@@ -1,3 +1,6 @@
+
+# To include in NF pipeline
+
 humann_regroup_table -i humann3_merged_genetables.tsv -o humann3_merged_genetables_GO.tsv -g uniref90_go
 humann_regroup_table -i humann3_merged_genetables.tsv -o humann3_merged_genetables_KO.tsv -g uniref90_ko
 humann_regroup_table -i humann3_merged_genetables.tsv -o humann3_merged_genetables_RXN.tsv -g uniref90_rxn
