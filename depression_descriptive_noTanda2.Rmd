@@ -1,0 +1,685 @@
+---
+title: "Depression metagenomics - Descriptive analysis"
+author: "C Mora"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+ html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    toc_depth: 5
+    theme: cerulean
+ pdf_document:
+    toc: true
+    toc_depth: 5
+editor_options: 
+  chunk_output_type: console
+# bibliography: references.bib
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+#html modificado: /home/carlos.mora@healthincode.global/R/x86_64-pc-linux-gnu-library/4.2/prettydoc/resources/templates/architect.html 
+library(knitr)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, 
+                      comment = NA, prompt = TRUE, tidy = FALSE, 
+                      fig.width = 7, fig.height = 7, fig_caption = TRUE,
+                      cache=TRUE)
+Sys.setlocale("LC_TIME", "C")
+```
+
+```{r echo=FALSE, include=FALSE}
+#This is to prevent using libraries from old R version, although I removed them 
+
+suppressPackageStartupMessages({
+  library(plyr)
+  library(tidyverse)
+  library(gt)
+  library(phyloseq)
+  library(fantaxtic)
+  library(readxl)
+  library(ggpubr)
+  library(dendextend)
+  library(DESeq2)
+  library(EnhancedVolcano)
+  library(gridExtra)
+  library(cowplot)
+  library(pheatmap)
+  library(HMP)
+  library(knitr)
+  library(vegan)
+  library(CoDaSeq)
+  library(rstatix)
+  library(janitor)
+})
+
+```
+
+
+
+```{r , echo=FALSE, include=FALSE, fig.align='center', fig.width=12, fig.height=5, results='asis'}
+SEED <- 123
+MODE = "LOCAL"
+
+if(MODE == "IATA"){
+  opt <- list(out = "/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_3/predictive/",
+            phobj_raw ="/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_3/phyloseq/phyloseq_object_analysis1.RData",
+            phobj_filt ="/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_3/phyloseq/pre_phyloseq_filt10.RData",
+            phobj_rare = "", 
+            DEA = "/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_3/DESEQ2_all_results_filtNoRaref.R",
+            fooddata = "/home/ccarlos/Documentos/202309_DEPRESION/Dieta_actualizada_09112023_CM.xlsx",
+            fc=1, 
+            pval=0.05, 
+            ptype="adjusted", 
+            fctype="shrunk"
+            )
+}else{
+  opt <- list(out = "/home/carmoma/Desktop/202311_DEPRESION/descriptive_v2/",
+            phobj_raw ="/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_3/phyloseq/phyloseq_object_analysis1.RData",
+            phobj_filt ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_3/phyloseq/pre_phyloseq_filt_noTanda2.RData",
+            #phobj_rare = "", 
+            #DEA = "/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_3/DESEQ2_all_results_filtNoRaref.R",
+            fooddata = "/home/carmoma/Desktop/202311_DEPRESION/Dieta_actualizada_09112023_CM.xlsx",
+            r_functions="/home/carmoma/Desktop/202311_DEPRESION/metagenomics_core_functions.R",
+            predictive_functions="/home/carmoma/Desktop/202311_DEPRESION/metagenomics_predictive_functions.R",
+            fc=1, 
+            pval=0.05, 
+            ptype="adjusted", 
+            fctype="shrunk"
+            )
+}
+if(! dir.exists(opt$out)){dir.create(opt$out)}
+
+# load(opt$DEA)
+# list2env(all_results_list, envir = globalenv())
+ load(opt$phobj_filt)
+ phobj <- pre_phyloseq_removet2
+# load(opt$phobj_raw)
+
+```
+
+
+```{r FUNCTIONS_PHLYLOSEQ, cache=FALSE}
+#R_FUNCTIONS = "/home/ccarlos/repos/depression_analysis/depression_functions.R" #  "/home/carmoma/Desktop/202309_DEPRESION/scripts/depression_analysis/depression_functions.R"
+
+#"/home/ccarlos/repos/depression_analysis/depression_functions.R"
+source(opt$r_functions)
+source(opt$predictive_functions)
+```
+
+
+# Descriptive analysis of metadata
+
+Educación: Universitarios y "Estudios superiores: universidad y posgrado" agrupados como universitarios. "FP" y "Bachiller y FP" agrupados en "Bachiller y FP". En ambos casos sólo había un sujeto en una de las clases agrupadas. 
+
+El factor estado civil 2 se calcula agrupando viudas (2) y solteros (21).
+
+Vitamina D, casos atípicos:    
+sampleID  Condition        VitD
+59       59 Depression 978.4666667
+83       83    Control  -0.5871628
+Los pongo como NAs
+
+```{r , echo=FALSE, include=FALSE, fig.align='center', fig.width=12, fig.height=5, results='asis'}
+metad <- sample_data(phobj) %>% data.frame()
+names(metad) <- gsub("Vit..", "Vit", names(metad)) %>% 
+            sapply(function(x)strsplit(x, "\\.\\.")[[1]][1]) %>% 
+            gsub("ajuste.residuos", "", .) %>% 
+            gsub("^X\\.", "", .) %>%
+            gsub("\\.$", "", .) 
+# names(metad)[84] <- "Colesterol_ajuste"
+# metad$Educacion[metad$Educacion == "Estudios superiores:universidad y postgrado"] <- "universitarios" 
+# metad$Educacion[metad$Educacion == "fp"] <- "Bachiller y fp" 
+# metad$VitD[metad$sampleID %in%  c("59", "83")] <- NA
+# metad$Estado.civil2 <- ifelse(metad$Estado.civil == "pareja", "pareja", "soltero" )
+# metad$DII.cualitativo[metad$DII.cualitativo == "Nuetra"] <- "Neutral"
+metad2 <- metad %>% 
+  mutate_if(is.character, str_to_title) %>% 
+  mutate_if(~ (all(as.integer(.) == .) & length(unique(.)) < 5) | is.character(.),  as.factor)
+
+omit_from_factors <- c("Condition", "CODIGO", "Presion.Sanguinea", "TRATAMIENTO" , "COMORBILIDADES", "tandacaso", "procedenciacaso", "obesidadcaso", "sexo", "sampleID")
+#metad2 %>% select_if(is.numeric) %>% get_summary_stats
+
+
+factors_all <- getValidFactors(metad, max_nas = 1, min_pct = 0, max_classes = 5, exclude=omit_from_factors) %>% filter(is_valid) %>% pull(var)
+numvars_all <- getValidNumeric(metad)%>% filter(is_valid) %>% pull(var)
+#metad2[, factors_all] %>% lapply(as.factor) %>% as.data.frame %>% summary
+
+factors_ctrl <- getValidFactors(metad %>% filter(Condition=="Control",), max_nas = 1, min_pct = 0, max_classes = 5, exclude=omit_from_factors)%>% filter(is_valid) %>% pull(var)
+numvars_ctrl <- getValidNumeric(metad %>% filter(Condition == "Control"))%>% filter(is_valid) %>% pull(var)
+
+factors_dep <- getValidFactors(metad %>% dplyr::filter(Condition=="Depression"), max_nas = 1, min_pct = 0, max_classes = 5, exclude=omit_from_factors)%>% filter(is_valid) %>% pull(var)
+numvars_dep <- getValidNumeric(metad %>% filter(Condition == "Depression"))%>% filter(is_valid) %>% pull(var)
+
+#Estas son variables antiguas que fueron recalculadas, no se utilizan
+aliment_only <- metad %>% dplyr::select(Mediterranean_diet_adherence:Vit.Prot) 
+aliment_nas <- aliment_only %>% is.na %>% rowSums() 
+aliment_nas <- aliment_nas/ncol(aliment_only)
+discarded_aliments <- metad$sampleID[aliment_nas > 0.3]
+
+metabolicas <- c("TG", "TG_mayor_200", "Glucosa.ayunas", "Glucosa_ayunas_mayor126", "Colesterol", 
+                 "Colesterol_mayor_200", "obesidad", "Diabetes", "IMC")
+food_old <- names(aliment_only)
+metad3 <- metad2 %>% select(-{{food_old}})
+```
+
+```{r read_new_food}
+foodnew <- read_excel(opt$fooddata,
+                       sheet = 'Hoja1', na="ND") %>% clean_names() %>% 
+                        dplyr::mutate(
+                          codigo2 = as.character(codigo2),
+                          Mediterranean_diet_adherence = metad2$Mediterranean_diet_adherence[match(codigo2, as.character(metad2$sampleID))],
+                               Condition = metad2$Condition[match(codigo2, metad2$sampleID)],
+                               sampleID = as.factor(codigo2)) %>% 
+                        dplyr::select(-codigo2) %>% 
+                        dplyr::filter(!is.na(Condition)) 
+
+
+aliment_nas2 <- foodnew %>% select_if(is.numeric) %>% is.na %>% rowSums() 
+aliment_nas2 <- aliment_nas2/ncol(foodnew[, sapply(foodnew, is.numeric)])
+discarded_aliments2 <- foodnew$sampleID[aliment_nas2 > 0.3]
+
+food_factors <- c("Mediterranean_diet_adherence", "dii_cualitativo")
+
+```
+
+
+## Summary {.tabset} 
+
+### Numerical variables  {.tabset} 
+
+#### All samples 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+metad3 %>% select_if(is.numeric) %>% get_summary_stats %>% kable(caption="Summary of numeric variables, all data")
+```
+
+#### Control only
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+metad3 %>% dplyr::filter(Condition=="Control") %>% 
+  select_if(is.numeric) %>% get_summary_stats %>% 
+  kable(caption="Summary of numeric variables, only in controls")
+```
+
+#### Depression only
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+metad3 %>% dplyr::filter(Condition=="Depression") %>% 
+  select_if(is.numeric) %>% get_summary_stats %>% 
+  kable(caption="Summary of numeric variables, only in depression patients")
+```
+
+### Factors  {.tabset} 
+
+#### All samples 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+metad2 %>% dplyr::select(all_of(factors_all)) %>% mutate_all(as.factor) %>% summary
+```
+
+#### Control only
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+metad2 %>% dplyr::filter(Condition=="Control") %>% dplyr::select(all_of(factors_ctrl)) %>% mutate_all(as.factor) %>% summary
+```
+
+#### Depression only
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+metad2 %>% dplyr::filter(Condition=="Depression") %>% dplyr::select(all_of(factors_dep)) %>% mutate_all(as.factor) %>% summary
+```
+
+<!-- ```{r makeAllPCAs_RareMin2, echo=FALSE, fig.width=12, fig.height=8} -->
+<!-- genes <- resdf %>% filter(padj <= opt$pval & abs(log2FoldChangeShrink) >= log2(opt$fc) ) %>%  -->
+<!--   pull(taxon) -->
+
+<!-- plotPCA(vst_counts_df, metad, genes) -->
+<!-- all_pcas <- makeAllPCAs(pre_phyloseq_filt, vst_counts_df, genes, opt, "PCAs_FiltNoRaref_DiffTaxa.pdf") -->
+<!-- all_pcas %>% class -->
+<!-- ``` -->
+
+<!-- ```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6} -->
+
+<!-- ``` -->
+
+## Bivariate tests {.tabset}
+
+### Numerical variables
+
+```{r, fig.height=7, fig.width=12, message=FALSE, warning=FALSE, echo=FALSE}
+outdir <- paste0(opt$out, "/descriptive")
+if(!dir.exists(outdir)) dir.create(outdir)
+
+df <- metad3
+vars2test <-names(metad3)[sapply(metad3, is.numeric)]
+vars2test <- vars2test[vars2test != "ob_o_sobrepeso"]
+
+test_res <- testDiversityDifferences(df, vars2test, groupvars=c("Condition"), outdir, name="tests_quant_vars_depression")
+test_res_show <- test_res %>% 
+  mutate(variable = gsub("\\.", "-", variable)) %>% 
+  dplyr::select(- comparison) %>% 
+  mutate_if(is.numeric, round, 4) 
+
+hlrows <- which(test_res_show$anova_p < 0.05 | test_res_show$t_test < 0.05 | test_res_show$wilcox_test < 0.05)
+
+test_res_show |> gt() |> 
+    tab_caption("Bivariate tests for Control/Depression") |>
+    data_color(
+    method = "numeric",
+    palette = c("firebrick3", "dodgerblue2"), 
+    rows= hlrows,
+    columns = c("anova_p", "t_test", "wilcox_test")
+  ) 
+```
+
+### Categorical variables
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+
+makePropsDescriptive <- function(metad2, groups, factors_all){
+  tables <- list()
+  restab <- data.frame()
+  for(g in groups){
+    for(var in factors_all){
+      rname <- paste0(g, "_", var)
+      
+      vtab<- xtabs(as.formula(paste0("~ ", g,   " + ", var)), metad2) 
+      vtabp<- prop.table(vtab) %>% addmargins
+      aux <- data.frame(
+        var1 = g,
+        var2 = var,
+        chisq_test = chisq.test(vtab)$p.value,
+        fisher_test = fisher.test(vtab)$p.value
+      )
+      
+      #vtab_k <- vtab %>% kable(caption= paste0(var, ": Chi-squared test p-value = ", as.character(round( aux$chisq_test, 4 ) ))) 
+      #vtabp_k <- vtabp %>% kable(caption= paste0(var, ": Chi-squared test p-value = ", as.character(round( aux$chisq_test, 4 ) ))) 
+    
+      reslist <- list(table = vtab, proptable = vtabp, test=aux) #table_kable = vtab_k, proptable_kable = vtabp_k,
+      tables[[rname]] <- reslist
+      restab <- rbind(restab, aux)
+      
+    }}
+  return(list(tables=tables, df=restab))
+}
+
+tablresults <- makePropsDescriptive(metad2, c("Condition"), factors_all[! factors_all %in% omit_from_factors] )
+
+hlrows <- which(tablresults[["df"]]$chisq_test < 0.05 | tablresults[["df"]]$fisher_test < 0.05 )
+tablresults[["df"]] %>% dplyr::mutate_if(is.numeric, round, 4) |> gt() |> 
+    tab_caption("Statistical tests for Control/Depression vs other factors") |>
+    data_color(
+    method = "numeric",
+    palette = c("firebrick3", "dodgerblue2"), 
+    rows= hlrows,
+    columns = c( "chisq_test", "fisher_test")
+  ) 
+  
+```
+
+## Plots by variable {.tabset}
+
+### Histograms and Boxplots for Numerical variables {.tabset}
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+makeHistogramsAndBoxplots <- function(df, variables, groupvars, outdir="", name="histograms", opt=list()){
+  plotlist <- list()
+  for(g in groupvars){
+    for(v in variables){
+      g1 <- ggplot(df, aes_string(x = v, col=g, fill=g))+
+        #geom_density(alpha=0.2)+
+        geom_histogram(aes(y = after_stat(count / sum(count))), alpha=0.5, position="dodge", show.legend = FALSE) +
+        # scale_fill_lancet()+
+        # scale_color_lancet() +
+        mytheme
+       g2 <- ggplot(df, aes_string(x = v, col=g, fill=g))+
+        geom_density(alpha=0.2, show.legend = FALSE)+
+        #geom_histogram(aes(y = after_stat(count / sum(count))), alpha=0.5, position="dodge") +
+        # scale_fill_lancet()+
+        # scale_color_lancet() +
+        mytheme
+       g3 <- ggplot(df, aes_string(y = v, x=g, col=g, fill=g))+
+        geom_boxplot(alpha=0.5)+
+        geom_jitter(position = position_jitter(seed = 1))+
+        geom_text_repel(aes(label=sampleID), position = position_jitter(seed = 1))+
+        # scale_fill_lancet()+
+        # scale_color_lancet() +
+        mytheme
+       
+      lname <- ifelse(length(groupvars) > 1, paste0(g, '_', v), v)
+      plotlist[[lname]] <- cowplot::plot_grid(plotlist=list(g1, g2, g3 ), nrow = 1)
+    }
+  }
+  WriteManyPlots(plotlist, name, outdir, w=12, h=4, separate=F, opt)
+  return(plotlist)
+}
+plotlist <- makeHistogramsAndBoxplots(metad3, vars2test, "Condition", outdir, name="variable_histograms")
+
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+chunkname <- "histograms_etc"
+plots_kn <- lapply(names(plotlist), FUN=function(nm, chunkname){
+  template_box <- c(
+    paste0("#### ",nm, "\n"),
+    paste0("```{r ", chunkname, "_", nm, ", echo = FALSE, fig.height=4, fig.width=12}\n"),
+    paste0("plotlist[['",nm,"']] \n"),
+    "```\n",
+    "\n"
+  )
+  knitr::knit_expand(text = template_box)
+}, chunkname)
+
+```
+
+`r knitr::knit(text = unlist(plots_kn))`
+
+### Heatmap for numerical variables {.tabset}
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=12, fig.width=16}
+library(pheatmap)
+mat <- metad2[, vars2test] %>% as.matrix %>% scale
+rownames(mat) <- metad2$sampleID
+annot <- metad2 %>% dplyr::select(Condition)
+rownames(annot) <- metad2$sampleID
+pheatmap(mat, na_col="gray", annotation_row = annot, cluster_rows = T, cluster_cols = F)
+```
+
+### Categorical variables {.tabset}
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+chunkname <- "prop_tables"
+plots_kn <- lapply(names(tablresults$tables), FUN=function(nm, chunkname){
+  template_box <- c(
+    paste0("#### ",nm, "\n"),
+    paste0("```{r ", chunkname, "_", nm, ", echo = FALSE}\n"),
+    paste0("mosaicplot(tablresults$tables[['",nm,"']][['table']]) \n"),
+    paste0("tablresults$tables[['",nm,"']][['test']] %>% kable \n"),
+    paste0("tablresults$tables[['",nm,"']][['table']] %>% kable \n"),
+    paste0("tablresults$tables[['",nm,"']][['proptable']] %>% kable \n"),
+    "```\n",
+    "\n"
+  )
+  knitr::knit_expand(text = template_box)
+}, chunkname)
+
+```
+
+`r knitr::knit(text = unlist(plots_kn))`
+
+# Analysis of Food data
+
+## Summary {.tabset} 
+
+### Numerical variables  {.tabset} 
+
+#### All samples 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+foodnew %>% select_if(is.numeric) %>% get_summary_stats %>% kable(caption="Summary of numeric variables, all data")
+```
+
+#### Control only
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+foodnew %>% dplyr::filter(Condition=="Control") %>% 
+  select_if(is.numeric) %>% get_summary_stats %>% 
+  kable(caption="Summary of numeric variables, only in controls")
+```
+
+#### Depression only
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+foodnew %>% dplyr::filter(Condition=="Depression") %>% 
+  select_if(is.numeric) %>% get_summary_stats %>% 
+  kable(caption="Summary of numeric variables, only in depression patients")
+```
+
+### Factors  {.tabset} 
+
+#### All samples 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+foodnew %>% dplyr::select(all_of(food_factors)) %>% mutate_all(as.factor) %>% summary
+```
+
+#### Control only
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+foodnew %>% dplyr::filter(Condition=="Control") %>% dplyr::select(all_of(food_factors)) %>% mutate_all(as.factor) %>% summary
+```
+
+#### Depression only
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+foodnew %>% dplyr::filter(Condition=="Depression") %>% dplyr::select(all_of(food_factors)) %>% mutate_all(as.factor) %>% summary
+```
+
+## Bivariate tests {.tabset}
+
+### Numerical variables
+
+```{r, fig.height=7, fig.width=12, message=FALSE, warning=FALSE, echo=FALSE}
+outdir <- paste0(opt$out, "/descriptive_food")
+if(!dir.exists(outdir)) dir.create(outdir)
+
+vars2log <- sapply(foodnew, is.numeric) & !grepl("dii|codigo", names(foodnew)) 
+df <- foodnew %>%
+  mutate_if(vars2log, list(log=\(x)log(x+1))) %>% 
+  #dplyr::select(-codigo) %>% 
+  as.data.frame
+
+write_tsv(df, file=paste0(outdir, "/food_data_input_logs.csv"))
+
+vars2test <-names(df)[sapply(df, is.numeric)]
+test_res <- testDiversityDifferences(df, vars2test, groupvars=c("Condition"), outdir, name="tests_food_vars_depression")
+test_res_show <- test_res %>% 
+  mutate(variable = gsub("\\.", "-", variable)) %>% 
+  dplyr::select(- comparison) %>% 
+  mutate_if(is.numeric, round, 4) 
+
+hlrows <- which(test_res_show$anova_p < 0.05 | test_res_show$t_test < 0.05 | test_res_show$wilcox_test < 0.05)
+
+test_res_show |> gt() |> 
+    tab_caption("Bivariate tests for Control/Depression") |>
+    data_color(
+    method = "numeric",
+    palette = c("firebrick3", "dodgerblue2"), 
+    rows= hlrows,
+    columns = c("anova_p", "t_test", "wilcox_test")
+  ) 
+```
+
+### Categorical variables
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+tablresults <- makePropsDescriptive(foodnew, c("Condition"), food_factors )
+
+hlrows <- which(tablresults[["df"]]$chisq_test < 0.05 | tablresults[["df"]]$fisher_test < 0.05 )
+tablresults[["df"]] %>% dplyr::mutate_if(is.numeric, round, 4) |> gt() |> 
+    tab_caption("Statistical tests for Control/Depression vs other factors") #|>
+  #   data_color(
+  #   method = "numeric",
+  #   palette = c("firebrick3", "dodgerblue2"), 
+  #   rows= hlrows,
+  #   columns = c( "chisq_test", "fisher_test")
+  # ) 
+  
+```
+
+## Plots by variable {.tabset}
+
+### Histograms and Boxplots for Numerical variables {.tabset}
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+plotlist <- makeHistogramsAndBoxplots(df, vars2test, "Condition", outdir, name="variable_histograms_food")
+
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+chunkname <- "histograms_etc_food"
+plots_kn <- lapply(names(plotlist), FUN=function(nm, chunkname){
+  template_box <- c(
+    paste0("#### ",nm, "\n"),
+    paste0("```{r ", chunkname, "_", nm, ", echo = FALSE, fig.height=4, fig.width=12}\n"),
+    paste0("plotlist[['",nm,"']] \n"),
+    "```\n",
+    "\n"
+  )
+  knitr::knit_expand(text = template_box)
+}, chunkname)
+
+```
+
+`r knitr::knit(text = unlist(plots_kn))`
+
+## PCA and clustering {.tabset}
+
+### PCA with all variables except dii
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+library(FactoMineR)
+library(factoextra)
+
+vars2pca <- df %>% dplyr::select( matches("_log")) %>% names
+vars2pca <- vars2pca[vars2pca != "x100g_hc_dia_log"]
+vars2pca <- vars2pca[vars2pca != "codigo2_numero_log"]
+vars2pca <- vars2pca[vars2pca != "tanda_log"]
+df2pca <- df %>% filter(! sampleID %in% discarded_aliments2)
+pcaresults <- plotPCA(df2pca, vars2pca, 
+                    labvar = "sampleID", 
+                    plotvars=c("Condition", food_factors), 
+                    transform = "", dims=2:5, name = "PCAs_noratios.pdf", outdir=outdir, w=12, h=8)
+pcaresults$plots[[1]]
+fviz_pca_biplot(pcaresults$pca, repel = TRUE)
+fviz_screeplot(pcaresults$pca, addlabels = TRUE)
+
+oname1 <- paste0(outdir, "/PCAs_all_samples.tsv")
+oname2 <- paste0(outdir, "/PCAs_all_rotation.tsv")
+sampledata <- pcaresults$pca$x %>% as.data.frame %>%  dplyr::mutate(sampleID = df2pca$sampleID) %>% 
+  dplyr::select(sampleID, everything())
+rotationdata <- pcaresults$pca$rotation %>% as.data.frame %>%  rownames_to_column("variable") %>% 
+  dplyr::select(variable, everything())
+write_tsv(sampledata, file=oname1)
+write_tsv(rotationdata, file=oname2)
+```
+
+### PCA with all variables except ratios, and dii
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+vars2pca <- df %>% select( matches("_log"), 
+                           -agp_ags_log, 
+                           -x100g_hc_dia_log,
+                           -agpi_agmi_ags_log, 
+                           -calcio_fosforo_log, 
+                           -vit_e_agpi_log) %>% names
+df2pca <- df %>% filter(! sampleID %in% discarded_aliments2)
+pcaresults <- plotPCA(df2pca, vars2pca, 
+                    labvar = "sampleID", 
+                    plotvars=c("Condition", food_factors), 
+                    transform = "", dims=2:5, name = "PCAs_noratios.pdf", outdir=outdir, w=12, h=8)
+pcaresults$plots[[1]]
+fviz_pca_biplot(pcaresults$pca, repel = TRUE)
+fviz_screeplot(pcaresults$pca, addlabels = TRUE)
+
+oname1 <- paste0(outdir, "/PCAs_noratios_samples.tsv")
+oname2 <- paste0(outdir, "/PCAs_noratios_rotation.tsv")
+sampledata <- pcaresults$pca$x %>% as.data.frame %>%  dplyr::mutate(sampleID = df2pca$sampleID) %>% 
+  dplyr::select(sampleID, everything())
+rotationdata <- pcaresults$pca$rotation %>% as.data.frame %>%  rownames_to_column("variable") %>% 
+  dplyr::select(variable, everything())
+write_tsv(sampledata, file=oname1)
+write_tsv(rotationdata, file=oname2)
+```
+
+
+### PCA with only ratios and dii
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+vars2pca <- df %>% select( dii,
+                           agp_ags_log, 
+                           agpi_agmi_ags_log, 
+                           calcio_fosforo_log, 
+                           vit_e_agpi_log) %>% names
+df2pca <- df %>% filter(! sampleID %in% discarded_aliments2)
+pcaresults <- plotPCA(df2pca, vars2pca, 
+                    labvar = "sampleID", 
+                    plotvars=c("Condition", food_factors), 
+                    transform = "", dims=2:3, name = "PCAs_onlyratios", outdir=outdir, w=12, h=8)
+pcaresults$plots[[1]]
+fviz_pca_biplot(pcaresults$pca, repel = TRUE)
+fviz_screeplot(pcaresults$pca, addlabels = TRUE)
+
+oname1 <- paste0(outdir, "/PCAs_onlyratios_samples.tsv")
+oname2 <- paste0(outdir, "/PCAs_onlyratios_rotation.tsv")
+sampledata <- pcaresults$pca$x %>% as.data.frame %>%  dplyr::mutate(sampleID = df2pca$sampleID) %>% 
+  dplyr::select(sampleID, everything())
+rotationdata <- pcaresults$pca$rotation %>% as.data.frame %>%  rownames_to_column("variable") %>% 
+  dplyr::select(variable, everything())
+write_tsv(sampledata, file=oname1)
+write_tsv(rotationdata, file=oname2)
+```
+
+### PCA dividing by Kcal
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+vars2pca <- df %>% select( matches("_log"), 
+                           -agp_ags_log, 
+                           -x100g_hc_dia_log,
+                           -agpi_agmi_ags_log, 
+                           -calcio_fosforo_log, 
+                           -vit_e_agpi_log,
+                           -energia_kcal_log
+                           ) %>% names
+df2pca <- df %>% filter(! sampleID %in% discarded_aliments2) %>% 
+  mutate_at(vars2pca, \(x)x- .$energia_kcal_log)
+pcaresults <- plotPCA(df2pca, vars2pca, 
+                    labvar = "sampleID", 
+                    plotvars=c("Condition", food_factors), 
+                    transform = "", dims=2:3, name = "PCAs_bykcal.pdf", outdir=outdir, w=12, h=8)
+pcaresults$plots[[1]]
+fviz_pca_biplot(pcaresults$pca, repel = TRUE)
+fviz_screeplot(pcaresults$pca, addlabels = TRUE)
+
+oname1 <- paste0(outdir, "/PCAs_bykcal_samples.tsv")
+oname2 <- paste0(outdir, "/PCAs_bykcal_rotation.tsv")
+sampledata <- pcaresults$pca$x %>% as.data.frame %>%  dplyr::mutate(sampleID = df2pca$sampleID) %>% 
+  dplyr::select(sampleID, everything())
+rotationdata <- pcaresults$pca$rotation %>% as.data.frame %>%  rownames_to_column("variable") %>% 
+  dplyr::select(variable, everything())
+write_tsv(sampledata, file=oname1)
+write_tsv(rotationdata, file=oname2)
+```
+
+### PCA dividing by Kcal, plus Kcal
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
+vars2pca <- df %>% select( matches("_log"), 
+                           -agp_ags_log, 
+                           -x100g_hc_dia_log,
+                           -agpi_agmi_ags_log, 
+                           -calcio_fosforo_log, 
+                           -vit_e_agpi_log,
+                           -energia_kcal_log
+                           ) %>% names
+df2pca <- df %>% filter(! sampleID %in% discarded_aliments2) %>% 
+  mutate_at(vars2pca, \(x)x- .$energia_kcal_log)
+vars2pca <- c(vars2pca, "energia_kcal_log")
+pcaresults <- plotPCA(df2pca, vars2pca, 
+                    labvar = "sampleID", 
+                    plotvars=c("Condition", food_factors), 
+                    transform = "", dims=2:3, name = "PCAs_bykcalPlusKcal.pdf", outdir=outdir, w=12, h=8)
+pcaresults$plots[[1]]
+fviz_pca_biplot(pcaresults$pca, repel = TRUE)
+fviz_screeplot(pcaresults$pca, addlabels = TRUE)
+
+oname1 <- paste0(outdir, "/PCAs_bykcalPlusKcal_samples.tsv")
+oname2 <- paste0(outdir, "/PCAs_bykcalPlusKcal_rotation.tsv")
+sampledata <- pcaresults$pca$x %>% as.data.frame %>%  dplyr::mutate(sampleID = df2pca$sampleID) %>% 
+  dplyr::select(sampleID, everything())
+rotationdata <- pcaresults$pca$rotation %>% as.data.frame %>%  rownames_to_column("variable") %>% 
+  dplyr::select(variable, everything())
+write_tsv(sampledata, file=oname1)
+write_tsv(rotationdata, file=oname2)
+```

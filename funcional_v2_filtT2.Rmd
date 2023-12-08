@@ -1,0 +1,770 @@
+---
+title: "Depression - functional analysis"
+author: "C Mora"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+ html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    toc_depth: 6
+    theme: cerulean
+ pdf_document:
+    toc: true
+    toc_depth: 6
+editor_options: 
+  chunk_output_type: console
+# bibliography: references.bib
+link-citations: yes
+params:
+  pval: 0.05
+  fc: 1
+  num_genes_default: 5
+  mincount: 1
+  minsampleswithcount: 6
+  ptype: "adjusted"
+  fctype: "shrunk"
+  out: "/home/ccarlos/Documentos/202309_DEPRESION/funcional2/"
+  input: "/home/ccarlos/Documentos/202309_DEPRESION/results_cluster/mg09_combinempa/"  
+  modules_path:  "/home/ccarlos/Documentos/202309_DEPRESION/funcional1/kegg_modules/" 
+  r_functions: "/home/ccarlos/repos/depression_analysis/metagenomics_core_functions.R"  #"/home/ccarlos/Documentos/PSORIASIS/Analysis_code/metagenomics_core_functions.R" 
+  r_functions2: "/home/ccarlos/repos/depression_analysis/metagenomics_predictive_functions.R"
+  input_funcional: "/home/ccarlos/Documentos/202309_DEPRESION/results_cluster/mg13_humann3_all/merge2/"
+  dearesult: "/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_3/DESEQ2_all_results_filtNoRaref.R"
+  metadata: "/home/ccarlos/Documentos/202309_DEPRESION/metadatos_MC_AL 12042023_CMcopy.xlsx"
+---
+
+<!-- [![](/home/ccarlos/Imágenes/logos/logo-microbiome.png){width="323"}](https://innobiome.csic.es/) ![](/home/ccarlos/Imágenes/logos/IATA.png){width="126"} ![](/home/ccarlos/Imágenes/logos/logo_csic.png){width="157"} -->
+
+```{r setup, include=FALSE}
+#html modificado: /home/carlos.mora@healthincode.global/R/x86_64-pc-linux-gnu-library/4.2/prettydoc/resources/templates/architect.html 
+library(knitr)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, 
+                      comment = NA, prompt = TRUE, tidy = FALSE, 
+                      fig.width = 7, fig.height = 7, fig_caption = TRUE,
+                      cache=T, fig.width=12, fig.height=7)
+Sys.setlocale("LC_TIME", "C")
+```
+
+```{r echo=FALSE, include=FALSE}
+#This is to prevent using libraries from old R version, although I removed them 
+
+suppressPackageStartupMessages({
+ # library(plyr)
+  library(tidyverse)
+  library(gt)
+  library(phyloseq)
+ # library(fantaxtic)
+  library(readxl)
+  library(ggpubr)
+  #library(dendextend)
+  library(DESeq2)
+  library(EnhancedVolcano)
+ # library(gridExtra)
+  library(cowplot)
+  library(pheatmap)
+ # library(HMP)
+  library(knitr)
+  library(vegan)
+  library(ggsignif)
+  library(DT)
+  library(caret)
+  library(randomForest)
+ # library(GGally)
+ # library(corrgram)
+ # library(MuMIn)
+ # library(corrplot)
+  #library(CoDaSeq) # dependencias necesitan sudo apt install libgsl-dev. Install with devtools::install_github('ggloor/CoDaSeq/CoDaSeq')
+  #library(zCompositions)
+  library(ggpmisc)
+})
+
+```
+
+```{r}
+MODE = "LOCAL"
+
+if(exists("input")){
+    opt <- input
+  }else{
+    if(MODE == "IATA"){
+    opt <- list(fc=1, 
+            pval=0.05, 
+            num_genes_default=5, 
+            ptype="adjusted", 
+            fctype="shrunk", 
+            mincount= 1,
+            minsampleswithcount= 6,
+            out= "/home/ccarlos/Documentos/202309_DEPRESION/funcional2_filtT2/", #"/home/carmoma/projects/Psoriasis_20231005/results2/",  
+            modules_path=  "/home/ccarlos/Documentos/202309_DEPRESION/funcional1/kegg_modules/", #"/home/carmoma/projects/Psoriasis_20231005/Psoriasis/results/04_phyloseq/",
+            cazy="/home/ccarlos/data/resources/cazy/",
+            r_functions= "/home/ccarlos/repos/depression_analysis/metagenomics_core_functions.R", #"/home/carmoma/projects/Psoriasis_20231005/Psoriasis/Analysis_code/metagenomics_core_functions.R",
+            r_functions2= "/home/ccarlos/repos/depression_analysis/metagenomics_predictive_functions.R",
+            metadata= "/home/carmoma/projects/Psoriasis_20231005/Psoriasis/Biobanco_Psoriasis.xlsx",
+            input_funcional = "/home/ccarlos/Documentos/202309_DEPRESION/results_cluster/mg13_humann3_all/merge2/",
+            dearesult = "/home/ccarlos/Documentos/202309_DEPRESION/202311_DEPRESSION/results_rstudio_v2_4/DeSEQ2/remove_tanda2/DESEQ2_all_results_remove_tanda2.R",
+            metadata =  "/home/ccarlos/Documentos/202309_DEPRESION/metadatos_MC_AL 12042023_CMcopy.xlsx",
+            phobj_raw ="/home/ccarlos/Documentos/202309_DEPRESION/202311_DEPRESSION/results_rstudio_v2_4/phyloseq/pre_phyloseq_filt_noTanda2.RData",
+            phobj_filt ="/home/ccarlos/Documentos/202309_DEPRESION/202311_DEPRESSION/results_rstudio_v2_4/phyloseq/pre_phyloseq_filt_noTanda2_rarefMin.RData",
+            phobj_rare = ""
+            )
+  }else{
+    opt <- list(fc=1, 
+            pval=0.05, 
+            num_genes_default=5, 
+            ptype="adjusted", 
+            fctype="shrunk", 
+            mincount= 1,
+            minsampleswithcount= 6,
+            out= "/home/carmoma/Desktop/202311_DEPRESION/funcional2_filtT2_v2test/", #"/home/carmoma/projects/Psoriasis_20231005/results2/",  
+            input=  "/home/carmoma/Desktop/202311_DEPRESION/mg09_combinempa",
+            modules_path=  "/home/carmoma/Desktop/202311_DEPRESION/funcional1/kegg_modules/",
+            cazy="/home/carmoma/Desktop/202311_DEPRESION/cazy/",#"/home/carmoma/projects/Psoriasis_20231005/Psoriasis/results/04_phyloseq/",
+            r_functions= "/home/carmoma/Desktop/202311_DEPRESION/metagenomics_core_functions.R", #"/home/carmoma/projects/Psoriasis_20231005/Psoriasis/Analysis_code/metagenomics_core_functions.R",
+            r_functions2= "/home/carmoma/Desktop/202311_DEPRESION/metagenomics_predictive_functions.R",
+            r_functions3= "/home/carmoma/Desktop/202311_DEPRESION/sankey_functions.R",
+            r_functions4= "/home/carmoma/Desktop/202311_DEPRESION/functional_auxiliary_functions.R",
+            input_funcional = "/home/carmoma/Desktop/202311_DEPRESION/mg13_humann3_all/merge2/",
+            dearesult = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/DeSEQ2/remove_tanda2/DESEQ2_all_results_remove_tanda2.R",
+            metadata =  "/home/carmoma/Desktop/202311_DEPRESION/metadatos_MC_AL12042023_CMcopy.xlsx",
+            phobj_raw ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/phyloseq/pre_phyloseq_filt_noTanda2.RData",
+            phobj_filt ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/phyloseq/pre_phyloseq_filt_noTanda2_rarefMin.RData",
+            phobj_rare = ""
+            )
+  }
+}
+```
+
+```{r FUNCTIONS_PHLYLOSEQ, cache=FALSE}
+source(opt$r_functions)
+source(opt$r_functions2)
+source(opt$r_functions4)
+
+dists <- c("bray", "jaccard", "unifrac", "wunifrac")
+dtitles <- c("Bray-Curtis distances", "Jaccard distances", "UniFrac distances", "Weighted UniFrac distances")
+```
+
+```{r CONSTANTS, echo=FALSE, include=FALSE, fig.align='center', fig.width=12, fig.height=5, results='asis'}
+SEED <- 123
+if(! dir.exists(opt$out)){dir.create(opt$out)}
+
+load(opt$dearesult)
+list2env(all_results_list, envir = globalenv())
+
+load(opt$phobj_filt)
+load(opt$phobj_raw)
+main_condition <- "Condition"
+
+```
+
+# Results
+
+
+```{r , echo=FALSE, include=FALSE, fig.align='center', fig.width=12, fig.height=5, results='asis'}
+phobj <- pre_phyloseq_removet2
+metad <- sample_data(phobj) %>% data.frame()
+names(metad) <- gsub("Vit..", "Vit", names(metad)) %>% 
+            sapply(function(x)strsplit(x, "\\.\\.")[[1]][1]) %>% 
+            gsub("ajuste.residuos", "", .) %>% 
+            gsub("^X\\.", "", .) %>%
+            gsub("\\.$", "", .)  
+#names(metad)[84] <- "Colesterol_ajuste"
+# metad$Educacion[metad$Educacion == "Estudios superiores:universidad y postgrado"] <- "universitarios" 
+# metad$Educacion[metad$Educacion == "fp"] <- "Bachiller y fp" 
+metad$VitD[metad$sampleID %in%  c("59", "83")] <- NA
+#metad$Estado.civil2 <- ifelse(metad$Estado.civil == "pareja", "pareja", "soltero" )
+#metad$DII.cualitativo[metad$DII.cualitativo == "Nuetra"] <- "Neutral"
+metad2 <- metad %>% 
+  mutate_if(is.character, str_to_title) %>% 
+  mutate_if(~ (all(as.integer(.) == .) & length(unique(.)) < 5) | is.character(.),  as.factor)
+metadf <- metad2 %>% mutate(sampleID = paste("G4M", sampleID, sep=""))
+
+omit_from_factors <- c("Condition", "CODIGO", "Presion.Sanguinea", "TRATAMIENTO" , "COMORBILIDADES", "tandacaso", "procedenciacaso", "obesidadcaso", "sexo", "sampleID")
+#metad2 %>% select_if(is.numeric) %>% get_summary_stats
+
+
+factors_all <- getValidFactors(metad, max_nas = 1, min_pct = 0, max_classes = 5, exclude=omit_from_factors) %>% filter(is_valid) %>% pull(var)
+numvars_all <- getValidNumeric(metad)%>% filter(is_valid) %>% pull(var)
+#metad2[, factors_all] %>% lapply(as.factor) %>% as.data.frame %>% summary
+
+factors_ctrl <- getValidFactors(metad %>% filter(Condition=="Control",), max_nas = 1, min_pct = 0, max_classes = 5, exclude=omit_from_factors)%>% filter(is_valid) %>% pull(var)
+numvars_ctrl <- getValidNumeric(metad %>% filter(Condition == "Control"))%>% filter(is_valid) %>% pull(var)
+
+factors_dep <- getValidFactors(metad %>% dplyr::filter(Condition=="Depression"), max_nas = 1, min_pct = 0, max_classes = 5, exclude=omit_from_factors)%>% filter(is_valid) %>% pull(var)
+numvars_dep <- getValidNumeric(metad %>% filter(Condition == "Depression"))%>% filter(is_valid) %>% pull(var)
+
+aliment_only <- metad %>% dplyr::select(Mediterranean_diet_adherence:Vit.Prot)
+aliment_nas <- aliment_only %>% is.na %>% rowSums() 
+aliment_nas <- aliment_nas/ncol(aliment_only)
+discarded_aliments <- metad$sampleID[aliment_nas > 0.3]
+
+samples2keep <- metad2$sampleID[metad2$Tanda == 1] %>% as.character()
+samples2keep <- paste("G4M", samples2keep, sep="")
+```
+
+
+
+```{r READ_MATRICES, echo=FALSE, warning=FALSE, message=FALSE}
+
+metacyc_ab <-  readFunctionalMatrix(opt, "humann3_merged_abundances_CPM.tsv") %>% select(all_of(c("Pathway",samples2keep)))
+metacyc_rxn <- readFunctionalMatrix(opt, "humann3_merged_genetables_RXN_CPM.tsv") %>% select(all_of(c("Pathway",samples2keep)))
+ko <- readFunctionalMatrix(opt, "humann3_merged_genetables_KO_CPM.tsv") %>% select(all_of(c("Pathway",samples2keep)))
+go <- readFunctionalMatrix(opt, "humann3_merged_genetables_GO_CPM.tsv") %>% select(all_of(c("Pathway",samples2keep)))
+cazy <- readFunctionalMatrix(opt, "humann3_merged_genetables_CAZY_CPM.tsv") %>% select(all_of(c("Pathway",samples2keep)))
+
+modules <- read_tsv(paste0(opt$modules_path, "/path_abundance.tsv"))
+modules2 <- modules %>% dplyr::mutate(Pathway=str_glue("{Module}|g__{Genus}.s__{Species}")) %>% 
+        dplyr::select(Pathway, starts_with("G4M"))
+names(modules2) <- sapply(names(modules2), function(x)strsplit(x, "_")[[1]][1]) %>% gsub("G4M0", "G4M", .)
+modules_mapnames <- data.frame(short = modules2$Pathway, long=modules$Description) 
+modules2 <- modules2 %>%
+        dplyr::filter(!grepl("g__NA.s__NA", Pathway))
+
+modules_nosp <- read_tsv(paste0(opt$modules_path, "/path_abundance_nosp.tsv"))
+modules_mapnames_nosp <- data.frame(short = modules_nosp$Module, long=modules_nosp$Description) 
+modules_nosp2 <- modules_nosp %>% dplyr::mutate(Pathway=Module) %>% dplyr::select(Pathway, starts_with("G4M"))
+names(modules_nosp2) <- sapply(names(modules_nosp2), function(x)strsplit(x, "_")[[1]][1]) %>% gsub("G4M0", "G4M", .)
+
+tabs2test <- list("MetaCyc"=metacyc_ab, "MetaCyc Reactions"=metacyc_rxn, "KEGG"=ko, "Gene Ontology"=go, "CAZy" = cazy, "GOmixerModules"=modules_nosp2 )
+save(tabs2test, file = paste0(opt$out, "functional_tabs.RData"))
+walk2(tabs2test, paste0(opt$out, "/functTab2Use_",names(tabs2test), ".tsv"), \(df, name)if(!is.null(df))write_tsv(df, file=name))
+
+metacyc_rxn_named <- readFunctionalMatrix(opt, "humann3_merged_genetables_RXN_CPM_namedRXN.tsv") %>% select(all_of(c("Pathway",samples2keep)))
+metacyc_mapnames <- data.frame(long=sapply(metacyc_rxn_named$Pathway, \(x)strsplit(x, "\\|")[[1]][[1]]), 
+                               short=metacyc_rxn$Pathway)
+
+ko_named <- readFunctionalMatrix(opt, "humann3_merged_genetables_KO_CPM_named.tsv") %>% select(all_of(c("Pathway",samples2keep)))
+ko_names <- read_delim(paste0(opt$cazy, "/map_ko_name.txt"), delim="\t", col_names=F)
+names(ko_names) <- c("short", "long")
+ko_idsalone <- sapply(ko$Pathway, function(x){strsplit(x, "\\|", perl=F)[[1]][1]})
+ko_mapnames <- data.frame(short= ko$Pathway, 
+                          idsalone = ko_idsalone, 
+                          long = ko_names$long[match(ko_idsalone, ko_names$short)])
+
+go_named <- readFunctionalMatrix(opt, "humann3_merged_genetables_GO_CPM_named.tsv") %>% select(all_of(c("Pathway",samples2keep)))
+go_idsalone = sapply(go_named$Pathway, \(x)strsplit(x, ": ")[[1]][1])
+go_mapnames <- data.frame(short=go$Pathway, 
+                          idsalone = go_idsalone,
+                          long=gsub("GO:[0-9]+: ", "", sapply(go_named$Pathway, \(x)strsplit(x, "\\|")[[1]][[1]]) ))
+
+cazy_names <- read_tsv(paste0(opt$cazy, "map_cazy_name.txt"))
+names(cazy_names) <- c("process", "name")
+cazy_idsalone <- sapply(cazy$Pathway, function(x){strsplit(x, "\\|", perl=F)[[1]][1]})
+cazy_mapnames <- data.frame(short = cazy$Pathway, idsalone = cazy_idsalone, long = cazy_names$name[match(cazy_idsalone, cazy_names$process)])
+
+tabs2annot <- list("MetaCyc"=NULL, "MetaCyc Reactions"=metacyc_mapnames, "KEGG"=ko_mapnames, "Gene Ontology"=go_mapnames, "CAZy" = cazy_mapnames, "GOmixerModules"=modules_mapnames_nosp )
+save(tabs2annot, file = paste0(opt$out, "functional_tabs_onlyannot.RData"))
+walk2(tabs2annot, paste0(opt$out, "/funcTabOnlyAnnot_",names(tabs2annot), ".tsv"), \(df, name)if(!is.null(df))write_tsv(df, file=name))
+```
+
+## Differential Pathway Abundance, Aggregated Processes {.tabset}
+
+```{r limma_processes, echo=FALSE, warning=FALSE, message=FALSE}
+
+## Do limma
+met2use <- metad2 %>% dplyr::mutate(sampleID = paste("G4M", sampleID, sep=""))
+filtered_byproc <- lapply(tabs2test, FUN=filterWholeProcessesAndFreq, opt)
+limmares_byproc <- lapply(filtered_byproc, FUN=limma4functional, met2use)
+limmares_byproc_annot <- mapply(limmares_byproc, tabs2annot, FUN=nameProcesses, SIMPLIFY = FALSE)
+walk2(limmares_byproc_annot, paste0(opt$out, "/DAA_process_",names(limmares_byproc_annot), ".tsv"), \(df, name)write_tsv(df%>% rownames_to_column("Process"), file=name))
+
+restabs_limma <- lapply(limmares_byproc, getSummaryTablesDeseq, opt)
+volcanos_limma <- lapply(names(limmares_byproc), 
+                         FUN=function(name){
+                           fname <- paste0("limma_volcano_SumProcesses_praw_", gsub(" ", "", name), sep="")
+                           make_volcano(res = limmares_byproc[[name]], opt=opt, name=fname, pcol="pvalue")}
+                         )
+volcanos_limma_padj <- lapply(names(limmares_byproc), 
+                         FUN=function(name){
+                           fname <- paste0("limma_volcano_SumProcesses_padj_", gsub(" ", "", name), sep="")
+                           make_volcano(res = limmares_byproc[[name]], opt=opt, name=fname, pcol="padj")}
+                         )
+
+plims <- c(0.01, 0.001, 0.001, 0.001, 0.05, 0.05)
+names(plims) <- names(limmares_byproc)
+barplots_limma <- lapply(names(limmares_byproc_annot), \(x){
+  tab <- limmares_byproc_annot[[x]]
+  include_longnames <- TRUE
+  if(x == "CAZy"){
+     include_longnames <- FALSE
+     rownames(tab) <- paste(getCazyClass(rownames(tab)), rownames(tab), sep=" - ")
+   }
+  makeBarplotFunctional(tab, 
+                       plim=plims[x], 
+                       paste0("BarplotProcess_", x), opt$out, 
+                       include_longnames = include_longnames, 
+                       w=12, h=8)
+})
+# heatmaps_byproc <- lapply(1:length(limmares_byproc), FUN=function(i){
+#             makeHeatmapFunctional(limmares_byproc[[i]], met2use, filtered_byproc[[i]],
+#                         variable = "Condition",
+#                         opt, 
+#                         name = paste0("heatmap_byProcess_padj_", gsub(" ", "", names(limmares_byproc)[i]), sep=""), 
+#                         logscale=FALSE, 
+#                         ptype = "padj", w=20, h=14)
+# })
+  
+  
+```
+
+```{r limma_processes_print, echo=FALSE, warning=FALSE, message=FALSE}
+template0 <- c(
+    "### {{names(limmares_byproc)[i]}} {.tabset}\n",
+    "```{r {{chunkname}}{{i}}, echo = FALSE}\n",
+    "limmares_byproc_annot[[{{i}}]] %>% dplyr::mutate_if(is.numeric, round, 4) %>% datatable   \n",
+    "```\n",
+    "#### Volcano Plots {.tabset} \n",
+    "##### Raw p-value\n",
+    "```{r {{chunkname}}{{i}}a, echo = FALSE}\n",
+    "volcanos_limma[[{{i}}]]   \n",
+    "restabs_limma[[{{i}}]]$restab %>% kable()   \n",
+    "```\n",
+    "##### Adjusted p-value\n",
+    "```{r {{chunkname}}{{i}}b, echo = FALSE}\n",
+    "volcanos_limma_padj[[{{i}}]]   \n",
+    "restabs_limma[[{{i}}]]$restab_adj %>% kable()   \n",
+    "```\n",
+    "#### Barplots {.tabset}\n",
+    "```{r {{chunkname}}{{i}}bplot, echo = FALSE}\n",
+    "barplots_limma[[{{i}}]]   \n",
+    "```\n",
+    "#### Heatmap {.tabset} \n",
+    "```{r {{chunkname}}{{i}}c, echo = FALSE}\n",
+    " makeHeatmapFunctional(limmares_byproc[[{{i}}]], met2use, filtered_byproc[[{{i}}]],
+                        variable = 'Condition',
+                        opt, 
+                        name = paste0('heatmap_byProcess_padj_', gsub(' ', '', names(limmares_byproc)[{{i}}]), sep=''), 
+                        logscale=FALSE, 
+                        ptype = 'padj', w=20, h=14)   \n",
+    "```\n",
+    "\n"
+  )
+chunkname <- "limmadiff"
+plots_kn <- lapply(1:length(limmares_byproc), function(i){
+    gsub("\\[\\[i\\]\\]", paste0("[[", as.character(i), "]]"), knitr::knit_expand(text = template0), perl=T)
+    })
+
+```
+
+`r knitr::knit(text = unlist(plots_kn))`
+
+
+
+## Differential Pathway Abundance, By Species {.tabset}
+
+```{r limma_processes_bysp, echo=FALSE, warning=FALSE, message=FALSE}
+## Do limma
+met2use <- metad2 %>% dplyr::mutate(sampleID = paste("G4M", sampleID, sep=""))
+tabs2test$GOmixerModules <- modules2 
+filtered_byspecies <- lapply(tabs2test, FUN=filterBySpeciesAndFreq, opt)
+limmares_bysp <- lapply(filtered_byspecies, FUN=limma4functional, met2use)
+
+restabs_limma_bysp <- lapply(limmares_bysp, getSummaryTablesDeseq, opt)
+volcanos_limma_bysp <- lapply(names(limmares_bysp), 
+                         FUN=function(name){
+                           fname <- paste0("limma_volcano_ProcessesBySp_praw_", gsub(" ", "", name), sep="")
+                           make_volcano(res = limmares_bysp[[name]], opt=opt, name=fname, pcol="pvalue")}
+                         )
+volcanos_limma_bysp_padj <- lapply(names(limmares_bysp), 
+                         FUN=function(name){
+                           fname <- paste0("limma_volcano_ProcessesBySp_padj_", gsub(" ", "", name), sep="")
+                           make_volcano(res = limmares_bysp[[name]], opt=opt, name=fname, pcol="padj")}
+                         )
+# heatmaps_bysp <- lapply(1:length(limmares_bysp), FUN=function(i){
+#             makeHeatmapFunctional( limmares_bysp[[i]], met2use,filtered_byspecies[[i]],
+#                         variable = "Condition",
+#                         opt, 
+#                         name = paste0("heatmap_byProcess_padj_", gsub(" ", "", names(limmares_byproc)[i]), sep=""), 
+#                         logscale=FALSE, 
+#                         ptype = "padj", w=20, h=14)
+#})
+
+genus_regex <-"g__([a-zA-Z]+)"
+species_regex <- ".s__(\\w+)"
+settaxon <- function(tab, namestab){
+  tab2 <- tab %>% 
+    rownames_to_column("Pathway_full") %>% 
+    dplyr::mutate(
+    Pathway = sapply(Pathway_full, \(x)strsplit(x, "\\|")[[1]][1] ),
+    Genus =  str_extract(Pathway_full, genus_regex) %>% gsub("g__", "", .),
+    Species =  str_extract(Pathway_full, species_regex) %>% gsub("\\.s__", "", .) %>% gsub("_", " ", .),
+    process_name =  {if(is.null(namestab)) "" else namestab$long[match(Pathway_full, namestab$short)]}
+) %>% dplyr::select(Pathway, Genus, Species, everything(), -Pathway_full) 
+  return(tab2)
+}
+
+tabs2annot$GOmixerModules <- modules_mapnames
+limmares_bysp2show <-  map2(limmares_bysp, tabs2annot, settaxon)
+walk2(limmares_bysp2show, paste0(opt$out, "/DAA_processbyspecies_",names(limmares_bysp2show), ".tsv"), \(df, name)write_tsv(df %>% rownames_to_column("Process"), file=name))
+```
+
+```{r limma_processes_print_bysp, echo=FALSE, warning=FALSE, message=FALSE}
+chunkname <- "limmadiffbyspecies"
+template1 <- c(
+    "### {{names(limmares_bysp)[i]}}\n",
+    "```{r {{chunkname}}{{i}}a, echo = FALSE}\n",
+    "limmares_bysp[[{{i}}]] %>% dplyr::mutate_if(is.numeric, round, 4) %>% datatable   \n",
+     "```\n",
+    "#### Volcano Plots {.tabset} \n",
+    "##### Raw p-value\n",
+     "```{r {{chunkname}}{{i}}b, echo = FALSE}\n",
+    "volcanos_limma_bysp[[{{i}}]]   \n",
+    "restabs_limma_bysp[[{{i}}]]$restab %>% kable()   \n",
+     "```\n",
+    "##### Adjusted p-value\n",
+     "```{r {{chunkname}}{{i}}c, echo = FALSE}\n",
+    "volcanos_limma_bysp_padj[[{{i}}]]   \n",
+    "restabs_limma_bysp[[{{i}}]]$restab_adj %>% kable()   \n",
+    "```\n",
+    "\n"
+  )
+plots_kn <- lapply(1:length(limmares_bysp), function(i){
+    gsub("\\[\\[i\\]\\]", paste0("[[", as.character(i), "]]"), knitr::knit_expand(text = template1), perl=T)
+    })
+
+```
+
+`r knitr::knit(text = unlist(plots_kn))`
+
+
+## Sankey with plotly {.tabset}
+
+```{r}
+
+
+source(opt$r_functions3)
+plims <- c(0.01, 0.001, 0.001, 0.001, 0.05, 0.05)
+names(plims) <- names(limmares_byproc)
+plims_sp <- c(0.01, 0.01, 0.01, 0.01, 0.05, 0.05)
+names(plims_sp) <- names(limmares_byproc)
+
+INCLUDE_OTHERS = FALSE
+OTHERS_SIZE = 1
+OTHERS_NAME = "Aggr. taxa"
+
+#Get processes
+
+
+
+case_name = "Depression"
+control_name = "Control"
+outdir <- paste0(opt$out, "/SankeyPlots/")
+if(!dir.exists(outdir)) dir.create(outdir)
+
+ #Rename samples as in functional analysis
+
+#functType <- "MetaCyc"
+figs <- list()
+for(functType in names(limmares_byproc)){
+  daa_proc_all <- limmares_byproc_annot[[functType]]
+  quant_by_proc <- filtered_byproc[[functType]]
+  daa_by_sp_all <- limmares_bysp2show[[functType]]
+
+  fname <- gsub(" ", "_", paste0("Sankey_", functType, 
+                                  "_ppr", as.character(plims[functType]), 
+                                  "_psp", as.character(plims_sp[functType]), collapse=""))
+  if(functType == "CAZy"){
+    include_longnames <- FALSE
+    rownames(daa_proc_all) <- paste(getCazyClass(rownames(daa_proc_all)), rownames(daa_proc_all), sep=" - ")
+    quant_by_proc$Pathway <- paste(getCazyClass(quant_by_proc$Pathway), quant_by_proc$Pathway, sep=" - ")
+    daa_by_sp_all$Pathway <-  paste(getCazyClass(daa_by_sp_all$Pathway), daa_by_sp_all$Pathway, sep=" - ")
+  }else{
+    include_longnames <- TRUE
+  }
+  sankeydata <- prepareSankeyPlot(daa_proc_all, 
+                              daa_by_sp_all, 
+                              quant_by_proc, 
+                              metadf, 
+                              plim = plims[functType], 
+                              plim_sp = plims_sp[functType], 
+                              include_others = INCLUDE_OTHERS, 
+                              include_longnames = include_longnames,
+                              others_name = OTHERS_NAME,
+                              case_name = case_name, 
+                              control_name = control_name, 
+                              outdir = outdir, 
+                              name = fname)
+  figs[[functType]] <- makeSankeyPlot(nodelist = sankeydata$nodelist, 
+                                      linklist = sankeydata$linklist, 
+                                      name = paste0("Functional Analysis - ", functType, " terms"), 
+                                      fname = fname,
+                                      outdir = outdir)
+#fig
+}
+```
+
+
+```{r sankey_show, echo=FALSE, warning=FALSE, message=FALSE}
+chunkname <- "sankey"
+template2 <- c(
+    "### {{names(limmares_byproc)[i]}}\n",
+    "```{r {{chunkname}}{{i}}, echo = FALSE}\n",
+    "figs[[{{i}}]] \n",
+    "```\n",
+    "\n"
+  )
+plots_kn <- lapply(1:length(limmares_bysp), function(i){
+    gsub("\\[\\[i\\]\\]", paste0("[[", as.character(i), "]]"), knitr::knit_expand(text = template2), perl=T)
+    })
+
+```
+
+`r knitr::knit(text = unlist(plots_kn))`
+
+
+## Differential Pathway Abundance, Aggregated Processes, Adjusting for BMI and Age {.tabset}
+
+```{r limma_processes_control, echo=FALSE, warning=FALSE, message=FALSE}
+
+tabs2annot <- list("MetaCyc"=NULL, "MetaCyc Reactions"=metacyc_mapnames, "KEGG"=ko_mapnames, "Gene Ontology"=go_mapnames, "CAZy" = cazy_mapnames, "GOmixerModules"=modules_mapnames_nosp )
+## Do limma
+met2use <- metad2 %>% dplyr::mutate(sampleID = paste("G4M", sampleID, sep=""))
+#filtered_byproc <- lapply(tabs2test, FUN=filterWholeProcessesAndFreq, opt)
+limmares_byproc <- lapply(filtered_byproc, FUN=limma4functional, 
+                          met2use, "Condition", covars=c("IMC", "Edad"))
+limmares_byproc_annot <- mapply(limmares_byproc, tabs2annot, FUN=nameProcesses, SIMPLIFY = FALSE)
+walk2(limmares_byproc_annot, paste0(opt$out, "/DAA_processControlIMCEdad_",names(limmares_byproc_annot), ".tsv"), \(df, name)write_tsv(df%>% rownames_to_column("Process"), file=name))
+
+restabs_limma <- lapply(limmares_byproc, getSummaryTablesDeseq, opt)
+volcanos_limma <- lapply(names(limmares_byproc), 
+                         FUN=function(name){
+                           fname <- paste0("limma_volcano_SumProcessesContIMCEdad_praw_", gsub(" ", "", name), sep="")
+                           make_volcano(res = limmares_byproc[[name]], opt=opt, name=fname, pcol="pvalue")}
+                         )
+volcanos_limma_padj <- lapply(names(limmares_byproc), 
+                         FUN=function(name){
+                           fname <- paste0("limma_volcano_SumProcessesContIMCEdad_padj_", gsub(" ", "", name), sep="")
+                           make_volcano(res = limmares_byproc[[name]], opt=opt, name=fname, pcol="padj")}
+                         )
+
+plims <- c(0.01, 0.001, 0.001, 0.001, 0.05, 0.05)
+names(plims) <- names(limmares_byproc)
+barplots_limma <- lapply(names(limmares_byproc_annot), \(x){
+  tab <- limmares_byproc_annot[[x]]
+  include_longnames <- TRUE
+  if(x == "CAZy"){
+     include_longnames <- FALSE
+     rownames(tab) <- paste(getCazyClass(rownames(tab)), rownames(tab), sep=" - ")
+   }
+  makeBarplotFunctional(tab, 
+                       plim=plims[x], 
+                       paste0("BarplotProcess_", x, '_AdjIMCEdad'), 
+                       opt$out, 
+                       include_longnames = include_longnames, 
+                       w=12, h=8)
+})
+# heatmaps_byproc <- lapply(1:length(limmares_byproc), FUN=function(i){
+#             makeHeatmapFunctional(limmares_byproc[[i]], met2use, filtered_byproc[[i]],
+#                         variable = "Condition",
+#                         opt, 
+#                         name = paste0("heatmap_byProcess_padj_", gsub(" ", "", names(limmares_byproc)[i]), sep=""), 
+#                         logscale=FALSE, 
+#                         ptype = "padj", w=20, h=14)
+# })
+  
+  
+```
+
+```{r limma_processes_print_adj, echo=FALSE, warning=FALSE, message=FALSE}
+template0 <- c(
+    "### {{names(limmares_byproc)[i]}} {.tabset}\n",
+    "```{r {{chunkname}}{{i}}, echo = FALSE}\n",
+    "limmares_byproc_annot[[{{i}}]] %>% dplyr::mutate_if(is.numeric, round, 4) %>% datatable   \n",
+    "```\n",
+    "#### Volcano Plots {.tabset} \n",
+    "##### Raw p-value\n",
+    "```{r {{chunkname}}{{i}}a, echo = FALSE}\n",
+    "volcanos_limma[[{{i}}]]   \n",
+    "restabs_limma[[{{i}}]]$restab %>% kable()   \n",
+    "```\n",
+    "##### Adjusted p-value\n",
+    "```{r {{chunkname}}{{i}}b, echo = FALSE}\n",
+    "volcanos_limma_padj[[{{i}}]]   \n",
+    "restabs_limma[[{{i}}]]$restab_adj %>% kable()   \n",
+    "```\n",
+    "#### Barplots {.tabset}\n",
+    "```{r {{chunkname}}{{i}}bplot, echo = FALSE}\n",
+    "barplots_limma[[{{i}}]]   \n",
+    "```\n",
+    "#### Heatmap {.tabset} \n",
+    "```{r {{chunkname}}{{i}}c, echo = FALSE}\n",
+    " makeHeatmapFunctional(limmares_byproc[[{{i}}]], met2use, filtered_byproc[[{{i}}]],
+                        variable = 'Condition',
+                        opt, 
+                        name = paste0('heatmap_byProcessCIMCEdad_padj_', gsub(' ', '', names(limmares_byproc)[{{i}}]), sep=''), 
+                        logscale=FALSE, 
+                        ptype = 'padj', w=20, h=14)   \n",
+    "```\n",
+    "\n"
+  )
+chunkname <- "limmadiffContr"
+plots_kn <- lapply(1:length(limmares_byproc), function(i){
+    gsub("\\[\\[i\\]\\]", paste0("[[", as.character(i), "]]"), knitr::knit_expand(text = template0), perl=T)
+    })
+
+```
+
+`r knitr::knit(text = unlist(plots_kn))`
+
+
+
+## Differential Pathway Abundance, By Species, Adjusting for Age and BMI {.tabset}
+
+```{r limma_processes_bysp_corr, echo=FALSE, warning=FALSE, message=FALSE}
+## Do limma
+met2use <- metad2 %>% dplyr::mutate(sampleID = paste("G4M", sampleID, sep=""))
+tabs2test$GOmixerModules <- modules2 
+filtered_byspecies <- lapply(tabs2test, FUN=filterBySpeciesAndFreq, opt)
+limmares_bysp <- lapply(filtered_byspecies, FUN=limma4functional, met2use)
+
+restabs_limma_bysp <- lapply(limmares_bysp, getSummaryTablesDeseq, opt)
+volcanos_limma_bysp <- lapply(names(limmares_bysp), 
+                         FUN=function(name){
+                           fname <- paste0("limma_volcano_ProcessesBySp_praw_", gsub(" ", "", name), sep="")
+                           make_volcano(res = limmares_bysp[[name]], opt=opt, name=fname, pcol="pvalue")}
+                         )
+volcanos_limma_bysp_padj <- lapply(names(limmares_bysp), 
+                         FUN=function(name){
+                           fname <- paste0("limma_volcano_ProcessesBySp_padj_", gsub(" ", "", name), sep="")
+                           make_volcano(res = limmares_bysp[[name]], opt=opt, name=fname, pcol="padj")}
+                         )
+# heatmaps_bysp <- lapply(1:length(limmares_bysp), FUN=function(i){
+#             makeHeatmapFunctional( limmares_bysp[[i]], met2use,filtered_byspecies[[i]],
+#                         variable = "Condition",
+#                         opt, 
+#                         name = paste0("heatmap_byProcess_padj_", gsub(" ", "", names(limmares_byproc)[i]), sep=""), 
+#                         logscale=FALSE, 
+#                         ptype = "padj", w=20, h=14)
+#})
+
+genus_regex <-"g__([a-zA-Z]+)"
+species_regex <- ".s__(\\w+)"
+settaxon <- function(tab, namestab){
+  tab2 <- tab %>% 
+    rownames_to_column("Pathway_full") %>% 
+    dplyr::mutate(
+    Pathway = sapply(Pathway_full, \(x)strsplit(x, "\\|")[[1]][1] ),
+    Genus =  str_extract(Pathway_full, genus_regex) %>% gsub("g__", "", .),
+    Species =  str_extract(Pathway_full, species_regex) %>% gsub("\\.s__", "", .) %>% gsub("_", " ", .),
+    process_name =  {if(is.null(namestab)) "" else namestab$long[match(Pathway_full, namestab$short)]}
+) %>% dplyr::select(Pathway, Genus, Species, everything(), -Pathway_full) 
+  return(tab2)
+}
+
+tabs2annot$GOmixerModules <- modules_mapnames
+limmares_bysp2show <-  map2(limmares_bysp, tabs2annot, settaxon)
+walk2(limmares_bysp2show, paste0(opt$out, "/DAA_processbyspeciesContIMCEdad_",names(limmares_bysp2show), ".tsv"), \(df, name)write_tsv(df %>% rownames_to_column("Process"), file=name))
+```
+
+```{r limma_processes_print_bysp_corr, echo=FALSE, warning=FALSE, message=FALSE}
+chunkname <- "limmadiffbyspeciesControl"
+template1 <- c(
+    "### {{names(limmares_bysp)[i]}}\n",
+    "```{r {{chunkname}}{{i}}a, echo = FALSE}\n",
+    "limmares_bysp[[{{i}}]] %>% dplyr::mutate_if(is.numeric, round, 4) %>% datatable   \n",
+     "```\n",
+    "#### Volcano Plots {.tabset} \n",
+    "##### Raw p-value\n",
+     "```{r {{chunkname}}{{i}}b, echo = FALSE}\n",
+    "volcanos_limma_bysp[[{{i}}]]   \n",
+    "restabs_limma_bysp[[{{i}}]]$restab %>% kable()   \n",
+     "```\n",
+    "##### Adjusted p-value\n",
+     "```{r {{chunkname}}{{i}}c, echo = FALSE}\n",
+    "volcanos_limma_bysp_padj[[{{i}}]]   \n",
+    "restabs_limma_bysp[[{{i}}]]$restab_adj %>% kable()   \n",
+    "```\n",
+    "\n"
+  )
+plots_kn <- lapply(1:length(limmares_bysp), function(i){
+    gsub("\\[\\[i\\]\\]", paste0("[[", as.character(i), "]]"), knitr::knit_expand(text = template1), perl=T)
+    })
+
+```
+
+`r knitr::knit(text = unlist(plots_kn))`
+
+
+## Sankey with plotly, adjusting for IMC and Age {.tabset}
+
+```{r}
+
+plims <- c(0.025, 0.0005, 0.005, 0.001, 0.05, 0.05)
+names(plims) <- names(limmares_byproc)
+plims_sp <- c(0.025, 0.01, 0.01, 0.01, 0.05, 0.05)
+names(plims_sp) <- names(limmares_byproc)
+
+INCLUDE_OTHERS = FALSE
+OTHERS_SIZE = 1
+OTHERS_NAME = "Aggr. taxa"
+
+#Get processes
+
+case_name = "Depression"
+control_name = "Control"
+outdir <- paste0(opt$out, "/SankeyPlotsControlIMCEdad/")
+if(!dir.exists(outdir)) dir.create(outdir)
+
+ #Rename samples as in functional analysis
+
+#functType <- "MetaCyc"
+figs <- list()
+for(functType in names(limmares_byproc)){
+  daa_proc_all <- limmares_byproc_annot[[functType]]
+  quant_by_proc <- filtered_byproc[[functType]]
+  daa_by_sp_all <- limmares_bysp2show[[functType]]
+
+  fname <- gsub(" ", "_", paste0("Sankey_", functType, 
+                                                     "_ppr", as.character(plims[functType]), 
+                                                     "_psp", as.character(plims_sp[functType]), collapse=""))
+  if(functType == "CAZy"){
+    include_longnames <- FALSE
+    rownames(daa_proc_all) <- paste(getCazyClass(rownames(daa_proc_all)), rownames(daa_proc_all), sep=" - ")
+    quant_by_proc$Pathway <- paste(getCazyClass(quant_by_proc$Pathway), quant_by_proc$Pathway, sep=" - ")
+    daa_by_sp_all$Pathway <-  paste(getCazyClass(daa_by_sp_all$Pathway), daa_by_sp_all$Pathway, sep=" - ")
+  }else{
+    include_longnames <- TRUE
+  }
+  sankeydata <- prepareSankeyPlot(daa_proc_all, 
+                              daa_by_sp_all, 
+                              quant_by_proc, 
+                              metadf, 
+                              plim = plims[functType], 
+                              plim_sp = plims_sp[functType], 
+                              include_others = INCLUDE_OTHERS, 
+                              include_longnames = include_longnames,
+                              others_name = OTHERS_NAME,
+                              case_name = case_name, 
+                              control_name = control_name, 
+                              outdir = outdir, 
+                              name = fname)
+  figs[[functType]] <- makeSankeyPlot(nodelist = sankeydata$nodelist, 
+                                      linklist = sankeydata$linklist, 
+                                      name = paste0("Functional Analysis - ", functType, " terms"), 
+                                      fname = fname,
+                                      outdir = outdir)
+#fig
+}
+```
+
+
+```{r sankey_show_correct, echo=FALSE, warning=FALSE, message=FALSE}
+chunkname <- "sankey_corr"
+template2 <- c(
+    "### {{names(limmares_byproc)[i]}}\n",
+    "```{r {{chunkname}}{{i}}, echo = FALSE}\n",
+    "figs[[{{i}}]] \n",
+    "```\n",
+    "\n"
+  )
+plots_kn <- lapply(1:length(limmares_bysp), function(i){
+    gsub("\\[\\[i\\]\\]", paste0("[[", as.character(i), "]]"), knitr::knit_expand(text = template2), perl=T)
+    })
+
+```
+
+`r knitr::knit(text = unlist(plots_kn))`
+
+
+
+
