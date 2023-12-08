@@ -41,8 +41,8 @@ if(MODE == "IATA"){
 }else{
   opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/",
               indir = "/home/carmoma/Desktop/202311_DEPRESION/mg09_combinempa/" ,
-              r_functions="/home/carmoma/Desktop/202311_DEPRESION/metagenomics_core_functions.R",
-              predictive_functions="/home/carmoma/Desktop/202311_DEPRESION/predictive_functions.R",
+              r_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/metagenomics_core_functions.R",
+              predictive_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/predictive_functions.R",
               metadata = "/home/carmoma/Desktop/202311_DEPRESION/metadatos_MC_AL12042023_CMcopy.xlsx",
               rewrite=TRUE,
               minfreq = 0.05,
