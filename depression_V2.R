@@ -388,16 +388,16 @@ vars2pcoa <- c(quant_vars_ext, vars2test_ampl)
 
 ccaplots <- list()
 for(phname in names(all_phyloseq)){
-for(method in c("PCoA", "NMDS")){
-for(dist in dists){
-  name <- paste0(phname, "_", dist, "_", method)
-  cat("Beta diversity for ", name, "\n")
+  for(method in c("PCoA", "NMDS")){
+    for(dist in dists){
+      name <- paste0(phname, "_", dist, "_", method)
+      cat("Beta diversity for ", name, "\n")
   
-  if(phname %in% c("remove_tanda2", "remove_tanda2_rarefied_min")){
-    reserva1 <- vars2pcoa
-    vars2pcoa <- vars2pcoa[vars2pcoa != "Tanda"]
-  }
-  ccaplots[[name]] <- makeAllPCoAs(all_phyloseq[[phname]], outdir,
+      if(phname %in% c("remove_tanda2", "remove_tanda2_rarefied_min")){
+        reserva1 <- vars2pcoa
+        vars2pcoa <- vars2pcoa[vars2pcoa != "Tanda"]
+      }
+      ccaplots[[name]] <- makeAllPCoAs(all_phyloseq[[phname]], outdir,
                                 method = method,
                                 name = name, 
                                 dist_type = dist, 
@@ -405,9 +405,9 @@ for(dist in dists){
                                 vars2plot = vars2pcoa, 
                                 extradims = 2:3, 
                                 create_pdfs = T)
-  if(phname %in% c("remove_tanda2", "remove_tanda2_rarefied_min")){
-    vars2pcoa <- reserva1
-  }
+      if(phname %in% c("remove_tanda2", "remove_tanda2_rarefied_min")){
+        vars2pcoa <- reserva1
+    }
 }}}
 
 # Composition 4 each
@@ -616,20 +616,6 @@ vars2test <- c("Tanda", "Edad_log", "Sexo", "ob_o_sobrepeso","obesidad", "IMC_lo
                "tratamiento_ansioliticos", "tratamiento_anticonvulsivos",
                "tratamiento_ISRNs", "tratamiento_antidiabeticos", "tratamiento_coagul_betabloq_etc" 
 )
-#Not using groups yet
-groups2test <- list(
-  c("Sexo", "Diabetes", "IMC_log"),
-  c("Edad_log", "Sexo", "IMC_log"),
-  c("Edad_log", "Sexo", "IMC_log", "Diabetes"),
-  c("Edad_log", "Sexo", "IMC_log", "Diabetes", "Fumador"),
-  c("tratamiento_ansioliticos", "tratamiento_anticonvulsivos", "tratamiento_ISRNs"),
-  c("tratamiento_ansioliticos", "tratamiento_anticonvulsivos"),
-  c("tratamiento_ansioliticos", "tratamiento_ISRNs"),
-  c("tratamiento_ansioliticos", "tratamiento_anticonvulsivos",
-    "tratamiento_ISRNs", "tratamiento_antidiabeticos", "tratamiento_coagul_betabloq_etc"),
-  c("Edad_log", "Sexo", "IMC_log", "Diabetes",
-    "tratamiento_ansioliticos", "tratamiento_anticonvulsivos")
-)
 
 opt$reserva_0 <- opt$out
 opt$out <- paste0(opt$out, "DESeq2_ControlVars/")
@@ -686,6 +672,261 @@ for(phname in phseq_to_correct){
   
 }}
 
+
+## DAA correcting for several variables at the same time
+phseq_to_correct <- names(all_phyloseq)[4]
+interestvar <- "Condition"
+
+groups2test <- list(
+  c("Edad_log", "IMC_log"),
+  c("Sexo", "Diabetes", "IMC_log"),
+  c("Edad_log", "Sexo", "IMC_log"),
+  c("Edad_log", "Sexo", "IMC_log", "Diabetes"),
+  c("Edad_log", "Sexo", "IMC_log", "Diabetes", "Fumador"),
+  c("tratamiento_ansioliticos", "tratamiento_anticonvulsivos", "tratamiento_ISRNs"),
+  c("tratamiento_ansioliticos", "tratamiento_anticonvulsivos"),
+  c("tratamiento_ansioliticos", "tratamiento_ISRNs"),
+  c("tratamiento_ansioliticos", "tratamiento_anticonvulsivos",
+    "tratamiento_ISRNs", "tratamiento_antidiabeticos", "tratamiento_coagul_betabloq_etc"),
+  c("Edad_log", "Sexo", "IMC_log", "Diabetes",
+    "tratamiento_ansioliticos", "tratamiento_anticonvulsivos")
+)
+getGroupName <- function(groupvars){
+  gsub("_log|tratamiento_", "", groupvars, perl=T) %>% 
+    gsub(" ", "", .) %>% 
+    gsub("anti", "anti_", .) %>% 
+    make_clean_names(case="big_camel") %>% 
+    gsub("Anti", "A", .) %>% 
+    substr(1, 3) %>% 
+    paste(collapse="")
+}
+names(groups2test) <- lapply(groups2test, getGroupName)
+
+opt$reserva_0 <- opt$out
+opt$out <- paste0(opt$out, "DESeq2_ControlVarsMany/")
+if(!dir.exists(opt$out)) dir.create(opt$out)
+daa_all_corrected_groups <- list()
+for(phname in phseq_to_correct){
+  cat("Doing DESeq2 Analysys with correction for: ", phname, "\n")
+  phobj <- all_phyloseq[[phname]]
+  phobj <- updatePsWithLogs(phobj, c("Edad", "IMC"))
+  daa_all_corrected_groups[[phname]] <- list()
+  for(vargroup in groups2test){
+    cat("Doing DESeq2 Analysys with correction for: ", phname, '-', paste(vargroup, collapse=", "), "\n")
+    samples_with_nas <- sample_data(phobj) %>% data.frame %>% dplyr::select(all_of(c(vargroup))) %>% mutate_all(is.na) %>% apply(MAR=1, any)
+    samples <- sample_data(phobj)$sampleID[!samples_with_nas]
+    phobj_filt <- phyloseq::prune_samples(samples, phobj)
+    
+    vars2deseq <- c(interestvar, vargroup)
+    vgroupname <- getGroupName(vargroup)
+    name <- paste0(phname, '_', vgroupname)
+    res_tmp <-deseq_full_pipeline(phobj_filt, name, vars2deseq, opt)
+    daa_all_corrected_groups[[phname]][[vgroupname]] <- res_tmp$resdf
+  }}
+opt$out <- opt$reserva_0
+save(daa_all_corrected_groups, file=paste0(opt$out, "DESeq2_ControlVarsMany/DESEQ2_controlVarsMany_all.RData"))
+
+## Make heatmap correcting by group (many variables at a time)
+outdir <- paste0(opt$out, "DESeq2_ControlVarsMany/")
+
+for(phname in phseq_to_correct){
+  oname <- paste0(phname, '_', vgroup, "_p01")
+  makeHeatmapsFromMultipleDeseqResults(daa_all_corrected_groups[[phname]], 
+                                         daa_all[[phname]]$resdf, 
+                                         main_name = interestvar,
+                                         vars2plot = names(groups2test),
+                                         italics_rownames=T, 
+                                         pfilt =0.01, pplot=0.05, name=oname, outdir=outdir)
+  oname <- paste0(phname, '_', vgroup, "_p05")
+  makeHeatmapsFromMultipleDeseqResults(daa_all_corrected_groups[[phname]], 
+                                         daa_all[[phname]]$resdf, 
+                                         main_name = interestvar,
+                                         vars2plot = vgroup,
+                                         italics_rownames=T, 
+                                         pfilt =0.01, pplot=0.01,name=oname, outdir=outdir)
+    
+}
+
+## DAA only with covariates, without depression condition
+phseq_to_correct <- names(all_phyloseq)[4]
+interestvar <- "Condition"
+vars2test <- c("Tanda", "Edad_log", "Sexo", "ob_o_sobrepeso","obesidad", "IMC_log", "Estado.civil2", 
+               "Educacion", "reads_log10", "Fumador", 
+               "TG", "TG_mayor_200",  "Colesterol", "Colesterol_mayor_200", 
+               "PSS_estres", "Diabetes", "bristol_scale", "bristol_scale_cualitativo",
+               "defecaciones_semana", "Euroqol", "IPAQ_act_fisica", "Mediterranean_diet_adherence",
+               "tratamiento_ansioliticos", "tratamiento_anticonvulsivos",
+               "tratamiento_ISRNs", "tratamiento_antidiabeticos", "tratamiento_coagul_betabloq_etc" 
+)
+
+opt$reserva_0 <- opt$out
+opt$out <- paste0(opt$out, "DESeq2_ControlVarsAlone/")
+if(!dir.exists(opt$out)) dir.create(opt$out)
+daa_all_corrected_only <- list()
+for(phname in phseq_to_correct){
+  cat("Doing DESeq2 Analysys with correction for: ", phname, "\n")
+  phobj <- all_phyloseq[[phname]]
+  phobj <- updatePsWithLogs(phobj, c("Edad", "IMC"))
+  daa_all_corrected_only[[phname]] <- list()
+  for(var in vars2test){
+    cat("Doing DESeq2 Analysys with correction for: ", phname, '-', var, "\n")
+    samples <- sample_data(phobj)$sampleID[! is.na(sample_data(phobj)[, var])]
+    phobj_filt <- phyloseq::prune_samples(samples, phobj)
+    cases <- sample_data(phobj_filt)[, var] %>% unlist %>%  table
+    if(length(which(cases > 0)) < 2 ){cat("Only one level, skipping this variable");next}
+    name <- paste0(phname, '_', var)
+    res_tmp <-deseq_full_pipeline(phobj_filt, name, var, opt)
+    daa_all_corrected_only[[phname]][[var]] <- res_tmp$resdf
+  }}
+opt$out <- opt$reserva_0
+save(daa_all_corrected_only, file=paste0(opt$out, "DESeq2_ControlVarsAlone/DESEQ2_controlVarsAlone_all.RData"))
+
+##Integrate with and without correction
+firstContrast <- daa_all$remove_tanda2
+mainContrastName <- "Depression_vs_Control"
+edad_correcting <- read_tsv(paste0(opt$out, "/DESeq2_ControlVars/DeSEQ2/remove_tanda2_Edad_log/remove_tanda2_Edad_log_Edad_log_DAAshrinkNormal.tsv"))
+imc_correcting <- read_tsv(paste0(opt$out, "/DESeq2_ControlVars/DeSEQ2/remove_tanda2_IMC_log/remove_tanda2_IMC_log_IMC_log_DAAshrinkNormal.tsv"))
+edad_corr2 <- read_tsv(paste0(opt$out,"/DESeq2_ControlVarsMany/DeSEQ2/remove_tanda2_EdaImc/remove_tanda2_EdaImc_Edad_log_DAAshrinkNormal.tsv"))
+imc_corr2 <-  read_tsv(paste0(opt$out, "/DESeq2_ControlVarsMany/DeSEQ2/remove_tanda2_EdaImc/remove_tanda2_EdaImc_IMC_log_DAAshrinkNormal.tsv"))
+
+#Sólo he guardado resdf
+contrastlist2 <- list(
+                      daa_all_corrected$remove_tanda2$Edad_log,
+                      daa_all_corrected$remove_tanda2$IMC_log,
+                      daa_all_corrected_groups$remove_tanda2$EdaImc,
+                      
+                      daa_all_corrected_only$remove_tanda2$Edad_log,
+                      edad_correcting,
+                      edad_corr2,
+                      
+                      daa_all_corrected_only$remove_tanda2$IMC_log,
+                      imc_correcting,
+                      imc_corr2
+                      
+) %>% lapply(\(x)return(list(resdf=x)))
+name2remove2 <- "xxx"
+names(contrastlist2) <- c(
+                          "Condition_corrAge", 
+                          "Condition_corrIMC", 
+                          "Condition_corr2", 
+                          
+                          "Age_alone", 
+                          "Age_corrCond", 
+                          "Age_corr2",
+                          
+                          "BMI_alone", 
+                          "BMI_corrCond",
+                          "BMI_corr2")
+
+contrastNamesOrdered2 <- c("Depression vs Control",  gsub("_", " ", names(contrastlist2)))
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.05, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_AgeAndBMI_allCombos_p05", w=12, h=12, scale_mode = "free")
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.001, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_AgeAndBMI_allCombos_pem3", w=12, h=12, 
+                   scale_mode = "free")
+dea2contrasts <- list(firstContrast = firstContrast, contrastlist2=contrastlist2)
+save(dea2contrasts, file = paste0(outdir, "/LFC_Comparison_AgeAndBMI_allCombos.RData"))
+
+### plots only with IMC
+
+contrastlist2 <- list(
+  #daa_all_corrected$remove_tanda2$Edad_log,
+  daa_all_corrected$remove_tanda2$IMC_log,
+  #daa_all_corrected_groups$remove_tanda2$EdaImc,
+  
+  #daa_all_corrected_only$remove_tanda2$Edad_log,
+  #edad_correcting,
+  #edad_corr2,
+  
+  daa_all_corrected_only$remove_tanda2$IMC_log,
+  imc_correcting
+  #imc_corr2
+  
+) %>% lapply(\(x)return(list(resdf=x)))
+name2remove2 <- "xxx"
+names(contrastlist2) <- c(
+  #"Condition_corrAge", 
+  "Condition_corrIMC", 
+  #"Condition_corr2", 
+  
+  #"Age_alone", 
+  #"Age_corrCond", 
+  #"Age_corr2",
+  
+  "BMI_alone", 
+  "BMI_corrCond")
+  #"BMI_corr2")
+
+contrastNamesOrdered2 <- c("Depression vs Control",  gsub("_", " ", names(contrastlist2)))
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.05, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_BMIcorrAndAlone_allCombos_p05", w=12, h=8, scale_mode = "free")
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.001, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_BMIcorrAndAlone_allCombos_pem3", w=12, h=8, 
+                   scale_mode = "free")
+dea2contrasts <- list(firstContrast = firstContrast, contrastlist2=contrastlist2)
+save(dea2contrasts, file = paste0(outdir, "/LFC_Comparison_BMIcorrAndAlone_allCombos.RData"))
+
+### Only Edad
+contrastlist2 <- list(
+  daa_all_corrected$remove_tanda2$Edad_log,
+  #daa_all_corrected$remove_tanda2$IMC_log,
+  #daa_all_corrected_groups$remove_tanda2$EdaImc,
+  
+  daa_all_corrected_only$remove_tanda2$Edad_log,
+  edad_correcting
+  #edad_corr2,
+  
+  #daa_all_corrected_only$remove_tanda2$IMC_log,
+  #imc_correcting
+  #imc_corr2
+  
+) %>% lapply(\(x)return(list(resdf=x)))
+name2remove2 <- "xxx"
+names(contrastlist2) <- c(
+  "Condition_corrAge", 
+  #"Condition_corrIMC", 
+  #"Condition_corr2", 
+  
+  "Age_alone", 
+  "Age_corrCond") 
+  #"Age_corr2",
+  
+#  "BMI_alone", 
+#  "BMI_corrCond")
+#"BMI_corr2")
+
+contrastNamesOrdered2 <- c("Depression vs Control",  gsub("_", " ", names(contrastlist2)))
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.05, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_AgecorrAndAlone_allCombos_p05", w=12, h=8, scale_mode = "free")
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.001, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_AgecorrAndAlone_allCombos_pem3", w=12, h=8, 
+                   scale_mode = "free")
+dea2contrasts <- list(firstContrast = firstContrast, contrastlist2=contrastlist2)
+save(dea2contrasts, file = paste0(outdir, "/LFC_Comparison_AgecorrAndAlone_allCombos.RData"))
 
 
 ## DAA only in Depressive subjects
@@ -902,6 +1143,31 @@ compareLFCContrats(contrastlist2, firstContrast,
                    outdir = outdir, name="LFC_Comparison_AllNum_OnlyDepr_pem3", w=12, h=8, 
                    scale_mode = "free")
 
+## Beck, DSMV and stress Inside depressive subjects
+#Sólo he guardado resdf
+contrastlist2 <- list(daa_all_bygroup$remove_tanda2$Depression$Escala_depresión_Beck,
+                      daa_all_bygroup$remove_tanda2$Depression$DMSV_puntuacion_total,
+                      daa_all_bygroup$remove_tanda2$Depression$PSS_estres
+                      
+) %>% lapply(\(x)return(list(resdf=x)))
+name2remove2 <- "xxx"
+names(contrastlist2) <- c("Beck", "DMSV", "Stress")
+contrastNamesOrdered2 <- c("Depression vs Control", names(contrastlist2))
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.05, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_BeckDMSStress_OnlyDepr_p05", w=12, h=8, scale_mode = "free")
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.01, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_BeckDMSStress_OnlyDepr_pem3", w=12, h=8, 
+                   scale_mode = "free")
+
+
 #Beck levels inside Depression
 fnames <- list.files("/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyDepression_Beck_cualitativo", 
                      pattern = "_vs_", full.names = T ) %>% 
@@ -1099,6 +1365,16 @@ compareLFCContrats(contrastlist2, firstContrast,
 firstContrast_edad <- list(resdf=daa_all_corrected$remove_tanda2$Edad_log)
 firstContrast_IMC <- list(resdf=daa_all_corrected$remove_tanda2$IMC_log)
 
+fnames <- list.files("/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyDepression_Beck_cualitativo", 
+                     pattern = "_vs_", full.names = T ) %>% 
+  subset(grepl("Normal.tsv", .))
+contrastlist2 <- map(fnames, read_tsv) %>% lapply(\(x)return(list(resdf=x)))
+newnames <- basename(fnames) %>% sapply(\(x)strsplit(x, "Beck_cualitativo_")[[1]][3]) %>% 
+  gsub("_DAAshrinkNormal.tsv", "", .) %>% gsub("_", " ", .)
+names(contrastlist2) <- newnames
+name2remove2 <- "xxx"
+contrastNamesOrdered2 <- c("Depression vs Control", names(contrastlist2))
+
 compareLFCContrats(contrastlist2, firstContrast_edad, 
                    contrastNamesOrdered2, mainContrastName, 
                    plim_select= 0.05, plim_plot=0.1,
@@ -1126,7 +1402,7 @@ compareLFCContrats(contrastlist2, firstContrast_IMC,
                    outdir = outdir, name="LFC_Comparison_CorrectIMC_BeckQual_OnlyDepr_pem3", w=12, h=8, 
                    scale_mode = "fixed")
 
-#Correceted by Age, Again with quantitative scales inside depr
+#Correceted by Age and IMC, Again with quantitative scales inside depr
 contrastlist2 <- list(daa_all_bygroup$remove_tanda2$Depression$Escala_depresión_Beck,
                       daa_all_bygroup$remove_tanda2$Depression$Montgomery.Asberg,
                       daa_all_bygroup$remove_tanda2$Depression$Escala_Hamilton,
@@ -1147,6 +1423,20 @@ compareLFCContrats(contrastlist2, firstContrast_edad,
                    name2remove = name2remove2,
                    resdfname="resdf", 
                    outdir = outdir, name="LFC_Comparison_CorrAge_AllNum_OnlyDepr_pem3", w=12, h=8, 
+                   scale_mode = "free")
+
+compareLFCContrats(contrastlist2, firstContrast_IMC, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.05, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_CorrIMC_AllNum_OnlyDepr_p05", w=12, h=8, scale_mode = "free")
+compareLFCContrats(contrastlist2, firstContrast_IMC, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.001, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_CorrIMC_AllNum_OnlyDepr_pem3", w=12, h=8, 
                    scale_mode = "free")
 
 # Compare Original with corrected, population variables
