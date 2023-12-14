@@ -1,5 +1,4 @@
 library(tidyverse)
-library(bmem)
 library(DESeq2)
 library(phyloseq)
 
@@ -34,11 +33,12 @@ MODE = "LOCAL"
 if(MODE == "IATA"){
   opt <- list()
 }else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/mediation_analysis",
+  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/mediation_analysis/",
               indir = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/",
               phyloseq_list = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/phyloseq/phyloseq_all_list.RData",
               phyloseq_name = "remove_tanda2",
               r_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/metagenomics_core_functions.R",
+              r_functions_mediation="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/mediation_functions.R",
               metadata = "/home/carmoma/Desktop/202311_DEPRESION/metadatos_MC_AL12042023_CMcopy.xlsx",
               rewrite=TRUE,
               fc=1, 
@@ -49,6 +49,7 @@ if(! dir.exists(opt$out)){dir.create(opt$out)}
 
 ### LOAD DATA
 source(opt$r_functions)
+source(opt$r_functions_mediation)
 load(opt$phyloseq_list)
 phobj <- all_phyloseq[[opt$phyloseq_name]]
 phobj <- updatePsWithLogs(phobj, c("Edad", "IMC"))
@@ -63,169 +64,7 @@ load(paste0(opt$indir, "DESeq2_ControlVarsMany/LFC_Comparison_AgeAndBMI_allCombo
 vstdf <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_vst_counts.tsv"))
 normdf <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_norm_counts.tsv"))
 
-
 ### Do tests
-
-makeMediationSimple <- function(df, xname, yname, medname){
-  library(bmem)
-  library(sem)
-  
-  eq1 = paste0(yname, " = b*", medname, " + cp*", xname)
-  eq2 = paste0(medname, " = a*", xname)
-  eqs <- paste(eq1, eq2, sep="\n", collapse="\n")
-  
-  iris.model<-specifyEquations(exog.variances=T, text=eqs)
-
-  effects<-c('a*b', 'cp+a*b') 
-  nlsy.res<-bmem.sobel(df, iris.model, effects) 
-  return(nlsy.res)
-
-}
-
-makeMediationSimple_mergedX <- function(df, xnames, yname, medname){
-  library(bmem)
-  library(sem)
-  
-  a_params <- paste("a", 1:length(xnames), sep="")
-  cp_params <- paste("cp", 1:length(xnames), sep="")
-  
-  eq1 = paste(yname, " = b*", medname, " + ", cp_params, "*", xnames, sep="") %>% 
-    paste(collapse = "\n")
-  eq2 = paste0(medname, " = ", a_params, "*", xnames) %>% 
-    paste(collapse = "\n")
-  eqs <- paste(eq1, eq2, sep="\n", collapse="\n")
-  
-  iris.model<-specifyEquations(exog.variances=T, text=eqs)
-  
-  effects<-c(paste(a_params, "*b", sep="" ), paste(cp_params, '+', a_params,'*b', sep="")) 
-  nlsy.res<-bmem.sobel(df, iris.model, effects) 
-  
-  oldnames2 <- rownames(nlsy.res$estimates) %>% 
-    sapply(\(x)strsplit(x, "\\*|\\+",perl = TRUE)[[1]][1]) 
-  # newnames <- ifelse(oldnames %in% a_params, 
-  #        paste(oldnames, xnames[match(oldnames, a_params)], sep="_"),
-  #        ifelse(oldnames %in% cp_params, 
-  #               paste(oldnames, xnames[match(oldnames, cp_params)], sep="_"), 
-  #               oldnames))
-  resdf <- nlsy.res$estimate %>% 
-    rownames_to_column("param")
-  resdf$x_labels <- ifelse(oldnames2 %in% a_params, 
-                     xnames[match(oldnames2, a_params)],
-                     ifelse(oldnames2 %in% cp_params, 
-                            xnames[match(oldnames2, cp_params)], 
-                            gsub("V\\[|\\]", "", oldnames2)))
-  
-  #rownames(nlsy.res$estimates) <- newnames
-  return(resdf)
-}
-
-makeMediationSimple_mergedMediat <- function(df, x_name, yname, mednames){
-  library(bmem)
-  library(sem)
-  
-  a_params <- paste("a", 1:length(mednames), sep="")
-  b_params <- paste("b", 1:length(mednames), sep="")
-  
-  eq1 = paste(yname, " = ", b_params, "*", mednames, " + ", "cp*", x_name, sep="") %>% 
-    paste(collapse = "\n")
-  eq2 = paste0(mednames, " = ", a_params, "*", x_name) %>% 
-    paste(collapse = "\n")
-  eqs <- paste(eq1, eq2, sep="\n", collapse="\n")
-  
-  iris.model<-specifyEquations(exog.variances=T, text=eqs)
-  
-  effects<-c(paste(a_params, "*", b_params, sep="" ), paste('cp+', a_params,'*', b_params, sep="")) 
-  nlsy.res<-bmem.sobel(df, iris.model, effects) 
-  
-  oldnames2 <- rownames(nlsy.res$estimates) %>% 
-    sapply(\(x){y<-strsplit(x, "\\*|\\+",perl = TRUE)[[1]];y[length(y)]}) 
-  # newnames <- ifelse(oldnames %in% a_params, 
-  #        paste(oldnames, xnames[match(oldnames, a_params)], sep="_"),
-  #        ifelse(oldnames %in% cp_params, 
-  #               paste(oldnames, xnames[match(oldnames, cp_params)], sep="_"), 
-  #               oldnames))
-  resdf <- nlsy.res$estimate %>% 
-    rownames_to_column("param")
-  resdf$x_labels <- ifelse(oldnames2 %in% a_params, 
-                           xnames[match(oldnames2, a_params)],
-                           ifelse(oldnames2 %in% b_params, 
-                                  xnames[match(oldnames2, b_params)], 
-                                  gsub("V\\[|\\]", "", oldnames2)))
-  
-  #rownames(nlsy.res$estimates) <- newnames
-  return(resdf)
-}
-
-makeMediationComplex <- function(df, xname="Edad", yname="Condition_bin", 
-         medname="IMC", medname2="Faecalibacterium_prausnitzii"){
-  library(bmem)
-  library(sem)
-  
-  eq1 = paste0(yname, " = b*", medname, " + cp*", medname2, " + fp*", xname)
-  eq2 = paste0(medname, " = a*", medname2, " + d*", xname)
-  eq3 = paste0(medname2, " = e*", xname)
-  eqs <- paste(eq1, eq2, eq3, sep="\n", collapse="\n")
-  
-  iris.model<-specifyEquations(exog.variances=T, text=eqs)
-  
-  effects<-c('a*b', 'cp+a*b', 'd*b', 'fp+d*b', 'e*cp', 'fp+e*cp', 'd*b+fp+e*cp+a*b') 
-  nlsy.res<-bmem.sobel(df, iris.model, effects) 
-  return(nlsy.res)
-  
-}
-
-makeMediationComplex_mergedMEdiat2 <- function(df, xname="Edad", 
-                                               yname="Condition_bin", 
-                                               medname="IMC", 
-                                               mednames2=c("Faecalibacterium_prausnitzii")){
-  library(bmem)
-  library(sem)
-  
-  a_params <- paste("a", 1:length(mednames2), sep="")
-  cp_params <- paste("cp", 1:length(mednames2), sep="")
-  e_params <- paste("e", 1:length(mednames2), sep="")
-  
-  eq1 = paste(yname, " = b*", medname, " + ", cp_params, "*", mednames2, " + fp*", xname, sep="") %>% 
-    paste(collapse = "\n")
-  eq2 = paste0(medname, " = ", a_params, "*", mednames2, " + d*", xname) %>% 
-    paste(collapse = "\n")
-  eq3 = paste0(mednames2, " = ", e_params, "*", xname)%>% 
-    paste(collapse = "\n")
-  eqs <- paste(eq1, eq2, eq3, sep="\n", collapse="\n")
-  
-  iris.model<-specifyEquations(exog.variances=T, text=eqs)
-  
-  effects<-c(paste(a_params, "*b", sep="" ), 
-             paste(cp_params, '+', a_params,'*b', sep=""),
-             'fp+d*b',
-             paste(e_params, '*', cp_params, sep=""),
-             paste('fp + ', e_params, '*', cp_params, sep=""),
-             paste('d*b + fp + ', e_params, '*', cp_params, ' + ', a_params, "*b", sep="")
-             ) 
-  nlsy.res<-bmem.sobel(df, iris.model, effects) 
-  
-  resdf <- nlsy.res$estimate %>% 
-    rownames_to_column("param")
-  resdf$x_labels <- resdf$param %>% 
-    sapply(\(x){
-      y <-strsplit(x, "\\*|\\+",perl = TRUE)[[1]] %>% gsub(" ", "", .) %>% sort 
-      
-      if(any(stringr::str_starts(y, "a"))){
-        pthis <- y[stringr::str_starts(y, "a")]
-        return(paste(mednames2[a_params==pthis], collapse=":"))
-      }else if(any(stringr::str_starts(y, "cp"))){
-        pthis <- y[stringr::str_starts(y, "cp")]
-        return(paste(mednames2[cp_params==pthis], collapse=":"))
-      }else if(any(stringr::str_starts(y, "e"))){
-        pthis <- y[stringr::str_starts(y, "e")]
-        return(paste(mednames2[e_params==pthis], collapse=":"))
-      }else{
-        return(gsub("V\\[|\\]", "", x))
-      }
-      
-    }) 
-  return(resdf)
-}
 
 #### Read data 
 
@@ -279,7 +118,9 @@ y_name <- "Condition_bin"
 plim <- 0.05
 
 vars2test <- summary_df %>% 
-  dplyr::filter(depr_only_padj<plim | imc_only_padj < plim | depr_adjimc_padj < plim) %>% 
+  dplyr::filter(depr_only_padj < plim &
+                  imc_only_padj > 0.1 & 
+                  imc_adjdepr_padj > 0.1) %>% 
   pull(variable)
 
 
@@ -304,13 +145,51 @@ medresults <- lapply(vars2test, \(x, df_all){
     filter(param %in% param_names) %>% 
     unite("tmp", param, var, sep="_") %>% 
     spread(tmp, value) %>% 
-    mutate(Xvar = x, Yvar = y_name, Mediator=mediator_name)
+    mutate(Xvar = x, Yvar = y_name, Mediator=mediator_name, fullmodel=list(res$estimates))
   return(res2)
   
 }, df_all) %>% bind_rows()
 #all(medresults$Xvar %in% summary_df$variable)
-medresults_merged <- merge(medresults, summary_df, by.x="Xvar", by.y="variable")
+medresults_merged <- merge(medresults %>% dplyr::select(-fullmodel), summary_df, by.x="Xvar", by.y="variable")
 write_tsv(medresults_merged, file=paste0(opt$out, "mediation_analysis_IMC.tsv"))
+save(medresults_merged, file=paste0(opt$out, "mediation_analysis_IMC.RData"))
+
+## Transform to plot
+def_effects <- c('a', 'b', 'cp','a*b', 'cp+a*b') 
+res_trans <- map(1:nrow(medresults), \(i){
+  res_i <- medresults$fullmodel[[i]]
+  oldnames2 <- rownames(res_i) %>% 
+    sapply(\(x)strsplit(x, "\\*|\\+",perl = TRUE)[[1]][1]) 
+  resdf_i <- res_i %>% 
+    rownames_to_column("param") %>% 
+    mutate(x_labels = ifelse(param %in% def_effects, 
+                             medresults$Xvar[i],
+                             gsub("V\\[|\\]", "", param)),
+           param = ifelse(param %in% def_effects, 
+                          gsub("(b|a|cp)", paste0("\\1", as.character(i)), param, perl=T), param) 
+           )
+
+}) %>% bind_rows()
+bs_only <- res_trans %>% dplyr::filter(grepl("^b[0-9]+$", param))
+(g_bs <- ggplot(bs_only,aes(x=Estimate))+geom_histogram()+mytheme+ggtitle("Histogram of b (IMC->Depr)"))
+ggsave(filename = paste0(opt$out, "histogram_bs_IMC_separate.pdf"), g_bs)
+
+res_final <- rbind(
+  bs_only %>% 
+    mutate_if(is.character, \(x)"b") %>% 
+    group_by(param, x_labels) %>% 
+    dplyr::summarise_all(mean) %>% 
+    dplyr::select(all_of(names(res_trans))),
+  res_trans %>% dplyr::filter(!grepl("^b[0-9]+$", param)) %>% 
+    dplyr::mutate(param=gsub("b[0-9]+$", "b", param))
+) 
+write_tsv(res_final, file=paste0(opt$out, "mediation_analysis_IMC_reformat.tsv"))
+write_tsv(bs_only, file=paste0(opt$out, "mediation_analysis_IMC_bs.tsv"))
+
+
+name<-"mediation_analysis_IMC_separate_plot_OnlyWithoutIMCEffects"
+plotIMCMediationSimple(res_final, vars2test, opt$out, name, plim_plot = 0.05, 
+                       use_color_scale = FALSE, w=14, h=18)
 
 ###########################################################################
 ### MEDIATION WITH IMC, MERGED
@@ -347,19 +226,25 @@ summary_df <- cbind(summary_df, merged_pvals)
 
 mediator_name <- "IMC"
 y_name <- "Condition_bin"
-plim <- 0.05
+plim <- 0.001
 
 vars2test <- summary_df %>% 
-  dplyr::filter(depr_only_padj<plim & imc_only_padj < plim & imc_adjdepr_padj < plim) %>% 
+  dplyr::filter(depr_only_padj>plim & 
+                  imc_only_padj < plim & 
+                  imc_adjdepr_padj < plim) %>% 
   pull(variable)
 length(vars2test)
-
+#vars2test <- "Actinomyces_naeslundii"
 df <- df_all %>% dplyr::select(all_of(c(vars2test, y_name, mediator_name)))
 with_nas <-  df %>% apply(MAR=1, \(x)any(is.na(x)))
 df <- df[!with_nas, ]
 res <- makeMediationSimple_mergedX(df, vars2test, y_name, mediator_name)
 write_tsv(res, file=paste0(opt$out, "mediation_analysis_IMC_mergedModel.tsv"))
 
+### PLOT 
+
+name<-"analysis_IMC_mergedModel_vjust"
+plotIMCMediationSimple(res, vars2test, opt$out, name, plim_plot = 0.05, use_color_scale = FALSE)
 
 ###################################################################
 ### MEDIATION ANALYSIS WITH AGE
@@ -636,5 +521,3 @@ res <- makeMediationComplex_mergedMEdiat2(df, xname=x_name,
 
 #all(medresults$Xvar %in% summary_df$variable)
 write_tsv(res, file=paste0(opt$out, "mediation_analysis_EdadAndIMC_mergedModel.tsv"))
-
-

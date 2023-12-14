@@ -34,6 +34,8 @@ mytheme <-  theme_bw()+
                                    size = 12, colour = "black", 
                                    angle = 90, face = "bold"))
 
+
+
 mystyle <- theme_classic() +
   theme(axis.text = element_text(face="bold"), 
         axis.title = element_text(face="bold")) 
