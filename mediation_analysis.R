@@ -78,8 +78,19 @@ names(df_all) <- gsub("^X\\.", "", names(df_all)) %>%
                  gsub("\\._", "_", .) %>% 
                  gsub("\\.$", "", .)
 
+expr_df_norm <- normdf %>% column_to_rownames("gene") %>% 
+  as.matrix() %>% t %>% data.frame %>% 
+  rownames_to_column("sampleID")
 
-write_tsv(df_all, file=paste0(opt$out, "merged_data.tsv"))
+df_all_norm <- merge(metadata2, expr_df_norm, by="sampleID")
+df_all_norm$Condition_bin <- ifelse(df_all_norm$Condition=="Depression", TRUE, FALSE)
+names(df_all_norm) <- gsub("^X\\.", "", names(df_all_norm)) %>% 
+  gsub("\\._", "_", .) %>% 
+  gsub("\\.$", "", .)
+
+
+write_tsv(df_all, file=paste0(opt$out, "merged_data_vst.tsv"))
+write_tsv(df_all_norm, file=paste0(opt$out, "merged_data_norm.tsv"))
 
 ### MEDIATION ANALYSIS WITH IMC
 
@@ -119,8 +130,8 @@ plim <- 0.05
 
 vars2test <- summary_df %>% 
   dplyr::filter(depr_only_padj < plim &
-                  imc_only_padj > 0.1 & 
-                  imc_adjdepr_padj > 0.1) %>% 
+                  imc_only_padj < plim  & 
+                  imc_adjdepr_padj < plim) %>% 
   pull(variable)
 
 
@@ -187,9 +198,25 @@ write_tsv(res_final, file=paste0(opt$out, "mediation_analysis_IMC_reformat.tsv")
 write_tsv(bs_only, file=paste0(opt$out, "mediation_analysis_IMC_bs.tsv"))
 
 
-name<-"mediation_analysis_IMC_separate_plot_OnlyWithoutIMCEffects"
-plotIMCMediationSimple(res_final, vars2test, opt$out, name, plim_plot = 0.05, 
-                       use_color_scale = FALSE, w=14, h=18)
+name<-"analysis_IMC_separateModel_vjust"
+plotres <- plotIMCMediationSimple(res_final, vars2test, opt$out, name, plim_plot = 0.05, 
+                       use_color_scale = FALSE, w=14, h=10)
+
+## Make also boxplot
+bacnames <- plotres$bacorder$x_labels
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "IMC_separate_BySpeciesPearson", quantvar="IMC_log", 
+                           quantvar_name = "log(IMC)", corrmethod = "pearson", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "IMC_separate_BySpeciesSpearman", quantvar="IMC_log", 
+                           quantvar_name = "log(IMC)", corrmethod = "spearman", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "IMC_separate_BySpeciesKendall", quantvar="IMC_log", 
+                           quantvar_name = "log(IMC)", corrmethod = "kendall", w=8, h=10)
+# 
+# plots <- makePlotBySpecies(bacnames, df_all_norm, opt$out, "IMCseparate_NormCountsBySpeciesPearson", quantvar="IMC_log", 
+#                            quantvar_name = "log(IMC)", corrmethod = "pearson", w=8, h=10)
+# plots <- makePlotBySpecies(bacnames, df_all_norm, opt$out, "IMCseparate_NormCountsBySpeciesSpearman", quantvar="IMC_log", 
+#                            quantvar_name = "log(IMC)", corrmethod = "spearman", w=8, h=10)
+# plots <- makePlotBySpecies(bacnames, df_all_norm, opt$out, "IMCseparate_NormCountsBySpeciesKendall", quantvar="IMC_log", 
+#                            quantvar_name = "log(IMC)", corrmethod = "kendall", w=8, h=10)
 
 ###########################################################################
 ### MEDIATION WITH IMC, MERGED
@@ -226,10 +253,10 @@ summary_df <- cbind(summary_df, merged_pvals)
 
 mediator_name <- "IMC"
 y_name <- "Condition_bin"
-plim <- 0.001
+plim <- 0.05
 
 vars2test <- summary_df %>% 
-  dplyr::filter(depr_only_padj>plim & 
+  dplyr::filter(depr_only_padj<plim & 
                   imc_only_padj < plim & 
                   imc_adjdepr_padj < plim) %>% 
   pull(variable)
@@ -244,7 +271,18 @@ write_tsv(res, file=paste0(opt$out, "mediation_analysis_IMC_mergedModel.tsv"))
 ### PLOT 
 
 name<-"analysis_IMC_mergedModel_vjust"
-plotIMCMediationSimple(res, vars2test, opt$out, name, plim_plot = 0.05, use_color_scale = FALSE)
+plotres2 <- plotIMCMediationSimple(res, vars2test, opt$out, name, plim_plot = 0.05, use_color_scale = FALSE)
+
+
+## Make also boxplot
+bacnames <- plotres2$bacorder$x_labels
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "IMC_merged_BySpeciesPearson", quantvar="IMC_log", 
+                           quantvar_name = "log(IMC)", corrmethod = "pearson", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "IMC_merged_BySpeciesSpearman", quantvar="IMC_log", 
+                           quantvar_name = "log(IMC)", corrmethod = "spearman", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "IMC_merged_BySpeciesKendall", quantvar="IMC_log", 
+                           quantvar_name = "log(IMC)", corrmethod = "kendall", w=8, h=10)
+# 
 
 ###################################################################
 ### MEDIATION ANALYSIS WITH AGE
@@ -317,6 +355,19 @@ medresultsAge <- lapply(vars2test, \(mediator_name, df_all){
 medresultsAge_merged <- merge(medresultsAge, summary_df, by.x="Mediator", by.y="variable")
 write_tsv(medresultsAge_merged, file=paste0(opt$out, "mediation_analysis_Edad.tsv"))
 
+
+plotres3 <- plotAgeMediationSimple(res, vars2test, opt$out, name, plim_plot = 0.05, use_color_scale = FALSE)
+
+## Make also boxplot
+bacnames <- plotres3$bacorder$x_labels
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "Age_separate_BySpeciesPearson", quantvar="Edad_log", 
+                           quantvar_name = "log(Age)", corrmethod = "pearson", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "Age_separate_BySpeciesSpearman", quantvar="Edad_log", 
+                           quantvar_name = "log(Age)", corrmethod = "spearman", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "Age_separate_BySpeciesKendall", quantvar="Edad_log", 
+                           quantvar_name = "log(Age)", corrmethod = "kendall", w=8, h=10)
+# 
+
 ##################################################################################33
 ### MEDIATION ANALYSIS WITH AGE, MERGED
 
@@ -355,14 +406,31 @@ y_name <- "Condition_bin"
 plim <- 0.05
 
 vars2test <- summary_df %>% 
-  dplyr::filter(depr_only_padj < plim  & age_adjdepr_padj < plim) %>% 
+  dplyr::filter(depr_only_padj < plim  & 
+                  age_only_padj < plim & 
+                  age_adjdepr_padj) %>% 
   pull(variable)
 
 df <- df_all %>% dplyr::select(all_of(c(x_name, y_name, vars2test)))
 with_nas <-  df %>% apply(MAR=1, \(x)any(is.na(x)))
 df <- df[!with_nas, ]
 res <- makeMediationSimple_mergedMediat(df, x_name, y_name, vars2test)
-write_tsv(medresultsAge_merged, file=paste0(opt$out, "mediation_analysis_Edad_mergedModel.tsv"))
+write_tsv(res, file=paste0(opt$out, "mediation_analysis_Edad_mergedModel.tsv"))
+
+## Plot network
+name<-"analysis_Age_mergedModel_vjust"
+plotres4 <- plotAgeMediationSimple(res, vars2test, opt$out, name, plim_plot = 0.05, use_color_scale = FALSE, 
+                                   w=10, h=6)
+
+## Make also boxplot
+bacnames <- plotres4$bacorder$x_labels
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "Age_merged_BySpeciesPearson", quantvar="Edad_log", 
+                           quantvar_name = "log(Age)", corrmethod = "pearson", w=8, h=6)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "Age_merged_BySpeciesSpearman", quantvar="Edad_log", 
+                           quantvar_name = "log(Age)", corrmethod = "spearman", w=8, h=6)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "Age_merged_BySpeciesKendall", quantvar="Edad_log", 
+                           quantvar_name = "log(Age)", corrmethod = "kendall", w=8, h=6)
+# 
 
 ### MEDIATION ANALYSIS WITH AGE AND IMC
 

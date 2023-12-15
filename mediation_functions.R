@@ -277,5 +277,206 @@ plotIMCMediationSimple <- function(res, vars2test, outdir, outname,
   )
   ggsave(filename = paste0(opt$out, "/", name,'_p', as.character(plim_plot), ".pdf"), g1, 
          width = w, height = h)
-  return(g1)
+  return(list(plot=g1, bacorder=bacorder, vertices=vertices, edges=edgetab))
+}
+
+plotAgeMediationSimple <- function(res, vars2test, outdir, outname, 
+                                   plim_plot = 0.05, use_color_scale=FALSE, w=14, h=6){
+  
+  edge_width_factor <- 10 ##Constants to adjust edge width. However, not used anymore
+  minq <- 0.2
+  rangefactor <- 10
+  
+  bacorder <- res %>% filter(grepl("^+b[0-9]+$", param)) %>% arrange(Estimate) #^cp[0-9]+$
+  assertthat::assert_that(all(vars2test %in% bacorder$x_labels) & nrow(bacorder)==length(vars2test))
+  
+  vnames <- c(bacorder$x_labels, "D", "Age")
+  total_age_effect <- res %>% dplyr::filter(grepl("^cp\\+", param, perl=T)) %>% 
+    pull(Estimate) %>% 
+    mean
+  vertices <- data.frame(names = gsub("_", " ", vnames),
+                         xpos1 = c( rep(1, length(vnames)-2), #1:(length(vnames)-2),
+                                    20, #length(vnames)+5,
+                                    14),#length(vnames)+5),
+                         ypos1 = c(length(vnames):3, 
+                                   7,
+                                   3 ),
+                         size = c(rep(4, length(vars2test)), 10, 10),
+                         totaleffect = c(bacorder$Estimate, NA, total_age_effect),
+                         total_pvalue = c(bacorder$p.value, NA, NA),
+                         colors = c(ifelse(bacorder$p.value < plim_plot, 
+                                           ifelse(bacorder$Estimate< 0, C_CTRL, C_CASE), 
+                                           C_NS),
+                                    C_CASE, C_OTHER),
+                         xoffset = ifelse(vnames == "D", 0.5, ifelse(vnames== "BMI", 1, 0))
+  )
+  
+  
+  edgenames <- expand.grid(c("a", "b"), as.character(1:length(vars2test)) ) %>% 
+    as.matrix %>% apply(MAR=1,paste,sep="", collapse="")
+  edgenames <- c("cp", edgenames)
+  assertthat::assert_that(all(edgenames %in% res$param))  
+  
+  minval <- quantile(abs(res$Estimate)*edge_width_factor, minq) #to trim edge widths
+  
+  
+  edgetab <- res %>% dplyr::filter(param %in% edgenames) %>% 
+    dplyr::mutate(
+      from=ifelse(grepl("^b", param), gsub("_", " ", x_labels), "Age"),
+      to = ifelse(grepl("^a", param), gsub("_", " ", x_labels), "D"),
+      x0 = vertices$xpos1[match(from, vertices$names)],
+      y0 = vertices$ypos1[match(from, vertices$names)],
+      x1 = vertices$xpos1[match(to, vertices$names)],
+      y1 = vertices$ypos1[match(to, vertices$names)],
+      labelnames = ifelse(to=="D" & from == "Age", paste0("c'=", as.character(round(Estimate*10,2))),
+                          ifelse(to=="D", paste0("b=", as.character(round(Estimate*10,2))), 
+                                 paste0("a=", as.character(round(Estimate*10,2))))
+      ),
+      color = ifelse(Estimate < 0, C_CTRL, C_CASE),
+      color = ifelse(p.value > plim_plot, C_NS, color),
+      linetype = ifelse(p.value > plim_plot, 2, 1),
+      width = abs(Estimate)*edge_width_factor,
+      width = ifelse(width <  minval, minval, 
+                     ifelse(width > rangefactor*minval, 
+                            rangefactor*minval, width))
+    ) %>% dplyr::select(from, to, everything())
+  
+  edgetab$y1[edgetab$to=="D" & edgetab$from=="Age"] = edgetab$y1[edgetab$to=="D" & edgetab$from=="Age"]-0.3
+  edgetab$x1[edgetab$to=="D" & edgetab$from=="Age"] = edgetab$x1[edgetab$to=="D" & edgetab$from=="Age"]-0.3
+  
+  if(use_color_scale){
+    scale_link = scales::gradient_n_pal(colours=c(C_CTRL2, C_CASE_LINK), 
+                                        values=c(min(c(-1,min(edgetab$Estimate))), 
+                                                 0,
+                                                 max(c(1,max(edgetab$Estimate)))))
+    edgetab <- edgetab %>% dplyr::mutate(color = ifelse(p.value > plim_plot, C_NS, scale_link(Estimate)))
+    vertices <- vertices %>% dplyr::mutate(colors = c(ifelse(bacorder$p.value < plim_plot, 
+                                                             scale_link(totaleffect), 
+                                                             C_NS),
+                                                      C_CASE, C_OTHER))
+    
+  }
+  
+  vertices$labelnames <- mapply(vertices$names,vertices$totaleffect, FUN=function(x, val) {
+    if( x == "D"){
+      return(x)
+    }else if(x=="Age"){
+      return("Age") #paste0("Age (", as.character(round(10*val, 2)), ")")
+    }else{
+      return(paste0("italic('", gsub("sp ", "sp. ", x), "')"))
+                                  }}, SIMPLIFY = T)
+  (g1 <- ggplot()+
+      # geom_point(data=vertices, aes(x=xpos1, y=ypos1),
+      #            size=5, col=vertices$colors)+
+      # geom_segment(data = edgetab, aes(x=x0, y=y0, xend=x1, yend=y1),
+      #              size = edgetab$width,
+      #              col = edgetab$color,
+      #              linetype = edgetab$linetype,
+      #              arrow=arrow(length=unit(0.01, "npc"), type="closed")) +
+      geom_textsegment(data = edgetab, 
+                       aes(label=labelnames,x=x0, y=y0, xend=x1, yend=y1),
+                       #size = edgetab$width,
+                       col = edgetab$color,
+                       linetype = edgetab$linetype,
+                       arrow=arrow(length=unit(0.01, "npc"), type="closed")) +
+      geom_label(data=vertices, aes(label=labelnames, x=xpos1, y=ypos1), 
+                 parse=TRUE,
+                 size=vertices$size,
+                 hjust=1,
+                 nudge_x = vertices$xoffset,
+                 col=vertices$colors, inherit.aes = T)+
+      xlim(c(min(vertices$xpos1-7), max(vertices$xpos1+7)))+
+      ylim(c(-1, max(vertices$ypos1)+2))+
+      theme_void()
+  )
+  ggsave(filename = paste0(opt$out, "/", name,'_p', as.character(plim_plot), ".pdf"), g1, 
+         width = w, height = h)
+  return(list(plot=g1, bacorder=bacorder, vertices=vertices, edges=edgetab))
+}
+
+makePlotBySpecies <- function(bacnames, df_all, outdir, name, quantvar="IMC_log", 
+                              quantvar_name = "log(IMC)",
+                              corrmethod="pearson", w=8, h=10){
+  library(cowplot)
+  assertthat::assert_that(all(bacnames %in% names(df_all)))
+  vars2factor <- bacnames %>% gsub("_", " ", .) %>% 
+    gsub("sp ", "sp. ", .) #%>% 
+  # paste0("italic('", ., "')")
+  
+  vars2factor <- factor(vars2factor, levels = vars2factor)
+  
+  df2box <- df_all %>% dplyr::select(all_of(c(vars2test, "Condition", mediator_name))) %>% 
+    gather(key="taxon", value="abundance", vars2test) %>% 
+    mutate(taxon = gsub("_", " ", taxon) %>% 
+             gsub("sp ", "sp. ", .) %>% 
+             #paste0("italic('", ., "')") %>% 
+             factor(levels=vars2factor)) %>% 
+    mutate(Condition = ifelse(Condition == "Control", "C", "D"),
+           Condition = factor(Condition, levels=c("C", "D")))
+  dfmeans <- df2box %>% group_by(Condition, taxon) %>% summarise(abundance=mean(abundance))
+  g1 <- ggplot(df2box, aes(x=Condition, y=abundance, col=Condition))+
+    facet_grid( taxon ~ .)+
+    geom_boxplot(outlier.alpha = 0, notch = F, width=0.1, size=1.5, varwidth = T)+
+    geom_point(data=dfmeans, aes(x=Condition, y=abundance, size=1.8)) +
+    coord_flip() +
+    theme_minimal() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+    theme(strip.text.y = element_text(size = 10, 
+                                      colour = "black", angle = 0, face = "italic")) +
+    theme(axis.text.x = element_text(size = 8, 
+                                     colour = "black", angle = 0, 
+                                     face = "plain"))+
+    theme(axis.text.y = element_text(size = 8, 
+                                     colour = "black", angle = 0, 
+                                     face = "plain")) +
+    #theme(axis.text.y = element_blank())+
+    ylab("Taxon abundance")
+  ggsave(filename = paste0(opt$out, "/", name, ".pdf"), g1, width = w, height = h)
+  
+  mods <- do.call('rbind', map(bacnames, \(x){
+    form <- as.formula(paste0(quantvar, " ~ ", x))
+    mm <- lm(data=df_all, formula = form) %>% summary() 
+    mm2 <- cbind(broom::glance(mm), 
+                 data.frame(intercept=mm$coefficients[1], 
+                            slope=mm$coefficients[2], 
+                            taxon=x,
+                            correlation = cor(df_all[, quantvar], df_all[, x], method = corrmethod, use="complete.obs"),
+                            correlation_pvalue = cor.test(df_all[, quantvar], df_all[, x], method = corrmethod, use="complete.obs")$p.value
+                            ))
+    return(mm2)
+  } 
+  )) %>% mutate(taxon = gsub("_", " ", taxon) %>% 
+                  gsub("sp ", "sp. ", .) %>% 
+                  #paste0("italic('", ., "')") %>% 
+                  factor(levels=vars2factor),
+                color = ifelse(correlation_pvalue > 0.05, C_NS, 
+                               ifelse(slope <0 , C_CTRL, C_CASE))
+                )
+  
+  g2 <- ggplot(mods, aes(y=correlation, x=taxon))+
+    facet_grid( taxon ~ ., scales="free")+
+    geom_col(fill=mods$color)+
+    coord_flip()+ 
+    theme_minimal() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+    #theme(strip.text.y = element_text(size = 10, 
+    #                                  colour = "black", angle = 0, face = "italic")) +
+    theme(strip.text.y = element_blank())+
+    theme(axis.text.x = element_text(size = 8, 
+                                     colour = "black", angle = 0, 
+                                     face = "plain")) +
+    theme(axis.text.y = element_text(size = 12, 
+                                     colour = "black", angle = 0, 
+                                     face = "italic"))+
+    ylab(paste0(make_clean_names(corrmethod, case="big_camel"), " corr. ", quantvar_name))
+    
+  ggsave(filename = paste0(opt$out, "/", name,'_',quantvar ,"_barplot.pdf"), g2, width = w, height = h)
+  
+  g3 <- g1 + theme(strip.text.y = element_blank()) + theme(legend.position = "none")
+  cw <- cowplot::plot_grid(plotlist=list(g2, g3), nrow = 1, rel_widths = c(2,1))
+  pdf(paste0(opt$out, name, "_merged.pdf"), width = h, height = h)
+  print(cw)
+  dev.off()
+  write_tsv(mods, file = paste0(opt$out, name,'_',quantvar ,"_correlations.tsv"))
+  return(list(box=g1, bars=g2, cw=cw, correlations=mods))
 }
