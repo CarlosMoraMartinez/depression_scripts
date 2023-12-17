@@ -493,10 +493,8 @@ plotAgeAndIMCMediationComplex <- function(res, vars2test, outdir, outname,
   }
   
   vertices$labelnames <- mapply(vertices$names,vertices$totaleffect, FUN=function(x, val) {
-    if( x == "D"){
+    if( x %in% c("D", "BMI", "Age")){
       return(x)
-    }else if(x=="Age"){
-      return("Age") #paste0("Age (", as.character(round(10*val, 2)), ")")
     }else{
       return(paste0("italic('", gsub("sp ", "sp. ", x), "')"))
     }}, SIMPLIFY = T)
