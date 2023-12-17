@@ -1,6 +1,7 @@
 library(tidyverse)
 library(DESeq2)
 library(phyloseq)
+library(janitor)
 
 ## Mediation analysis based on tutorials:
 ## https://advstats.psychstat.org/book/mediation/index.php 
@@ -194,9 +195,8 @@ res_final <- rbind(
   res_trans %>% dplyr::filter(!grepl("^b[0-9]+$", param)) %>% 
     dplyr::mutate(param=gsub("b[0-9]+$", "b", param))
 ) 
-write_tsv(res_final, file=paste0(opt$out, "mediation_analysis_IMC_reformat.tsv"))
-write_tsv(bs_only, file=paste0(opt$out, "mediation_analysis_IMC_bs.tsv"))
-
+write_tsv(res_final, file=paste0(opt$out, "mediation_analysis_IMC_separate_reformat.tsv"))
+write_tsv(bs_only, file=paste0(opt$out, "mediation_analysis_IMC_separate_bs.tsv"))
 
 name<-"analysis_IMC_separateModel_vjust"
 plotres <- plotIMCMediationSimple(res_final, vars2test, opt$out, name, plim_plot = 0.05, 
@@ -322,7 +322,9 @@ y_name <- "Condition_bin"
 plim <- 0.05
 
 vars2test <- summary_df %>% 
-  dplyr::filter(depr_only_padj < plim | age_only_padj < plim | depr_adjage_padj < plim) %>% 
+  dplyr::filter(depr_only_padj < plim & 
+                  age_only_padj < plim &
+                  depr_adjage_padj < plim) %>% 
   pull(variable)
 
 medresultsAge <- lapply(vars2test, \(mediator_name, df_all){
@@ -346,7 +348,7 @@ medresultsAge <- lapply(vars2test, \(mediator_name, df_all){
     dplyr::filter(param %in% param_names) %>% 
     unite("tmp", param, var, sep="_") %>% 
     spread(tmp, value) %>% 
-    dplyr::mutate(Xvar = x_name, Yvar = y_name, Mediator=mediator_name)
+    dplyr::mutate(Xvar = x_name, Yvar = y_name, Mediator=mediator_name, fullmodel=list(res$estimates))
   return(res2)
   
 }, df_all) %>% bind_rows() 
@@ -355,8 +357,42 @@ medresultsAge <- lapply(vars2test, \(mediator_name, df_all){
 medresultsAge_merged <- merge(medresultsAge, summary_df, by.x="Mediator", by.y="variable")
 write_tsv(medresultsAge_merged, file=paste0(opt$out, "mediation_analysis_Edad.tsv"))
 
+## Transform to plot ##falta
+def_effects <- c('a', 'b', 'cp','a*b', 'cp+a*b') 
+res_trans <- map(1:nrow(medresultsAge), \(i){
+  res_i <- medresultsAge$fullmodel[[i]]
+  #oldnames2 <- rownames(res_i) %>% 
+  #  sapply(\(x)strsplit(x, "\\*|\\+",perl = TRUE)[[1]][1]) 
+  resdf_i <- res_i %>% 
+    rownames_to_column("param") %>% 
+    mutate(x_labels = ifelse(param %in% def_effects, 
+                             medresultsAge$Mediator[i],
+                             gsub("V\\[|\\]", "", param)),
+           param = ifelse(param %in% def_effects, 
+                          gsub("(b|a|cp)", paste0("\\1", as.character(i)), param, perl=T), param) 
+    )
+  
+}) %>% bind_rows()
+cps_only <- res_trans %>% dplyr::filter(grepl("^cp[0-9]+$", param))
+(g_bs <- ggplot(cps_only,aes(x=Estimate))+geom_histogram()+mytheme+ggtitle("Histogram of b (IMC->Depr)"))
+ggsave(filename = paste0(opt$out, "histogram_bs_IMC_separate.pdf"), g_bs)
 
-plotres3 <- plotAgeMediationSimple(res, vars2test, opt$out, name, plim_plot = 0.05, use_color_scale = FALSE)
+res_final <- rbind(
+  cps_only %>% 
+    mutate(param= "cp", x_labels="cp") %>% 
+    group_by(param, x_labels) %>% 
+    dplyr::summarise_if(is.numeric, mean) %>% 
+    dplyr::select(all_of(names(res_trans))),
+  res_trans %>% dplyr::filter(!grepl("^cp[0-9]+$", param)) %>% 
+    dplyr::mutate(param=gsub("cp[0-9]+", "cp", param))
+) 
+write_tsv(res_final, file=paste0(opt$out, "mediation_analysis_Edad_separate_reformat.tsv"))
+write_tsv(cps_only, file=paste0(opt$out, "mediation_analysis_Edad_separate_cps.tsv"))
+
+
+name<-"analysis_Age_separateModel_vjust"
+plotres3 <- plotAgeMediationSimple(res_final, vars2test, opt$out, name, plim_plot = 0.05, use_color_scale = FALSE, 
+                                   w=10, h=6)
 
 ## Make also boxplot
 bacnames <- plotres3$bacorder$x_labels
@@ -472,25 +508,25 @@ merged_pvals <- list2merge %>%
   }) %>% bind_cols()
 summary_df <- cbind(summary_df, merged_pvals)
 
-summary_df %>% filter(depr_adj2<plim & 
-                        imc_adj2<plim & 
-                        age_adj2<plim) ## just curious
-
 x_name <- "Edad"
 y_name <- "Condition_bin"
 mediator_name1 <- "IMC"
 plim <- 0.05
 
-signvars <- summary_df %>% dplyr::select(-variable) %>% 
-  as.matrix() %>% apply(MAR=1, \(x)any(x<=plim)) 
-vars2test <- summary_df %>% dplyr::filter(signvars) %>% 
-  pull(variable)
+# signvars <- summary_df %>% dplyr::select(-variable) %>% 
+#   as.matrix() %>% apply(MAR=1, \(x)any(x<=plim)) 
+# vars2test <- summary_df %>% dplyr::filter(signvars) %>% 
+#   pull(variable)
 
+vars2test <- summary_df %>% dplyr::filter(depr_adj2<plim & 
+                                     ((imc_adjdepr_padj < plim & imc_only_padj < plim) |
+                                        (age_adjdepr_padj < plim & age_only_padj < plim))) %>% 
+     pull(variable)
+param_names <- c('a', 'b', 'cp', 'd', 'e', 'fp', 'a*b', 'cp+a*b', 'd*b', 'fp+d*b', 'e*cp', 'fp+e*cp', 'd*b+fp+e*cp+e*a*b') 
 medresultsBoth <- lapply(vars2test, \(mediator_name2, df_all){
   df <- df_all %>% dplyr::select(all_of(c(x_name, y_name, mediator_name1, mediator_name2)))
   with_nas <-  df %>% apply(MAR=1, \(x)any(is.na(x)))
   df <- df[!with_nas, ]
-  param_names <- c('a', 'b', 'cp', 'd', 'e', 'fp', 'a*b', 'cp+a*b', 'd*b', 'fp+d*b', 'e*cp', 'fp+e*cp', 'd*b+fp+e*cp+a*b') 
   
   res <- tryCatch({makeMediationComplex(df, xname=x_name, 
                                         yname=y_name, 
@@ -515,15 +551,72 @@ medresultsBoth <- lapply(vars2test, \(mediator_name2, df_all){
     dplyr::mutate(Xvar = x_name, 
                   Yvar = y_name, 
                   Mediator=mediator_name1, 
-                  Mediator2=mediator_name2)
+                  Mediator2=mediator_name2,
+                  fullmodel=list(res$estimates))
   return(res2)
   
 }, df_all) %>% bind_rows() 
+
 #all(medresults$Xvar %in% summary_df$variable)
 medresultsBoth_merged <- merge(medresultsBoth, summary_df, by.x="Mediator2", by.y="variable")
 write_tsv(medresultsBoth_merged, file=paste0(opt$out, "mediation_analysis_EdadAndIMC.tsv"))
 
+## Transform to plot ##falta
+def_effects <- c('a', 'b', 'cp', 'd', 'fp', 'e', 'a*b', 'cp+a*b', 
+                 'cp+a*b', 'fp+d*b', 'e*cp', 'fp+e*cp', 'd*b+fp+e*cp+e*a*b') 
+res_trans <- map(1:nrow(medresultsBoth), \(i){
+  res_i <- medresultsBoth$fullmodel[[i]]
+  #oldnames2 <- rownames(res_i) %>% 
+  #  sapply(\(x)strsplit(x, "\\*|\\+",perl = TRUE)[[1]][1]) 
+  resdf_i <- res_i %>% 
+    rownames_to_column("param") %>% 
+    mutate(x_labels = ifelse(param %in% def_effects, 
+                             medresultsBoth$Mediator2[i],
+                             gsub("V\\[|\\]", "", param)),
+           param = ifelse(param %in% def_effects, 
+                          gsub("(b|a|cp|d|e|fp)", paste0("\\1", as.character(i)), param, perl=T), param) 
+    )
+  
+}) %>% bind_rows()
+edbs_only <- res_trans %>% dplyr::filter(grepl("^(d|b|fp)[0-9]+$", param)) %>% 
+  dplyr::mutate(x_labels=gsub("[0-9]+", "", param))
+(edbs_hist <- ggplot(edbs_only,aes(x=Estimate))+
+    facet_wrap(~x_labels, scales="free")+geom_histogram()+
+    mytheme+ggtitle("Histogram of params"))
+ggsave(filename = paste0(opt$out, "histogram_edbfs_AgeAndIMC_separate.pdf"), edbs_hist)
 
+res_final <- rbind(
+  edbs_only %>% 
+    mutate(param = x_labels) %>% 
+    group_by(param, x_labels) %>% 
+    dplyr::summarise_if(is.numeric, mean) %>% 
+    dplyr::select(all_of(names(res_trans))),
+  res_trans %>% dplyr::filter(!grepl("^(d|b|fp)[0-9]+$", param)) %>% 
+    dplyr::mutate(param=gsub("(d|b|fp)[0-9]+", "\\1", param))
+) 
+write_tsv(res_final, file=paste0(opt$out, "mediation_analysis_EdadAndIMC_separate_reformat.tsv"))
+write_tsv(cps_only, file=paste0(opt$out, "mediation_analysis_EdadAndIMC_separate_cps.tsv"))
+
+
+name<-"analysis_AgeAndIMC_separateModel_vjust"
+plotres3 <- plotAgeAndIMCMediationComplex(res_final, vars2test, opt$out, name, plim_plot = 0.05, use_color_scale = FALSE, 
+                                   w=14, h=10)
+
+## Make also boxplot
+bacnames <- plotres3$bacorder$x_labels
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotAge_separate_BySpeciesPearson", quantvar="Edad_log", 
+                           quantvar_name = "log(Age)", corrmethod = "pearson", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotAge_separate_BySpeciesSpearman", quantvar="Edad_log", 
+                           quantvar_name = "log(Age)", corrmethod = "spearman", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotAge_separate_BySpeciesKendall", quantvar="Edad_log", 
+                           quantvar_name = "log(Age)", corrmethod = "kendall", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotIMC_separate_BySpeciesPearson", quantvar="IMC_log", 
+                           quantvar_name = "log(BMI)", corrmethod = "pearson", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotIMC_separate_BySpeciesSpearman", quantvar="IMC_log", 
+                           quantvar_name = "log(BMI)", corrmethod = "spearman", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotIMC_separate_BySpeciesKendall", quantvar="IMC_log", 
+                           quantvar_name = "log(BMI)", corrmethod = "kendall", w=8, h=10)
+## 
 
 ### MEDIATION ANALYSIS WITH AGE AND IMC, MERGED
 
@@ -575,8 +668,10 @@ plim <- 0.05
 # signvars <- summary_df %>% dplyr::select(-variable) %>% 
 #   as.matrix() %>% apply(MAR=1, \(x)any(x<=plim)) 
 
-vars2test <-summary_df %>% filter(depr_only_padj<plim & 
-                                    imc_adjdepr_padj<plim ) %>% pull(variable)
+vars2test <- summary_df %>% dplyr::filter(depr_adj2<plim & 
+                                            ((imc_adjdepr_padj < plim & imc_only_padj < plim) |
+                                               (age_adjdepr_padj < plim & age_only_padj < plim))) %>% 
+  pull(variable)
 
 df <- df_all %>% dplyr::select(all_of(c(x_name, y_name, mediator_name1, vars2test)))
 with_nas <-  df %>% apply(MAR=1, \(x)any(is.na(x)))
@@ -589,3 +684,23 @@ res <- makeMediationComplex_mergedMEdiat2(df, xname=x_name,
 
 #all(medresults$Xvar %in% summary_df$variable)
 write_tsv(res, file=paste0(opt$out, "mediation_analysis_EdadAndIMC_mergedModel.tsv"))
+
+## PLOT
+name<-"analysis_AgeAndIMC_mergedModel_vjust"
+plotres4 <- plotAgeAndIMCMediationComplex(res, vars2test, opt$out, name, plim_plot = 0.05, use_color_scale = FALSE, 
+                                          w=14, h=10)
+
+## Make also boxplot
+bacnames <- plotres4$bacorder$x_labels
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotAge_merged_BySpeciesPearson", quantvar="Edad_log", 
+                           quantvar_name = "log(Age)", corrmethod = "pearson", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotAge_merged_BySpeciesSpearman", quantvar="Edad_log", 
+                           quantvar_name = "log(Age)", corrmethod = "spearman", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotAge_merged_BySpeciesKendall", quantvar="Edad_log", 
+                           quantvar_name = "log(Age)", corrmethod = "kendall", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotIMC_merged_BySpeciesPearson", quantvar="IMC_log", 
+                           quantvar_name = "log(BMI)", corrmethod = "pearson", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotIMC_merged_BySpeciesSpearman", quantvar="IMC_log", 
+                           quantvar_name = "log(BMI)", corrmethod = "spearman", w=8, h=10)
+plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotIMC_merged_BySpeciesKendall", quantvar="IMC_log", 
+                           uantvar_name = "log(BMI)", corrmethod = "spearman", w=8, h=10)
