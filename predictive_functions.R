@@ -288,7 +288,7 @@ plotSVM<-function(modelo_svm, datasc, varnames, opt, name){
   datos <- datasc[,varnames[1:2]] 
   names(datos) <- paste("X", 1:ncol(datos), sep="")
   datos$y <- datasc$class
-  rangos <- datos %>% select(matches("^X[0-9]+")) %>% map(range)
+  rangos <- datos %>% dplyr::select(matches("^X[0-9]+")) %>% map(range)
   new_xs <- map(rangos, \(x)seq(from = x[1], to = x[2], length = 75))
   
   # Interpolación de puntos
@@ -319,8 +319,8 @@ plotSVM<-function(modelo_svm, datasc, varnames, opt, name){
                aes(x = X1, y = X2, color = as.factor(y)),
                shape = 21, colour = "black",
                size = 2) +
-    scale_color_lancet()+
-    scale_fill_lancet() +
+    #scale_color_lancet()+
+    #scale_fill_lancet() +
     theme_bw() #+theme(legend.position = "none")
     
     if(modelo_svm$kernel == 0){
@@ -336,7 +336,7 @@ plotSVM<-function(modelo_svm, datasc, varnames, opt, name){
   return(g1)
 }
 
-callDoAllModelsFromALLPCAs <- function(all_pcas, name){
+callDoAllModelsFromALLPCAs <- function(all_pcas, name, vars2pca=c("Condition")){
   datasc <- all_pcas[[1]]$pca$x %>% 
     as.data.frame %>% 
     rownames_to_column("sample") %>% 
@@ -348,5 +348,305 @@ callDoAllModelsFromALLPCAs <- function(all_pcas, name){
   
   modelo_svm <- allmodssumm$models$`SVM-radial`$mod_noscale
   allmodssumm$plot_svm_rad <- plotSVM(modelo_svm, datasc, allmodssumm$varnames, opt, paste0(name, "_radial"))
+  
   return(allmodssumm)
+}
+
+callDoAllModelsFromALLPCAsOriginalVars <- function(all_pcas, PCs, modelo_svm, vstdf, 
+                                                name, vars2pca=c("Condition"), metadata, daares, topns = c(5, 10, 20)){
+  
+  pcts <- summary(all_pcas[[1]]$pca)$importance[2, PCs]
+  pcslope <- pcts[1]/pcts[2]
+  beta <- drop(t(modelo_svm$coefs) %*% all_pcas$Condition$pca$x[modelo_svm$index,PCs])
+  bslope <- -beta[1]/beta[2]
+  
+  rotvals <- all_pcas[[1]]$pca$rotation %>% as.data.frame %>% dplyr::select(all_of(PCs)) %>% 
+    rownames_to_column("taxon") %>% 
+    dplyr::mutate(
+           score1 = abs(all_pcas[[1]]$pca$rotation[, PCs[1]]),
+           score2 = abs(all_pcas[[1]]$pca$rotation[, PCs[2]]), 
+           score3 = abs(all_pcas[[1]]$pca$rotation[, PCs[1]]) + abs(all_pcas[[1]]$pca$rotation[, PCs[2]]),
+           score4 = pcslope*abs(all_pcas[[1]]$pca$rotation[, PCs[1]]) + abs(all_pcas[[1]]$pca$rotation[, PCs[2]]),
+           score5 = bslope*abs(all_pcas[[1]]$pca$rotation[, PCs[1]]) + abs(all_pcas[[1]]$pca$rotation[, PCs[2]]),
+           daa_pval  = -10*log10(daares$padj[match(taxon, daares$taxon)])
+           )
+  names(rotvals)[!names(rotvals) %in% c("taxon", PCs)] <- c(paste0(PCs[1], " score"), 
+                                                            paste0(PCs[2], " score"), 
+                                                            paste0(PCs, collapse="+"),
+                                                            paste0(PCs[1], " and ", PCs[2], " combined 2"),
+                                                            paste0(PCs[1], " and ", PCs[2], " combined "),
+                                                            "DESeq pval"
+                                                            )
+  modresults <- list()
+  for(score in names(rotvals)[!names(rotvals) %in% c("taxon", PCs)]){
+    for(topn in topns){
+      print(paste0("Fitting models to ", score, '_', topn))
+      toptaxa <- rotvals[order(rotvals[, score], decreasing = T), "taxon"][1:topn]
+      df2pred <- vstdf %>% dplyr::filter(gene %in% toptaxa) %>% column_to_rownames("gene") %>% as.matrix %>% t %>% 
+        as.data.frame() %>% rownames_to_column("sample") %>% 
+        dplyr::mutate(class=unlist(metadata[match(sample, metadata$sampleID), vars2pca[1]]))
+      names(df2pred) <- gsub("[\\.\\-\\[\\]()]", "", names(df2pred), perl=T)
+      modresults[[paste0(score, ' top ', as.character(topn))]] <- makeAllModels(df2pred, plim=1, opt, name= paste0(name, "_modsIndBacs_", score, "_top", topn))
+      modresults[[paste0(score, ' top ', as.character(topn))]]$taxa <- toptaxa
+      
+    }
+  }##make models
+  print("Merging models")
+  modall_table <- map(names(modresults), \(x){
+    res <- modresults[[x]]$modummary %>% 
+      dplyr::mutate(sel_method=x,
+                    varsused=paste0(modresults[[x]]$taxa, collapse="|"))
+    
+  }) %>% bind_rows()
+  
+  return(list(fullresults=modresults, allmodsum=modall_table))
+}
+
+makeLinePlotComparingPhobjs <- function(all_model_results, opt){
+  
+  all_sig_tables <- names(all_model_results) %>% map(\(name){
+    a <- all_model_results[[name]]$padj_taxa_res$modummary %>% 
+      mutate(taxa_group="padj")
+    b <- all_model_results[[name]]$praw_taxa_res$modummary %>% 
+      mutate(taxa_group="praw")
+    rbind(a, b) %>% dplyr::mutate(input_data=name)
+  }) %>% bind_rows() %>% arrange(desc(Accuracy_l1out)) %>% 
+    dplyr::select(input_data, model, taxa_group, everything())
+  
+  write_tsv(all_sig_tables, file = paste0(opt$out, "PredictDAA/all_model_summaries.tsv"))
+  
+  (g1 <- ggplot(all_sig_tables, aes(x=model, 
+                                    y=Accuracy_l1out, 
+                                    col=input_data,
+                                    fill=input_data, 
+                                    group=input_data))+
+      facet_grid(taxa_group~.)+
+      geom_point()+
+      geom_line()+
+      scale_color_cosmic()+
+      scale_fill_cosmic() +
+      ggpubr::theme_pubr() +
+      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  )
+  ggsave(paste0(opt$out, "PredictDAA/all_model_accuracy.pdf"), g1, 
+         width = 8, height = 8)
+  return(g1)
+}
+
+makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt, w=8, h=12){
+  resph <- all_model_results[[phname]]
+pcnames <- resph$padj_taxa_res$varnames
+tabs <- rbind(
+  resph$padj_taxa_res$modummary %>% mutate(sel_method = "PCA", varsused = paste(pcnames, collapse="|")),
+  resph$padj_taxa_res_indiv$allmodsum
+)
+write_tsv(tabs, file = paste0(opt$out, "PredictDAA/", phname, "_modelSummariesWithIndividualSpecies.tsv"))
+tabs2plot <- tabs %>% 
+  dplyr::filter(!grepl("\\+", sel_method)) %>% 
+  dplyr::filter(!grepl("combined 2", sel_method)) %>% 
+  dplyr::filter(!grepl("PC11 score", sel_method)) %>% 
+  dplyr::mutate(model=gsub("logistic_regression", "Logistic Regr.", model),
+                sel_method = gsub("  ", " ", sel_method)
+  )
+modorder <- tabs2plot %>% group_by(model) %>% dplyr::summarise(maxacc = max(Accuracy_l1out)) %>% 
+  arrange(desc(maxacc)) %>% pull(model)
+levorder <- tabs2plot %>% group_by(sel_method) %>% dplyr::summarise(maxacc = max(Accuracy_l1out)) %>% 
+  arrange(desc(maxacc)) %>% pull(sel_method)
+
+tabs2plot <- tabs2plot %>% dplyr::mutate(model = factor(model, levels=modorder),
+                                         sel_method = factor(sel_method, levels=levorder)) 
+(g1 <- ggplot(tabs2plot, aes(x=model, 
+                             y=Accuracy_l1out, 
+                             col=sel_method,
+                             fill=sel_method, 
+                             group=sel_method
+                             #shape=sel_method,
+                             #linetype=sel_method)
+))+
+    #facet_grid(sel_method~.)+
+    geom_col(alpha=1, width = 0.8, position="dodge")+
+    #geom_point(size=2)+
+    #geom_line(alpha=1)+
+    scale_color_cosmic()+
+    scale_fill_cosmic() +
+    ggpubr::theme_pubr() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+)
+ggsave(paste0(opt$out, "PredictDAA/all_model_accuracy_1.pdf"), g1, 
+       width = 12, height = 8)
+tabs2plot2 <- tabs2plot %>%  dplyr::filter(!grepl("top (5|10)", sel_method, perl=T)) 
+g2 <- ggplot(tabs2plot2, aes(x=model, 
+                             y=Accuracy_l1out, 
+                             col=sel_method,
+                             fill=sel_method, 
+                             group=sel_method
+                             #shape=sel_method,
+                             #linetype=sel_method)
+))+
+  #facet_grid(sel_method~.)+
+  #geom_col(alpha=1, width = 0.8, position="dodge")+
+  geom_point(size=2)+
+  geom_line(alpha=1)+
+  #scale_color_cosmic()+
+  #scale_fill_cosmic() +
+  ggpubr::theme_pubr() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  ylab("Accuracy") + 
+  xlab("")+ 
+  theme(legend.position="right")+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+
+ggsave(paste0(opt$out, "PredictDAA/", phname, "all_model_accuracy_2.pdf"), g2, 
+       width = 12, height = 8)
+g3 <- ggplot(tabs2plot2, aes(x=model, 
+                             y=Sensitivity_l1out, 
+                             col=sel_method,
+                             fill=sel_method, 
+                             group=sel_method
+                             #shape=sel_method,
+                             #linetype=sel_method)
+))+
+  #facet_grid(sel_method~.)+
+  #geom_col(alpha=1, width = 0.8, position="dodge")+
+  geom_point(size=2)+
+  geom_line(alpha=1)+
+  #scale_color_cosmic()+
+  #scale_fill_cosmic() +
+  ggpubr::theme_pubr() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  ylab("Sensitivity")+ 
+  xlab("")+ 
+  theme(legend.position="right")+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+
+ggsave(paste0(opt$out, "PredictDAA/", phname, "all_model_sensitivity.pdf"), g3, 
+       width = 12, height = 8)
+
+g4 <- ggplot(tabs2plot2, aes(x=model, 
+                             y=Specificity_l1out, 
+                             col=sel_method,
+                             fill=sel_method, 
+                             group=sel_method
+                             #shape=sel_method,
+                             #linetype=sel_method)
+))+
+  #facet_grid(sel_method~.)+
+  #geom_col(alpha=1, width = 0.8, position="dodge")+
+  geom_point(size=2)+
+  geom_line(alpha=1)+
+  #scale_color_cosmic()+
+  #scale_fill_cosmic() +
+  ggpubr::theme_pubr() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  ylab("Specificity")+ 
+  xlab("") + 
+  theme(legend.position="right") + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+
+ggsave(paste0(opt$out, "PredictDAA/", phname, "all_model_Specificity.pdf"), g4, 
+       width = 12, height = 8)
+cw <- cowplot::plot_grid(plotlist=list(g2, g3, g4), ncol = 1)
+pdf(paste0(opt$out, "PredictDAA/", phname, "_all_model_combined.pdf"), width = w, height = h)
+print(cw)
+dev.off()
+
+}
+
+
+getPCnamesFromAllresults <- function(phname, all_model_results){
+  PCs <- all_model_results[[phname]]$padj_taxa_res$varnames
+  sumPCA <- summary(all_model_results[[phname]]$padj_taxa_pcas$Condition$pca)$importance
+  PC_names <- paste(PCs, ' (', round(100*sumPCA[2, PCs], 1),'%)', sep="")
+  PCs_newnames <- PCs
+  names(PCs_newnames) <- PC_names
+  return(PCs_newnames)
+}
+
+makePCsBoxplot <- function(phname, all_model_results, opt){
+  outdir <- paste0(opt$out, "/PredictDAA/", phname)
+  if(!dir.exists(outdir)) dir.create(outdir)
+
+  PCs <- all_model_results[[phname]]$padj_taxa_res$varnames
+  PCs_newnames <- getPCnamesFromAllresults(phname, all_model_results)
+  
+  dfsamples <- all_model_results$remove_tanda2$padj_taxa_pcas$Condition$pca$x %>% 
+    as.data.frame() %>% 
+    dplyr::select(all_of(PCs)) %>% 
+    rownames_to_column("sampleID") %>% 
+    mutate(Condition = metadata$Condition[match(sampleID, metadata$sampleID)]) %>% 
+    gather("PC", "score", -sampleID, -Condition) %>% 
+    group_by(PC) 
+  
+  # Multiplicar por -1 si el componente es menor en deprimidos, para plotear más fácil
+  pcfactors <- dfsamples %>% group_by(PC, Condition) %>% summarise(media = mean(score)) %>% 
+    spread(Condition, media) %>% 
+    dplyr::mutate(factor = ifelse(Depression < Control, -1, 1))
+  
+  dfsamples <- dfsamples %>% 
+    dplyr::mutate(score = score*pcfactors$factor[match(PC, pcfactors$PC)]) %>% 
+    mutate(PC = factor(PC, levels = PCs),
+           PC = fct_recode(PC, !!!PCs_newnames),
+           Condition = gsub("Depression", "Depr.", Condition))
+  
+  gpcbox <- ggplot(dfsamples, aes(x=Condition, y=score)) +
+    facet_grid(~PC)+
+    geom_violin(aes(fill=Condition)) +
+    geom_boxplot(width=0.2)+
+    mytheme
+  
+  ggsave(filename = paste0(outdir, "/boxplot_signif_PCs.pdf"), gpcbox)
+  write_tsv(dfsamples, file = paste0(outdir, "/boxplot_signif_PCs_data.tsv"))
+  write_tsv(pcfactors, file = paste0(outdir, "/boxplot_signif_PCs_PCFactors.tsv"))
+  return(list(plot=gpcbox, tab=dfsamples, pcfactors=pcfactors))
+}
+
+makePCBarplot <- function(phname, all_model_results, pcBoxplots, opt, w=8, h=14){
+  outdir <- paste0(opt$out, "/PredictDAA/", phname)
+  if(!dir.exists(outdir)) dir.create(outdir)
+  predictions <- all_model_results[[phname]]$padj_taxa_res$models$`KNN-K=5`$preds_no_l1o
+  PCs <- all_model_results[[phname]]$padj_taxa_res$varnames
+  PCs_newnames <- getPCnamesFromAllresults(phname, all_model_results)
+  daatab <- daa_all[[phname]]$resdf
+  pcfactors <- pcBoxplots[[phname]]$pcfactors %>% column_to_rownames("PC") %>% dplyr::select(factor) 
+  
+  df <- all_model_results$remove_tanda2$padj_taxa_pcas$Condition$pca$rotation %>% 
+    as.data.frame() %>% 
+    dplyr::select(all_of(PCs)) %>% 
+    rownames_to_column("taxon") %>% 
+    mutate(across(all_of(PCs), \(x)x*pcfactors[cur_column(), 1])) ## Multiplicar por factor para que coincida con LFC
+  
+  dfmerged <- merge(df, daatab, by="taxon", all.x=T, all.y=F) %>% 
+    arrange(desc(!!sym(PCs[1]))) %>% 
+    dplyr::mutate(taxon = gsub("_", " ", taxon),
+                  taxon = gsub("[\\[\\]]", "", taxon),
+                  taxon = factor(taxon, levels = taxon))
+  
+  newlevnames <- c( PCs_newnames, "LFC"="log2FoldChangeShrink","-10log(adj. p)"="padj")
+  dflong <- dfmerged %>% 
+    dplyr::select(all_of(c("taxon", "padj", PCs, "log2FoldChangeShrink"))) %>% 
+    dplyr::mutate(padj = -10*log10(padj)) %>% 
+    tidyr::gather(key="variable", "value", -taxon) %>% 
+    dplyr::mutate(color = ifelse(variable == "padj",C_NS, ifelse(value < 0, C_CTRL, C_CASE)),
+                  variable = fct_recode(variable, !!!newlevnames),
+                  variable = factor(variable, levels = names(newlevnames))
+    )
+  
+  gbars <- ggplot(dflong, aes(y=value, x=taxon, fill=color)) +
+    facet_wrap(~ variable, nrow=1, scales = "free_x")+
+    geom_col()+
+    coord_flip() +
+    theme_classic() +
+    scale_fill_manual(values = c(C_CTRL, C_CTRL_LINK2, C_CASE))+
+    theme(axis.text.y = element_text(size = 8, 
+                                     colour = "black", angle = 0, 
+                                     face = "italic"))+
+    theme(axis.text.x = element_text(size = 10, 
+                                     colour = "black", angle = 0, 
+                                     face = "plain"))+
+    theme(strip.text.x = element_text(size = 14, 
+                                      colour = "black", angle = 0, face = "plain")) +
+    theme(legend.position = 'none') 
+  ggsave(filename = paste0(outdir, "/", phname, "_barplots_PCs_and_LFC.pdf"), gbars, width = w, height = h)
+  write_tsv(dflong,  paste0(outdir, "/", phname, "_barplots_PCs_and_LFC_data.tsv"))
+  return(gbars)
 }

@@ -15,7 +15,7 @@ library(HMP)
 library(knitr)
 library(vegan)
 library(janitor)
-library(plyr)
+#library(plyr)
 
 SEED <- 123
 MODE = "LOCAL"
@@ -39,12 +39,12 @@ if(MODE == "IATA"){
             num_genes_default=5
             )
 }else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/",
+  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_5/",
               indir = "/home/carmoma/Desktop/202311_DEPRESION/mg09_combinempa/" ,
               r_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/metagenomics_core_functions.R",
               predictive_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/predictive_functions.R",
-              metadata = "/home/carmoma/Desktop/202311_DEPRESION/metadatos_MC_AL12042023_CMcopy.xlsx",
-              rewrite=TRUE,
+              metadata = "/home/carmoma/Desktop/202311_DEPRESION/metadatos_MC_AL12042023_CM_corrected.xlsx",
+              rewrite=FALSE,
               minfreq = 0.05,
               mincountspersample = 0,
               mincount= 1,
@@ -63,6 +63,7 @@ if(! dir.exists(path_phyloseq)){dir.create(path_phyloseq)}
 
 source(opt$r_functions)
 
+restaurar <- restauraropt_mk(opt)
 # Read OTUs
 
 s_abund <- read_tsv(paste0(opt$indir, "species.mpa.combined.clean2.txt"))
@@ -213,10 +214,10 @@ muestras_eliminadas <- sample_names(pre_phyloseq_filt)[!sample_names(pre_phylose
 nreads <- otu_table(pre_phyloseq_filt) %>% colSums()
 
 eliminadas_df <- metadata %>% 
-  filter(sampleID %in% muestras_eliminadas) %>% 
-  select(sampleID, PROCEDENCIA, Tanda, CP, Sexo, obesidad) %>% 
-  mutate(reads = nreads[as.character(sampleID)]) %>% 
-  arrange(reads)
+  dplyr::filter(sampleID %in% muestras_eliminadas) %>% 
+  dplyr::select(sampleID, PROCEDENCIA, Tanda, CP, Sexo, obesidad) %>% 
+  dplyr::mutate(reads = nreads[as.character(sampleID)]) %>% 
+  dplyr::arrange(reads)
 eliminadas_df %>% write_tsv(file=paste0(opt$out, "/muestras_eliminadas_raref", as.character(opt$raref_quant), ".tsv"))
 
 ## Eliminar tanda 2
@@ -325,7 +326,6 @@ if(!file.exists(allphyloseqlist_fname) | opt$rewrite){
   load(allphyloseqlist_fname)
 }
 
-
 # Alpha 4 each
 
 ## Cualitativas
@@ -338,7 +338,7 @@ vars2test <- c("Condition", "Sexo", "PROCEDENCIA", "Estado.civil2", "Educacion",
                "sexocaso", "Tanda", "tandacaso", "procedenciacaso")
 vars2test_ampl <- c(vars2test, escalas_qual)
 
-quant_vars <- c("Edad", "IMC",  "TG", "Colesterol", "Glucosa.ayunas")
+quant_vars <- c("Edad", "IMC",  "TG", "Colesterol", "Glucosa.ayunas", "DII")
 quant_vars_ext <- c(quant_vars, escalas_quant)
 interestvar <- "Condition"
 extravars <- c(quant_vars, vars2test)
@@ -353,9 +353,10 @@ extravars <- c(quant_vars, vars2test)
 extravars <- extravars[extravars != interestvar]
 extravars2 <- c("Sexo", "Edad", "IMC")
 
+phseq_to_use <- c("rarefied_min", "remove_tanda2_rarefied_min", "rmbatch_tanda_raref")
 #load(allphyloseqlist_fname)
 
-for(phname in names(all_phyloseq)){
+for(phname in phseq_to_use){
   cat("Alpha diversity in ", phname, "\n")
   phobj <- all_phyloseq[[phname]]
   divtab <- calculateAlphaDiversityTable(phobj, outdir, alpha_indices, paste0(phname, "_AlphaDiv") )
@@ -379,6 +380,32 @@ for(phname in names(all_phyloseq)){
                               name = paste0(phname, "_AlphaDiv"))
 }
 
+# Alpha inside depression
+outdir <- paste0(opt$out, "/AlphaDiversityInsideDepr/")
+if(!dir.exists(outdir)) dir.create(outdir)
+
+
+interestvar <- "Condition"
+quant_vars_onlydepr <-  c(escalas_quant, "PSS_estres", "DII", "IMC")
+qual_vars_onlydepr <- escalas_qual
+
+phseq_to_use <- c("rarefied_min", "remove_tanda2_rarefied_min", "rmbatch_tanda_raref")
+#load(allphyloseqlist_fname)
+
+for(phname in phseq_to_use){
+  cat("Alpha diversity inside depression ", phname, "\n")
+  phobj <- all_phyloseq[[phname]]
+  samples <- sample_data(phobj)$sampleID[unlist(sample_data(phobj)[, interestvar]) == "Depression" ]
+  phobj_filt <- phyloseq::prune_samples(samples, phobj)
+  #alphadif <- testDiversityDifferences(divtab, alpha_indices, vars2test, outdir, "AlphaDiv_rawdata")
+  # Ya se hace dentro de la siguiente funcion
+  divplots <- getAlphaDiversity(phobj_filt, interestvar, quant_vars_onlydepr,
+                                opt,
+                                indices= alpha_indices,
+                                correct_pvalues = T,
+                                name = paste0(phname, "_AlphaDivOnlyDepr"))
+}
+
 # Beta 4 each
 outdir <- paste0(opt$out, "/BetaDiversity/")
 if(!dir.exists(outdir)) dir.create(outdir)
@@ -387,7 +414,7 @@ dists <- c("bray", "jaccard")
 vars2pcoa <- c(quant_vars_ext, vars2test_ampl)
 
 ccaplots <- list()
-for(phname in names(all_phyloseq)){
+for(phname in phseq_to_use){
   for(method in c("PCoA", "NMDS")){
     for(dist in dists){
       name <- paste0(phname, "_", dist, "_", method)
@@ -418,7 +445,7 @@ tops <- c(5, 10)
 n_species <- 20
 interestvar <- "Condition"
 
-for(phname in names(all_phyloseq)){
+for(phname in phseq_to_use){
   cat("Doing Abundance Plots for: ", phname, "\n")
   abund_plots <- plotAbundanceFullPipeline(all_phyloseq[[phname]], interestvar, outdir, phname, c("Control", "Depression"), tops)
 }
@@ -433,15 +460,15 @@ for(phname in names(all_phyloseq)){
   daa_all[[phname]] <-deseq_full_pipeline(all_phyloseq[[phname]], phname, vars2deseq, opt)
 }
 save(daa_all, file = paste0(opt$out, "DeSEQ2/DESEQ2_all.RData"))
+#load(paste0(opt$out, "DeSEQ2/DESEQ2_all.RData"))
 
 # Predict  
 source(opt$predictive_functions)
 #opt$out <- "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_1/"
 vars2pca <- c("Condition", "Sexo", "Edad")
-opt$reserva <- opt$out
 opt$out <- paste0(opt$out, "PredictDAA")
 if(!dir.exists(opt$out)) dir.create(opt$out)
-opt$out <- opt$reserva
+opt <- restaurar(opt)
 
 all_model_results <- list()
 for(i in names(all_phyloseq)){
@@ -461,44 +488,94 @@ for(i in names(all_phyloseq)){
   all_pcas_adj <- makeAllPCAs(phobj, df2pca, taxa_padj, vars2pca, opt, "DiffTaxaPadj")
   all_pcas_praw <- makeAllPCAs(phobj, df2pca, taxa_praw, vars2pca, opt, "DiffTaxaPraw")
   
+  taxa_padj01 <- daa_all[[i]]$resdf %>% dplyr::filter(padj <= 0.01 & abs(log2FoldChangeShrink) >= log2(opt$fc) ) %>% 
+    pull(taxon)
+  taxa_padj001 <- daa_all[[i]]$resdf %>% dplyr::filter(padj <= 0.001 & abs(log2FoldChangeShrink) >= log2(opt$fc) ) %>% 
+    pull(taxon)
+  all_pcas_adj01 <- makeAllPCAs(phobj, df2pca, taxa_padj01, vars2pca, opt, "DiffTaxaPadj01")
+  all_pcas_adj001 <- makeAllPCAs(phobj, df2pca, taxa_padj001, vars2pca, opt, "DiffTaxaPadj001")
+  
+  
   all_model_results[[i]][["padj_taxa_taxa"]] <- taxa_padj
   all_model_results[[i]][["praw_taxa_taxa"]] <- taxa_praw
   all_model_results[[i]][["padj_taxa_pcas"]] <- all_pcas_adj
   all_model_results[[i]][["praw_taxa_pcas"]] <- all_pcas_praw
-  all_model_results[[i]][["padj_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadj"))
-  all_model_results[[i]][["praw_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPraw"))
-  opt$out <- opt$reserva
+  all_model_results[[i]][["padj_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadj"), vars2pca=c("Condition"))
+  all_model_results[[i]][["praw_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPraw"), vars2pca=c("Condition"))
+  all_model_results[[i]][["padj_taxa_res01"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01, name=paste0(i, "ConditionPadj01"), vars2pca=c("Condition"))
+  all_model_results[[i]][["padj_taxa_res001"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj001, name=paste0(i, "ConditionPadj001"), vars2pca=c("Condition"))
+  
+  PCs <- all_model_results[[i]][["padj_taxa_res"]]$varnames
+  modelo_svm <- all_model_results[[i]][["padj_taxa_res"]]$models$`SVM-linear`$mod_noscale
+  all_model_results[[i]][["padj_taxa_res_indiv"]] <- callDoAllModelsFromALLPCAsOriginalVars(all_pcas_adj, PCs, modelo_svm, 
+                                                                                            df2pca, 
+                                                                                            paste0(i, "_ConditionPadjIndiv"), 
+                                                                                            vars2pca=c("Condition"), s_meta,
+                                                                                            daa_all[[i]]$resdf, 
+                                                                                            topns = c(5, 10, 20))
+  
+  opt <- restaurar(opt)
 }
+opt <- restaurar(opt)
 save(all_model_results, file=paste0(opt$out, "PredictDAA/all_model_results.RData"))
+#load(file=paste0(opt$out, "PredictDAA/all_model_results.RData"))
 
 #Integrate
+makeLinePlotComparingPhobjs(all_model_results, opt)
+## Compare with Bacteria in componets
 
-all_sig_tables <- names(all_model_results) %>% map(\(name){
-  a <- all_model_results[[name]]$padj_taxa_res$modummary %>% 
-    mutate(taxa_group="padj")
-  b <- all_model_results[[name]]$praw_taxa_res$modummary %>% 
-    mutate(taxa_group="praw")
-  rbind(a, b) %>% dplyr::mutate(input_data=name)
-}) %>% bind_rows() %>% arrange(desc(Accuracy_l1out)) %>% 
-  dplyr::select(input_data, model, taxa_group, everything())
+walk(names(all_model_results), makeLinePlotComparingSamePhobjModels, all_model_results, opt)
 
-write_tsv(all_sig_tables, file = paste0(opt$out, "PredictDAA/all_model_summaries.tsv"))
+## Plot boxplot PCs
+pcBoxplots <- map(names(all_model_results), makePCsBoxplot, all_model_results, opt)
+names(pcBoxplots) <- names(all_model_results)
 
-(g1 <- ggplot(all_sig_tables, aes(x=model, 
-                                 y=Accuracy_l1out, 
-                                 col=input_data,
-                                 fill=input_data, 
-                                 group=input_data))+
-  facet_grid(taxa_group~.)+
-  geom_point()+
-  geom_line()+
-  scale_color_cosmic()+
-  scale_fill_cosmic() +
-  ggpubr::theme_pubr() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-)
-ggsave(paste0(opt$out, "PredictDAA/all_model_accuracy.pdf"), g1, 
-       width = 8, height = 8)
+## Plot barplot PCs and LFC
+pcBarplots <- map(names(all_model_results), makePCBarplot, all_model_results, pcBoxplots, opt, w=8, h=14)
+names(pcBarplots) <- names(all_model_results)
+
+# Plot KNN (best model)
+mod2plot <- 'KNN-K=5'
+modplots <- map(names(all_model_results[[phname]]$padj_taxa_res$models), 
+                \(modpred){
+                  tryCatch(plotPrediction(phname, modpred, all_model_results, opt), error=\(x)list())
+                })
+names(modplots) <- names(all_model_results[[phname]]$padj_taxa_res$models)
+modplots2 <- list()
+for(mn in names(modplots)){
+  m <- modplots[[mn]]
+  if(class(m)[1] == "list" & length(m)==0) next
+  modplots2[[mn]] <- m
+}
+cowplot::plot_grid(plotlist = modplots2)
+
+plotPrediction<-function(phname, mod2plot, all_model_results, opt){
+  outdir <- paste0(opt$out, "/PredictDAA/", phname)
+  if(!dir.exists(outdir)) dir.create(outdir)
+  predictions <- all_model_results[[phname]]$padj_taxa_res$models[[mod2plot]]$preds_no_l1o
+  snames <- all_model_results[[phname]]$padj_taxa_pcas$Condition$pca$x %>% rownames
+  PCs <- all_model_results[[phname]]$padj_taxa_res$varnames
+  PCs_newnames <- getPCnamesFromAllresults(phname, all_model_results) %>% names
+
+ df <- pcBoxplots[[phname]]$tab %>% 
+    mutate(Predicted = predictions[match(sampleID, snames)]) %>% 
+    spread(key=PC, value=score) %>% 
+    dplyr::mutate(Condition = fct_recode(Condition, "Control"="Control", "Depression"="Depr."),
+                Good = ifelse(Condition==Predicted, TRUE, FALSE),
+                size2 = ifelse(Good, 0, 1)) 
+ confmat <- caret::confusionMatrix(df$Condition, df$Predicted)
+  
+ gm <- ggplot(df, aes(x=`PC2 (11%)`, y = `PC11 (2.2%)`, col=Condition))+
+   geom_point(size=2)+
+   geom_point(col="black", alpha=df$size2, size=0.6)+
+   mytheme +
+   ggtitle(paste0(mod2plot, ", Acc=", as.character(round(confmat$overall["Accuracy"], 3))))
+ ggsave(filename = paste0(outdir, "/", mod2plot, "_predictionPlot.pdf"))
+ gm <- gm + theme(legend.position = 'none')
+ return(gm)
+ }
+ # Make sure that it works
+ 
 
 library(VennDiagram)
 

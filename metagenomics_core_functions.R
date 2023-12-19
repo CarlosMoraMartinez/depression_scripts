@@ -9,7 +9,16 @@ library(phyloseq)
 
 options(ggplot2.discrete.fill = c("#A1C6EA","#FD8B2F", "#00AA5A", "#8E7BFF","#00D1EE", "#00E6BB", "#F9F871", "#F45680", "#A5ABBD", "#B60E50"))
 options(ggplot2.discrete.colour = c("#A1C6EA","#FD8B2F","#00AA5A",   "#8E7BFF","#00D1EE", "#00E6BB", "#F9F871", "#F45680", "#A5ABBD", "#B60E50"))
-
+C_CASE = "#FD8B2F" #"rgba(200, 44, 44, 0.8)"
+C_CASE2 = "tomato"
+C_CASE_LINK = "#fBd895" #"#f9c784"
+C_CTRL = "#A1C6EA" # "#006daa" #
+C_CTRL2 = "steelblue2"
+C_CTRL_LINK ="#DAE3E5" #"rgba(44, 44, 200, 0.8)"
+C_CTRL_LINK2 ="#B8C1D4"
+C_WHITE= "#DDDDDD"
+C_NS =  "#A5ABBD" #"rgba(224, 224, 224, 0.8)"
+C_OTHER = "gray30"
 
 options(ggplot2.continuous.fill="viridis")
 options(ggplot2.continuous.colour="viridis")
@@ -40,6 +49,13 @@ mystyle <- theme_classic() +
   theme(axis.text = element_text(face="bold"), 
         axis.title = element_text(face="bold")) 
 
+restauraropt_mk <- function(opt){
+  output <- opt$out
+  restaurar <- function(optbad){
+    optbad$out <- output
+    return(opt)
+  }
+}
 ### Basic phlyloseq
 
 MULTI_PAGE_PDFS = TRUE

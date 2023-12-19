@@ -3,6 +3,7 @@ library(bmem)
 library(sem)
 library(ggrepel)
 library(geomtextpath)
+library(cowplot)
 
 C_CASE = "#FD8B2F" #"rgba(200, 44, 44, 0.8)"
 C_CASE2 = "tomato"
@@ -418,7 +419,7 @@ plotAgeAndIMCMediationComplex <- function(res, vars2test, outdir, outname,
                                     24, #length(vnames)+5,
                                     12, 
                                     18),#length(vnames)+5),
-                         ypos1 = c(length(vnames):4, 
+                         ypos1 = c(1.1*(length(vnames):4-2), 
                                    as.integer(length(vnames)*0.7),
                                    as.integer(length(vnames)*1.1),
                                    1),#as.integer(length(vnames)*0.2)),
@@ -455,7 +456,7 @@ plotAgeAndIMCMediationComplex <- function(res, vars2test, outdir, outname,
       y0 = vertices$ypos1[match(from, vertices$names)],
       x1 = vertices$xpos1[match(to, vertices$names)],
       y1 = vertices$ypos1[match(to, vertices$names)],
-      labelnames = paste0(gsub("p", "'", param), '=',as.character(round(Estimate*10,2))),
+      labelnames = paste0(gsub("p", "'", gsub("[0-9]+", "", param)), '=',as.character(round(Estimate*10,2))),
       color = ifelse(Estimate < 0, C_CTRL, C_CASE),
       color = ifelse(p.value > plim_plot, C_NS, color),
       linetype = ifelse(p.value > plim_plot, 2, 1),
@@ -530,7 +531,6 @@ plotAgeAndIMCMediationComplex <- function(res, vars2test, outdir, outname,
 makePlotBySpecies <- function(bacnames, df_all, outdir, name, quantvar="IMC_log", 
                               quantvar_name = "log(IMC)",
                               corrmethod="pearson", w=8, h=10){
-  library(cowplot)
   assertthat::assert_that(all(bacnames %in% names(df_all)))
   vars2factor <- bacnames %>% gsub("_", " ", .) %>% 
     gsub("sp ", "sp. ", .) #%>% 

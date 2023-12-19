@@ -2,6 +2,7 @@ library(tidyverse)
 library(DESeq2)
 library(phyloseq)
 library(janitor)
+library(ggvenn)
 
 ## Mediation analysis based on tutorials:
 ## https://advstats.psychstat.org/book/mediation/index.php 
@@ -34,7 +35,7 @@ MODE = "LOCAL"
 if(MODE == "IATA"){
   opt <- list()
 }else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/mediation_analysis/",
+  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/mediation_analysis2/",
               indir = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/",
               phyloseq_list = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/phyloseq/phyloseq_all_list.RData",
               phyloseq_name = "remove_tanda2",
@@ -66,6 +67,22 @@ vstdf <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_vst_coun
 normdf <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_norm_counts.tsv"))
 
 ### Do tests
+#first do a small Venn diagram
+
+vars2venn <- list(
+  "D vs C" = dea2contrasts$firstContrast$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon),
+  #"D vs C adj. BMI" = summary_df %>% dplyr::filter(depr_adjimc_padj < plim) %>% pull(variable),
+  "adj BMI" = dea2contrasts$contrastlist2$Condition_corrIMC$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon),
+  "adj Age" = dea2contrasts$contrastlist2$Condition_corrAge$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon),
+  "adj both" = dea2contrasts$contrastlist2$Condition_corr2$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon)
+)
+gv <- ggvenn(
+  vars2venn, columns = names(vars2venn),
+  stroke_size = 0.5,
+  stroke_color = C_NS,
+  fill_color = c(C_CASE, C_CTRL2, C_CTRL, C_CASE2),show_elements = F
+)
+ggsave(filename = paste0(opt$out, "VennDiagram_CvsD_control.pdf"), gv, width = 8, height = 8)
 
 #### Read data 
 
@@ -131,11 +148,24 @@ plim <- 0.05
 
 vars2test <- summary_df %>% 
   dplyr::filter(depr_only_padj < plim &
-                  imc_only_padj < plim  & 
+                  #imc_only_padj < plim  & 
                   imc_adjdepr_padj < plim) %>% 
   pull(variable)
 
+vars2venn <- list(
+  "D vs C" = summary_df %>% dplyr::filter(depr_only_padj < plim) %>% pull(variable),
+  #"D vs C adj. BMI" = summary_df %>% dplyr::filter(depr_adjimc_padj < plim) %>% pull(variable),
+  "BMI" = summary_df %>% dplyr::filter(imc_only_padj < plim) %>% pull(variable),
+  "BMI adj. Depr" = summary_df %>% dplyr::filter(imc_adjdepr_padj < plim) %>% pull(variable)
+)
 
+gv <- ggvenn(
+  vars2venn, columns = names(vars2venn),
+  stroke_size = 0.5,
+  stroke_color = C_NS,
+  fill_color = c(C_CASE, C_CASE2, C_CTRL2, C_CTRL),show_elements = F
+)
+ggsave(filename = paste0(opt$out, "VennDiagram_IMC.pdf"), gv)
 
 medresults <- lapply(vars2test, \(x, df_all){
   df <- df_all %>% dplyr::select(all_of(c(x, y_name, mediator_name)))
@@ -323,9 +353,24 @@ plim <- 0.05
 
 vars2test <- summary_df %>% 
   dplyr::filter(depr_only_padj < plim & 
-                  age_only_padj < plim &
-                  depr_adjage_padj < plim) %>% 
+                  #age_only_padj < plim &
+                  age_adjdepr_padj < plim) %>% 
   pull(variable)
+
+vars2venn <- list(
+  "D vs C" = summary_df %>% dplyr::filter(depr_only_padj < plim) %>% pull(variable),
+  "Age" = summary_df %>% dplyr::filter(age_only_padj < plim) %>% pull(variable),
+  "Age adj. Depr" = summary_df %>% dplyr::filter(age_adjdepr_padj < plim) %>% pull(variable)
+)
+
+gv <- ggvenn(
+  vars2venn, columns = names(vars2venn),
+  stroke_size = 0.5,
+  stroke_color = C_NS,
+  fill_color = c(C_CASE, C_CASE2, C_CTRL2),show_elements = F
+)
+ggsave(filename = paste0(opt$out, "VennDiagram_Age.pdf"), gv)
+
 
 medresultsAge <- lapply(vars2test, \(mediator_name, df_all){
   df <- df_all %>% dplyr::select(all_of(c(x_name, y_name, mediator_name)))
@@ -519,9 +564,26 @@ plim <- 0.05
 #   pull(variable)
 
 vars2test <- summary_df %>% dplyr::filter(depr_adj2<plim & 
-                                     ((imc_adjdepr_padj < plim & imc_only_padj < plim) |
-                                        (age_adjdepr_padj < plim & age_only_padj < plim))) %>% 
+                                     ((imc_adjdepr_padj < plim ) |  #& imc_only_padj < plim
+                                        (age_adjdepr_padj < plim ))) %>%  #& age_only_padj < plim
      pull(variable)
+
+
+vars2venn <- list(
+  "D vs C" = summary_df %>% dplyr::filter(depr_only_padj < plim) %>% pull(variable),
+  "BMI adj." = summary_df %>% dplyr::filter(imc_adjdepr_padj < plim) %>% pull(variable),
+  "Age adj." = summary_df %>% dplyr::filter(age_adjdepr_padj < plim) %>% pull(variable)
+)
+
+gv <- ggvenn(
+  vars2venn, columns = names(vars2venn),
+  stroke_size = 0.5,
+  stroke_color = C_NS,
+  fill_color = c(C_CASE, C_CASE2, C_CTRL2),show_elements = F
+)
+ggsave(filename = paste0(opt$out, "VennDiagram_AgeAndBMI.pdf"), gv)
+
+
 param_names <- c('a', 'b', 'cp', 'd', 'e', 'fp', 'a*b', 'cp+a*b', 'd*b', 'fp+d*b', 'e*cp', 'fp+e*cp', 'd*b+fp+e*cp+e*a*b') 
 medresultsBoth <- lapply(vars2test, \(mediator_name2, df_all){
   df <- df_all %>% dplyr::select(all_of(c(x_name, y_name, mediator_name1, mediator_name2)))
@@ -669,8 +731,8 @@ plim <- 0.05
 #   as.matrix() %>% apply(MAR=1, \(x)any(x<=plim)) 
 
 vars2test <- summary_df %>% dplyr::filter(depr_adj2<plim & 
-                                            ((imc_adjdepr_padj < plim & imc_only_padj < plim) |
-                                               (age_adjdepr_padj < plim & age_only_padj < plim))) %>% 
+                                            ((imc_adjdepr_padj < plim ) | #& imc_only_padj < plim
+                                               (age_adjdepr_padj < plim ))) %>%  #& age_only_padj < plim
   pull(variable)
 
 df <- df_all %>% dplyr::select(all_of(c(x_name, y_name, mediator_name1, vars2test)))
@@ -703,4 +765,4 @@ plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotIMC_merged_
 plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotIMC_merged_BySpeciesSpearman", quantvar="IMC_log", 
                            quantvar_name = "log(BMI)", corrmethod = "spearman", w=8, h=10)
 plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotIMC_merged_BySpeciesKendall", quantvar="IMC_log", 
-                           uantvar_name = "log(BMI)", corrmethod = "spearman", w=8, h=10)
+                           quantvar_name = "log(BMI)", corrmethod = "spearman", w=8, h=10)
