@@ -35,7 +35,7 @@ MODE = "LOCAL"
 if(MODE == "IATA"){
   opt <- list()
 }else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/mediation_analysis2/",
+  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/mediation_analysis4/",
               indir = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/",
               phyloseq_list = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/phyloseq/phyloseq_all_list.RData",
               phyloseq_name = "remove_tanda2",
@@ -44,14 +44,17 @@ if(MODE == "IATA"){
               metadata = "/home/carmoma/Desktop/202311_DEPRESION/metadatos_MC_AL12042023_CMcopy.xlsx",
               rewrite=TRUE,
               fc=1, 
-              pval=0.05
+              pval=0.05,
+              adjust_pvals = TRUE
   )
 }
 if(! dir.exists(opt$out)){dir.create(opt$out)}
-
+AJUST_PVALS = opt$adjust_pvals
 ### LOAD DATA
 source(opt$r_functions)
 source(opt$r_functions_mediation)
+restaurar <- restauraropt_mk(opt)
+
 load(opt$phyloseq_list)
 phobj <- all_phyloseq[[opt$phyloseq_name]]
 phobj <- updatePsWithLogs(phobj, c("Edad", "IMC"))
@@ -84,6 +87,57 @@ gv <- ggvenn(
 )
 ggsave(filename = paste0(opt$out, "VennDiagram_CvsD_control.pdf"), gv, width = 8, height = 8)
 
+vars2venn <- list(
+  "D vs C" = dea2contrasts$firstContrast$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon),
+  #"D vs C adj. BMI" = summary_df %>% dplyr::filter(depr_adjimc_padj < plim) %>% pull(variable),
+  "D vs C, adj BMI+Age" = dea2contrasts$contrastlist2$Condition_corr2$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon)
+)
+gv <- ggvenn(
+  vars2venn, columns = names(vars2venn),
+  stroke_size = 0.5,
+  stroke_color = C_NS,
+  fill_color = c(C_CASE, C_CTRL2, C_CTRL, C_CASE2),show_elements = F
+)
+ggsave(filename = paste0(opt$out, "VennDiagram_CvsD_control2.pdf"), gv, width = 6, height = 6)
+
+
+vars2venn <- list(
+  "D vs C" = dea2contrasts$firstContrast$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon),
+  "D vs C, adj BMI" = dea2contrasts$contrastlist2$Condition_corrIMC$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon)
+)
+gv <- ggvenn(
+  vars2venn, columns = names(vars2venn),
+  stroke_size = 0.5,
+  stroke_color = C_NS,
+  fill_color = c(C_CASE, C_CTRL2, C_CTRL, C_CASE2),show_elements = F
+)
+ggsave(filename = paste0(opt$out, "VennDiagram_CvsD_adjBMI.pdf"), gv, width = 6, height = 6)
+
+vars2venn <- list(
+  "D vs C" = dea2contrasts$firstContrast$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon),
+  #"D vs C adj. BMI" = summary_df %>% dplyr::filter(depr_adjimc_padj < plim) %>% pull(variable),
+  "D vs C, adj Age" = dea2contrasts$contrastlist2$Condition_corrAge$resdf %>% 
+    dplyr::filter(padj <= 0.05) %>% pull(taxon)
+)
+gv <- ggvenn(
+  vars2venn, columns = names(vars2venn),
+  stroke_size = 0.5,
+  stroke_color = C_NS,
+  fill_color = c(C_CASE, C_CTRL2, C_CTRL, C_CASE2),show_elements = F
+)
+ggsave(filename = paste0(opt$out, "VennDiagram_CvsD_adjAge.pdf"), gv, width = 6, height = 6)
+
+### Plot bars of DEA contrasts
+daalist <- list(
+  "D_vs_C" = dea2contrasts$firstContrast$resdf,
+  "D_vs_C_adj_BMIplusAge" = dea2contrasts$contrastlist2$Condition_corr2$resdf,
+  "BMI_adj_DeprplusAge" = dea2contrasts$contrastlist2$BMI_corr2$resdf,
+  "Age_adj_DeprplusBMI" = dea2contrasts$contrastlist2$Age_corr2$resdf
+)
+
+batplotsdaa <- makeBarplotDAA(daalist, opt$out, plim=0.05)
+
+
 #### Read data 
 
 expr_df <- vstdf %>% column_to_rownames("gene") %>% 
@@ -110,146 +164,89 @@ names(df_all_norm) <- gsub("^X\\.", "", names(df_all_norm)) %>%
 write_tsv(df_all, file=paste0(opt$out, "merged_data_vst.tsv"))
 write_tsv(df_all_norm, file=paste0(opt$out, "merged_data_norm.tsv"))
 
+### Show relationship between IMC and Age:
+
+mod <- lm(log(metadata$IMC) ~ log(metadata$Edad))
+altmod <- lm(log(metadata$IMC) ~ 1)
+pdf(paste0(opt$out, "Age_vs_BMI_regression.pdf"))
+par(mfrow=c(2,2))
+plot(mod)
+dev.off()
+ss <- broom::glance(mod)
+write_tsv(ss, file = paste0(opt$out, "Age_vs_BMI_regression.tsv"))
+
 ### MEDIATION ANALYSIS WITH IMC
-
-summary_df <- data.frame(variable = gsub("-", ".", vstdf$gene) %>% 
-                                    gsub("\\[|\\]", "", .) %>% 
-                                    gsub("\\._", "_", .) %>% 
-                                    gsub("\\/|\\(|\\)", ".", .) %>% 
-                                    gsub("\\.$", "", .) 
-                         )
-
-assertthat::assert_that(all(summary_df$variable %in% names(df_all)))
-
-list2merge <- list(
-  depr_only_padj = dea2contrasts$firstContrast$resdf,
-  imc_only_padj = dea2contrasts$contrastlist2$BMI_alone$resdf,
-  depr_adjimc_padj = dea2contrasts$contrastlist2$Condition_corrIMC$resdf,
-  imc_adjdepr_padj = dea2contrasts$contrastlist2$BMI_corrCond$resdf
-)
-
-merged_pvals <- list2merge %>% 
-  lapply(\(x){
-  x$taxon <- x$taxon %>% 
-    gsub("-", ".", .) %>% 
-    gsub("\\[|\\]", "", .) %>% 
-    gsub("\\._", "_", .) %>% 
-    gsub("\\/|\\(|\\)", ".", .) %>% 
-    gsub("\\.$", "", .) 
-  x <- x[match(summary_df$variable, x$taxon), ]
-  return(x$padj)
-}) %>% bind_cols()
-summary_df <- cbind(summary_df, merged_pvals)
+getvars_MAIN_ANALYSIS_CondAndIMC <- function(summary_df){
+  vars2test <- summary_df %>% 
+    dplyr::filter(depr_only_padj < plim &
+                    imc_only_padj < plim  & 
+                    imc_adjdepr_padj < plim) %>% 
+    pull(variable)
+  return(vars2test)
+}
 
 
-mediator_name <- "IMC"
-y_name <- "Condition_bin"
-plim <- 0.05
+getvars_onlyAfterAdjusting <- function(summary_df){
+  vars2test <- summary_df %>% 
+    dplyr::filter(depr_only_padj > plim &
+                    depr_adjimc_padj < plim) %>% 
+    pull(variable)
+  return(vars2test)
+}
 
-vars2test <- summary_df %>% 
-  dplyr::filter(depr_only_padj < plim &
-                  #imc_only_padj < plim  & 
-                  imc_adjdepr_padj < plim) %>% 
-  pull(variable)
+getvars_onlyBeforeAdj <- function(summary_df){
+  vars2test <- summary_df %>% 
+    dplyr::filter(depr_only_padj < plim &
+                    depr_adjimc_padj > plim) %>% 
+    pull(variable) 
+  return(vars3test)
+}
 
-vars2venn <- list(
-  "D vs C" = summary_df %>% dplyr::filter(depr_only_padj < plim) %>% pull(variable),
-  #"D vs C adj. BMI" = summary_df %>% dplyr::filter(depr_adjimc_padj < plim) %>% pull(variable),
-  "BMI" = summary_df %>% dplyr::filter(imc_only_padj < plim) %>% pull(variable),
-  "BMI adj. Depr" = summary_df %>% dplyr::filter(imc_adjdepr_padj < plim) %>% pull(variable)
-)
+getvars_onlyNotIMC <- function(summary_df){
+  vars2test <- summary_df %>% 
+    dplyr::filter(depr_only_padj < plim &
+                    depr_adjimc_padj < plim &
+                    imc_only_padj > plim &
+                    imc_adjdepr_padj > plim) %>% 
+    pull(variable)
+  return(vars2test)
+}
 
-gv <- ggvenn(
-  vars2venn, columns = names(vars2venn),
-  stroke_size = 0.5,
-  stroke_color = C_NS,
-  fill_color = c(C_CASE, C_CASE2, C_CTRL2, C_CTRL),show_elements = F
-)
-ggsave(filename = paste0(opt$out, "VennDiagram_IMC.pdf"), gv)
 
-medresults <- lapply(vars2test, \(x, df_all){
-  df <- df_all %>% dplyr::select(all_of(c(x, y_name, mediator_name)))
-  with_nas <-  df %>% apply(MAR=1, \(x)any(is.na(x)))
-  df <- df[!with_nas, ]
-  param_names <- c("b", "cp", "a", "a*b", "cp+a*b")
-  res <- tryCatch({makeMediationSimple(df, x, y_name, mediator_name)}, error=\(x){
-    
-      xx <- data.frame(Estimate=rep(NA, 5), 
-                       S.E. = rep(NA, 5), 
-                       `Z-score`=rep(NA, 5), 
-                       p.value=rep(NA, 5))
-      rownames(xx) <- c(param_names)
-      return(list(estimates=xx))   
-  })
-  res2 <- res$estimates %>% rownames_to_column("param") %>% 
-    dplyr::select(param, Estimate, p.value) %>% 
-    gather(key="var", value="value", Estimate, p.value) %>% 
-    filter(param %in% param_names) %>% 
-    unite("tmp", param, var, sep="_") %>% 
-    spread(tmp, value) %>% 
-    mutate(Xvar = x, Yvar = y_name, Mediator=mediator_name, fullmodel=list(res$estimates))
-  return(res2)
-  
-}, df_all) %>% bind_rows()
-#all(medresults$Xvar %in% summary_df$variable)
-medresults_merged <- merge(medresults %>% dplyr::select(-fullmodel), summary_df, by.x="Xvar", by.y="variable")
-write_tsv(medresults_merged, file=paste0(opt$out, "mediation_analysis_IMC.tsv"))
-save(medresults_merged, file=paste0(opt$out, "mediation_analysis_IMC.RData"))
+#####################################################
 
-## Transform to plot
-def_effects <- c('a', 'b', 'cp','a*b', 'cp+a*b') 
-res_trans <- map(1:nrow(medresults), \(i){
-  res_i <- medresults$fullmodel[[i]]
-  oldnames2 <- rownames(res_i) %>% 
-    sapply(\(x)strsplit(x, "\\*|\\+",perl = TRUE)[[1]][1]) 
-  resdf_i <- res_i %>% 
-    rownames_to_column("param") %>% 
-    mutate(x_labels = ifelse(param %in% def_effects, 
-                             medresults$Xvar[i],
-                             gsub("V\\[|\\]", "", param)),
-           param = ifelse(param %in% def_effects, 
-                          gsub("(b|a|cp)", paste0("\\1", as.character(i)), param, perl=T), param) 
-           )
+opt <- restaurar(opt)
+opt$out <- paste0(opt$out, "/mediation_BMI_separate/")
+if(!dir.exists(opt$out)) dir.create(opt$out)
+makeFullMediationAnalysisIMC(opt, getvars_MAIN_ANALYSIS_CondAndIMC, mediator_name, y_name, plim, "analysis_IMC_separateModel_vjust",
+                             wnet=14, hnet=10, wbars=8, hbars=10, wbars2=10, hbars2=10)
 
-}) %>% bind_rows()
-bs_only <- res_trans %>% dplyr::filter(grepl("^b[0-9]+$", param))
-(g_bs <- ggplot(bs_only,aes(x=Estimate))+geom_histogram()+mytheme+ggtitle("Histogram of b (IMC->Depr)"))
-ggsave(filename = paste0(opt$out, "histogram_bs_IMC_separate.pdf"), g_bs)
+### MEDIATION ANALYSIS WITH IMC - ONLY BACTERIA SIGNIFICANT IN D VS C AFTER ADJUSTING FOR BMI
+opt <- restaurar(opt)
+opt$out <- paste0(opt$out, "/mediation_BMI_OnlyAfterAdjust_separate/")
+if(!dir.exists(opt$out)) dir.create(opt$out)
 
-res_final <- rbind(
-  bs_only %>% 
-    mutate_if(is.character, \(x)"b") %>% 
-    group_by(param, x_labels) %>% 
-    dplyr::summarise_all(mean) %>% 
-    dplyr::select(all_of(names(res_trans))),
-  res_trans %>% dplyr::filter(!grepl("^b[0-9]+$", param)) %>% 
-    dplyr::mutate(param=gsub("b[0-9]+$", "b", param))
-) 
-write_tsv(res_final, file=paste0(opt$out, "mediation_analysis_IMC_separate_reformat.tsv"))
-write_tsv(bs_only, file=paste0(opt$out, "mediation_analysis_IMC_separate_bs.tsv"))
+makeFullMediationAnalysisIMC(opt, getvars_onlyAfterAdjusting, mediator_name, y_name, plim, "analysis_IMC_separateModel_vjust")
 
-name<-"analysis_IMC_separateModel_vjust"
-plotres <- plotIMCMediationSimple(res_final, vars2test, opt$out, name, plim_plot = 0.05, 
-                       use_color_scale = FALSE, w=14, h=10)
+### MEDIATION ANALYSIS WITH IMC - ONLY BACTERIA SIGNIFICANT IN D VS C BUT NOT AFTER ADJUSTING
+opt <- restaurar(opt)
+opt$out <- paste0(opt$out, "/mediation_BMI_NonSigAfterAdjustingBMI_separate/")
+if(!dir.exists(opt$out)) dir.create(opt$out)
 
-## Make also boxplot
-bacnames <- plotres$bacorder$x_labels
-plots <- makePlotBySpecies(bacnames, df_all, opt$out, "IMC_separate_BySpeciesPearson", quantvar="IMC_log", 
-                           quantvar_name = "log(IMC)", corrmethod = "pearson", w=8, h=10)
-plots <- makePlotBySpecies(bacnames, df_all, opt$out, "IMC_separate_BySpeciesSpearman", quantvar="IMC_log", 
-                           quantvar_name = "log(IMC)", corrmethod = "spearman", w=8, h=10)
-plots <- makePlotBySpecies(bacnames, df_all, opt$out, "IMC_separate_BySpeciesKendall", quantvar="IMC_log", 
-                           quantvar_name = "log(IMC)", corrmethod = "kendall", w=8, h=10)
-# 
-# plots <- makePlotBySpecies(bacnames, df_all_norm, opt$out, "IMCseparate_NormCountsBySpeciesPearson", quantvar="IMC_log", 
-#                            quantvar_name = "log(IMC)", corrmethod = "pearson", w=8, h=10)
-# plots <- makePlotBySpecies(bacnames, df_all_norm, opt$out, "IMCseparate_NormCountsBySpeciesSpearman", quantvar="IMC_log", 
-#                            quantvar_name = "log(IMC)", corrmethod = "spearman", w=8, h=10)
-# plots <- makePlotBySpecies(bacnames, df_all_norm, opt$out, "IMCseparate_NormCountsBySpeciesKendall", quantvar="IMC_log", 
-#                            quantvar_name = "log(IMC)", corrmethod = "kendall", w=8, h=10)
+makeFullMediationAnalysisIMC(opt, getvars_onlyBeforeAdj, mediator_name, y_name, plim, "analysis_IMC_separateModel_vjust")
+
+### MEDIATION ANALYSIS WITH IMC - ONLY BACTERIA SIGNIFICANT IN D VS C BUT NOT AFTER ADJUSTING
+opt <- restaurar(opt)
+opt$out <- paste0(opt$out, "/mediation_BMI_SigCondAndNotBMI_separate/")
+if(!dir.exists(opt$out)) dir.create(opt$out)
+
+makeFullMediationAnalysisIMC(opt, getvars_onlyNotIMC, mediator_name, y_name, plim, "analysis_IMC_separateModel_vjust")
 
 ###########################################################################
 ### MEDIATION WITH IMC, MERGED
+opt <- restaurar(opt)
+opt$out <- paste0(opt$out, "/mediation_BMI_merged/")
+if(!dir.exists(opt$out)) dir.create(opt$out)
 
 summary_df <- data.frame(variable = gsub("-", ".", vstdf$gene) %>% 
                            gsub("\\[|\\]", "", .) %>% 
@@ -296,6 +293,10 @@ df <- df_all %>% dplyr::select(all_of(c(vars2test, y_name, mediator_name)))
 with_nas <-  df %>% apply(MAR=1, \(x)any(is.na(x)))
 df <- df[!with_nas, ]
 res <- makeMediationSimple_mergedX(df, vars2test, y_name, mediator_name)
+if(AJUST_PVALS){
+  res$p_raw <- res$p.value
+  res$p.value <- p.adjust(res$p.value, method = "BH")
+}
 write_tsv(res, file=paste0(opt$out, "mediation_analysis_IMC_mergedModel.tsv"))
 
 ### PLOT 
@@ -313,9 +314,14 @@ plots <- makePlotBySpecies(bacnames, df_all, opt$out, "IMC_merged_BySpeciesSpear
 plots <- makePlotBySpecies(bacnames, df_all, opt$out, "IMC_merged_BySpeciesKendall", quantvar="IMC_log", 
                            quantvar_name = "log(IMC)", corrmethod = "kendall", w=8, h=10)
 # 
+plots <- makePlotBySpeciesEffects_BMI(bacnames, df_all, res, opt$out, "IMC_merged_BySpeciesEffects", w=8, h=10)
 
 ###################################################################
 ### MEDIATION ANALYSIS WITH AGE
+
+opt <- restaurar(opt)
+opt$out <- paste0(opt$out, "/mediation_Age_separate/")
+if(!dir.exists(opt$out)) dir.create(opt$out)
 
 summary_df <- data.frame(variable = gsub("-", ".", vstdf$gene) %>% 
                            gsub("\\[|\\]", "", .) %>% 
@@ -369,7 +375,7 @@ gv <- ggvenn(
   stroke_color = C_NS,
   fill_color = c(C_CASE, C_CASE2, C_CTRL2),show_elements = F
 )
-ggsave(filename = paste0(opt$out, "VennDiagram_Age.pdf"), gv)
+ggsave(filename = paste0(opt$out, "VennDiagram_Age.pdf"), gv, width = 5, height = 5)
 
 
 medresultsAge <- lapply(vars2test, \(mediator_name, df_all){
@@ -431,6 +437,10 @@ res_final <- rbind(
   res_trans %>% dplyr::filter(!grepl("^cp[0-9]+$", param)) %>% 
     dplyr::mutate(param=gsub("cp[0-9]+", "cp", param))
 ) 
+if(AJUST_PVALS){
+  res_final$p_raw <- res_final$p.value
+  res_final$p.value <- p.adjust(res_final$p.value, method = "BH")
+}
 write_tsv(res_final, file=paste0(opt$out, "mediation_analysis_Edad_separate_reformat.tsv"))
 write_tsv(cps_only, file=paste0(opt$out, "mediation_analysis_Edad_separate_cps.tsv"))
 
@@ -451,6 +461,10 @@ plots <- makePlotBySpecies(bacnames, df_all, opt$out, "Age_separate_BySpeciesKen
 
 ##################################################################################33
 ### MEDIATION ANALYSIS WITH AGE, MERGED
+
+opt <- restaurar(opt)
+opt$out <- paste0(opt$out, "/mediation_Age_merged/")
+if(!dir.exists(opt$out)) dir.create(opt$out)
 
 summary_df <- data.frame(variable = gsub("-", ".", vstdf$gene) %>% 
                            gsub("\\[|\\]", "", .) %>% 
@@ -496,6 +510,10 @@ df <- df_all %>% dplyr::select(all_of(c(x_name, y_name, vars2test)))
 with_nas <-  df %>% apply(MAR=1, \(x)any(is.na(x)))
 df <- df[!with_nas, ]
 res <- makeMediationSimple_mergedMediat(df, x_name, y_name, vars2test)
+if(AJUST_PVALS){
+  res$p_raw <- res$p.value
+  res$p.value <- p.adjust(res$p.value, method = "BH")
+}
 write_tsv(res, file=paste0(opt$out, "mediation_analysis_Edad_mergedModel.tsv"))
 
 ## Plot network
@@ -514,6 +532,10 @@ plots <- makePlotBySpecies(bacnames, df_all, opt$out, "Age_merged_BySpeciesKenda
 # 
 
 ### MEDIATION ANALYSIS WITH AGE AND IMC
+
+opt <- restaurar(opt)
+opt$out <- paste0(opt$out, "/mediation_AgeAndBMI_separate/")
+if(!dir.exists(opt$out)) dir.create(opt$out)
 
 summary_df <- data.frame(variable = gsub("-", ".", vstdf$gene) %>% 
                            gsub("\\[|\\]", "", .) %>% 
@@ -581,7 +603,7 @@ gv <- ggvenn(
   stroke_color = C_NS,
   fill_color = c(C_CASE, C_CASE2, C_CTRL2),show_elements = F
 )
-ggsave(filename = paste0(opt$out, "VennDiagram_AgeAndBMI.pdf"), gv)
+ggsave(filename = paste0(opt$out, "VennDiagram_AgeAndBMI.pdf"), gv, width = 5, height = 5)
 
 
 param_names <- c('a', 'b', 'cp', 'd', 'e', 'fp', 'a*b', 'cp+a*b', 'd*b', 'fp+d*b', 'e*cp', 'fp+e*cp', 'd*b+fp+e*cp+e*a*b') 
@@ -656,6 +678,10 @@ res_final <- rbind(
   res_trans %>% dplyr::filter(!grepl("^(d|b|fp)[0-9]+$", param)) %>% 
     dplyr::mutate(param=gsub("(d|b|fp)[0-9]+", "\\1", param))
 ) 
+if(AJUST_PVALS){
+  res_final$p_raw <- res_final$p.value
+  res_final$p.value <- p.adjust(res_final$p.value, method = "BH")
+}
 write_tsv(res_final, file=paste0(opt$out, "mediation_analysis_EdadAndIMC_separate_reformat.tsv"))
 write_tsv(cps_only, file=paste0(opt$out, "mediation_analysis_EdadAndIMC_separate_cps.tsv"))
 
@@ -681,6 +707,10 @@ plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotIMC_separat
 ## 
 
 ### MEDIATION ANALYSIS WITH AGE AND IMC, MERGED
+
+opt <- restaurar(opt)
+opt$out <- paste0(opt$out, "/mediation_AgeAndBMI_merged/")
+if(!dir.exists(opt$out)) dir.create(opt$out)
 
 summary_df <- data.frame(variable = gsub("-", ".", vstdf$gene) %>% 
                            gsub("\\[|\\]", "", .) %>% 
@@ -743,7 +773,10 @@ res <- makeMediationComplex_mergedMEdiat2(df, xname=x_name,
                             yname=y_name, 
                             medname=mediator_name1, 
                             mednames2=vars2test)
-
+if(AJUST_PVALS){
+  res$p_raw <- res$p.value
+  res$p.value <- p.adjust(res$p.value, method = "BH")
+}
 #all(medresults$Xvar %in% summary_df$variable)
 write_tsv(res, file=paste0(opt$out, "mediation_analysis_EdadAndIMC_mergedModel.tsv"))
 
@@ -766,3 +799,6 @@ plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotIMC_merged_
                            quantvar_name = "log(BMI)", corrmethod = "spearman", w=8, h=10)
 plots <- makePlotBySpecies(bacnames, df_all, opt$out, "AgeAndIMC_plotIMC_merged_BySpeciesKendall", quantvar="IMC_log", 
                            quantvar_name = "log(BMI)", corrmethod = "spearman", w=8, h=10)
+
+
+

@@ -1,7 +1,7 @@
 library(tidyverse)
 library(ggsci)
 library(phyloseq)
-
+library(ggvenn)
 ## GGPLOT THEMES
 
 #options(ggplot2.discrete.fill = c("#1E90FF", "#00AA5A", "#F75A3F", "#8E7BFF","#00D1EE", "#00E6BB", "#F9F871", "#F45680", "#A5ABBD", "#B60E50"))
@@ -212,7 +212,7 @@ testDiversityDifferences <- function(divtab, vars, groupvars, outdir, name="alph
   for (v in vars){
     if(length(unique(divtab[, v])) < 2 ) next
     for(g in groupvars){
-      if(length(unique(divtab[, g])) < 2 | min(table(divtab[, g]))<2) next
+      if(length(unique(divtab[, g])) < 2 | min(table(divtab[!is.na(divtab[, v]), g]))<2) next
       meantab <- tapply(divtab[, v], divtab[, g], mean, na.rm=T)
       if(any(is.na(meantab))) next
       divtab[, g] <- as.factor(divtab[, g])
@@ -2963,14 +2963,171 @@ compareLFCContrats <- function(contrastlist, firstContrast,
     facet_grid(comparison ~ ., scales=scale_mode) +
     geom_hline(yintercept = 0, linetype=3, col="gray80") +
     geom_bar(stat="identity") +
-    scale_fill_manual(values=c("firebrick1", "lightgray","steelblue2"))+
+    scale_fill_manual(values=c(C_CASE, C_NS, C_CTRL))+ #c("firebrick1", "lightgray","steelblue2")
     mytheme +
+    theme_classic() +
     theme(strip.text.y = element_text(size = 10, 
                                       colour = "black", angle = 0, face = "bold"))+
     theme(axis.text.x = element_text(size = 6, 
-                                     colour = "black", angle = 90, 
-                                     face = "italic", hjust=1, vjust=0))
+                                     colour = "black", angle = 45, 
+                                     face = "italic", hjust=1, vjust=1))
+    
   
   ggsave(filename = paste0(outdir, "/", name, ".pdf"), g1, width = w, height = h)
+  return(g1)
+}
+
+
+compareLFCContrats2 <- function(contrastlist, firstContrast, 
+                               contrastNamesOrdered, mainContrastName, 
+                               plim_select= 0.000001, plim_plot=0.05,
+                               name2remove = "",
+                               resdfname="resdf", outdir = "./", name="LFC_compare", w=12, h=8,
+                               scale_mode="fixed"){
+  alldeatables <- map(names(contrastlist), 
+                      \(x) contrastlist[[x]][[resdfname]] %>% mutate(comparison=x)) %>% 
+    bind_rows()
+  alldeatables <- rbind(alldeatables, firstContrast[[resdfname]] %>% 
+                          mutate(comparison=mainContrastName)) %>% 
+    mutate(taxon = gsub("_", " ", taxon))
+  
+  tax2plot <- alldeatables %>% filter(padj<=plim_select) %>% pull(taxon) %>% unique
+  tax2plot %>% length
+  taxorder <- firstContrast[[resdfname]] %>% arrange(desc(log2FoldChangeShrink)) %>% 
+    mutate(taxon = gsub("_", " ", taxon)) %>% 
+    filter(taxon %in% tax2plot) %>% pull(taxon)
+  
+  alldeatables_filt <- alldeatables %>% 
+    dplyr::filter(taxon %in% taxorder) %>% 
+    dplyr::mutate(taxon=factor(taxon, levels=taxorder),
+                  comparison=gsub(name2remove, "", comparison),
+                  comparison=gsub("_", " ", comparison),
+                  comparison=factor(comparison, 
+                                    levels=contrastNamesOrdered),
+                  UpOrDown = ifelse(log2FoldChangeShrink<0, "Down", "Up"),
+                  UpOrDownSig = ifelse(padj<=plim_plot & !is.na(padj), UpOrDown, "NS"),
+                  UpOrDownSig = factor(UpOrDownSig, levels=c("Up", "NS", "Down"))
+    )
+  
+  g1<-ggplot(alldeatables_filt, aes(x=taxon, y=log2FoldChangeShrink, fill=UpOrDownSig)) +
+    facet_grid(. ~ comparison, scales=scale_mode) +
+    geom_hline(yintercept = 0, linetype=3, col="gray80") +
+    geom_bar(stat="identity") +
+    scale_fill_manual(values=c(C_CASE, C_NS,C_CTRL))+
+    mytheme +
+    theme_classic()+
+    theme(strip.text.y = element_text(size = 8, 
+                                      colour = "black", angle = 0, face = "bold"))+
+    theme(axis.text.y = element_text(size = 8, 
+                                     colour = "black", angle = 0, 
+                                     face = "italic", hjust=1, vjust=0))+
+    coord_flip()
+  
+  ggsave(filename = paste0(outdir, "/", name, "2.pdf"), g1, width = w, height = h)
+  return(g1)
+}
+
+makeVennLocal <- function(vars2venn, name="VennDiagram", outdir, w=5, h=5){
+  
+  gv <- ggvenn(
+    vars2venn, columns = names(vars2venn),
+    stroke_size = 0.5,
+    stroke_color = C_NS,
+    fill_color = c(C_CASE, C_CASE2, C_CTRL2, C_CTRL),show_elements = F
+  )
+  ggsave(filename = paste0(outdir, name, ".pdf"), gv, width = w, height = h)
+  return(gv)
+}
+
+compareLFCContratsNumeric <- function(contrastlist, firstContrast, 
+                                contrastNamesOrdered, mainContrastName, 
+                                plim_select= 0.000001, plim_plot=0.05,
+                                name2remove = "",
+                                resdfname="resdf", outdir = "./", name="LFC_compare", w=12, h=8,
+                                scale_mode="fixed"){
+  alldeatables <- map(names(contrastlist), 
+                      \(x) contrastlist[[x]][[resdfname]] %>% mutate(comparison=x)) %>% 
+    bind_rows()
+  alldeatables <- rbind(alldeatables, firstContrast[[resdfname]] %>% 
+                          mutate(comparison=mainContrastName)) %>% 
+    mutate(taxon = gsub("_", " ", taxon))
+  
+ 
+  
+  # 1) Calculate correlations
+  mat2cor <- alldeatables %>% dplyr::filter(taxon %in% tax2plot) %>% 
+    dplyr::select(taxon, log2FoldChange, comparison) %>% 
+    spread(key=comparison, value=log2FoldChange) %>% 
+    column_to_rownames("taxon") 
+  cordf <- data.frame()
+  i <- gsub(" ", "_", contrastNamesOrdered[1])
+  for(j in names(mat2cor[, names(mat2cor)!=i])){
+    mat <- mat2cor[, c(i, j)]
+    mat <- mat[!apply(mat, MAR=1, \(x)any(is.na(x))), ]
+    aux <- data.frame(
+      Contrast1 = i,
+      Contrast2 = j,
+      pearson_cor = cor(mat[, i], mat[, j], method= "pearson"),
+      pearson_pval = cor.test(mat[, i], mat[, j], method= "pearson")$p.value,
+      spearman_cor = cor(mat[, i], mat[, j], method= "spearman"),
+      spearman_pval = cor.test(mat[, i], mat[, j], method= "spearman")$p.value,
+      kendall_cor = cor(mat[, i], mat[, j], method= "kendall"),
+      kendall_pval = cor.test(mat[, i], mat[, j], method= "kendall")$p.value
+    )
+    cordf <- rbind(cordf, aux)
+  }
+  cordf <- cordf %>% dplyr::mutate(across(matches("_pval$"), list(ajd=\(x)p.adjust(x, method="BH"))))
+  write_tsv(cordf, file = paste0(outdir, '/', name, "_Correlations.tsv"))
+  
+  # 2) Make Venn Diagram
+  tax2plot <- alldeatables %>% dplyr::filter(comparison==i & padj<=plim_select) %>% pull(taxon) %>% unique
+  tax2plot_up <- alldeatables %>% dplyr::filter(comparison==i & padj<=plim_select & log2FoldChangeShrink >0) %>% pull(taxon) %>% unique
+  tax2plot_down <- alldeatables %>% dplyr::filter(comparison==i & padj<=plim_select & log2FoldChangeShrink <0) %>% pull(taxon) %>% unique
+  venplots <- map(names(mat2cor[, names(mat2cor)!=i]), \(x){
+    tmp <-  alldeatables %>% dplyr::filter(comparison == x & padj < plim_select & ! is.na(padj))
+    vars2venn <- list(
+      "More in Depr" = tax2plot_up,
+      "More in Ctrl" = tax2plot_down,
+      " Up" = tmp %>% dplyr::filter(log2FoldChangeShrink > 0) %>% pull(taxon),
+      " Down" = tmp %>% dplyr::filter(log2FoldChangeShrink < 0) %>% pull(taxon)
+    )
+    names(vars2venn)[3:4] <- paste0(x, names(vars2venn)[3:4])
+    makeVennLocal(vars2venn, name=paste0(name, "_", x, "_VennDiagram"), outdir, w=6, h=6)
+  })
+  
+    
+
+  tax2plot %>% length
+  taxorder <- firstContrast[[resdfname]] %>% arrange(desc(log2FoldChangeShrink)) %>% 
+    mutate(taxon = gsub("_", " ", taxon)) %>% 
+    filter(taxon %in% tax2plot) %>% pull(taxon)
+  
+  alldeatables_filt <- alldeatables %>% 
+    dplyr::filter(taxon %in% taxorder) %>% 
+    dplyr::mutate(taxon=factor(taxon, levels=taxorder),
+                  comparison=gsub(name2remove, "", comparison),
+                  comparison=gsub("_", " ", comparison),
+                  comparison=factor(comparison, 
+                                    levels=contrastNamesOrdered),
+                  UpOrDown = ifelse(log2FoldChangeShrink<0, "Down", "Up"),
+                  UpOrDownSig = ifelse(padj<=plim_plot & !is.na(padj), UpOrDown, "NS"),
+                  UpOrDownSig = factor(UpOrDownSig, levels=c("Up", "NS", "Down"))
+    )
+  
+  g1<-ggplot(alldeatables_filt, aes(x=taxon, y=log2FoldChangeShrink, fill=UpOrDownSig)) +
+    facet_grid(. ~ comparison, scales=scale_mode) +
+    geom_hline(yintercept = 0, linetype=3, col="gray80") +
+    geom_bar(stat="identity") +
+    scale_fill_manual(values=c(C_CASE, C_NS,C_CTRL))+
+    mytheme +
+    theme_classic()+
+    theme(strip.text.y = element_text(size = 8, 
+                                      colour = "black", angle = 0, face = "bold"))+
+    theme(axis.text.y = element_text(size = 8, 
+                                     colour = "black", angle = 0, 
+                                     face = "italic", hjust=1, vjust=0))+
+    coord_flip()
+  
+  ggsave(filename = paste0(outdir, "/", name, "2.pdf"), g1, width = w, height = h)
   return(g1)
 }

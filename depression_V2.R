@@ -15,7 +15,7 @@ library(HMP)
 library(knitr)
 library(vegan)
 library(janitor)
-#library(plyr)
+library(plyr)
 
 SEED <- 123
 MODE = "LOCAL"
@@ -39,7 +39,7 @@ if(MODE == "IATA"){
             num_genes_default=5
             )
 }else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_5/",
+  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_6/",
               indir = "/home/carmoma/Desktop/202311_DEPRESION/mg09_combinempa/" ,
               r_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/metagenomics_core_functions.R",
               predictive_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/predictive_functions.R",
@@ -129,6 +129,10 @@ metadata$Educacion[metadata$Educacion == "Estudios superiores:universidad y post
 metadata$Educacion[metadata$Educacion == "fp"] <- "Bachiller y fp" 
 metadata$Estado.civil2 <- ifelse(metadata$`Estado civil` == "pareja", "pareja", "soltero" )
 metadata$DII.cualitativo[metadata$`DII cualitativo` == "Nuetra"] <- "Neutral"
+metadata$Mediterranean_diet_adherence2 <- ifelse(
+  is.na(metadata$Mediterranean_diet_adherence), NA, 
+  ifelse(metadata$Mediterranean_diet_adherence=="Low", "Low", "Good")
+)
 metadata <- metadata %>% 
   mutate_if(is.character, str_to_title) %>% 
   mutate_if(~ (all(as.integer(.) == .) & length(unique(.)) < 5) | is.character(.),  as.factor)
@@ -353,7 +357,7 @@ extravars <- c(quant_vars, vars2test)
 extravars <- extravars[extravars != interestvar]
 extravars2 <- c("Sexo", "Edad", "IMC")
 
-phseq_to_use <- c("rarefied_min", "remove_tanda2_rarefied_min", "rmbatch_tanda_raref")
+phseq_to_use <- c("remove_tanda2_rarefied_min")
 #load(allphyloseqlist_fname)
 
 for(phname in phseq_to_use){
@@ -455,7 +459,8 @@ for(phname in phseq_to_use){
 daa_all <- list()
 vars2deseq <- c("Condition")
 opt$mincount <- 1
-for(phname in names(all_phyloseq)){
+phseq_to_use <- c("remove_tanda2", "rmbatch_tanda", "filt")
+for(phname in phseq_to_use){
   cat("Doing DESeq2 Analysys for: ", phname, "\n")
   daa_all[[phname]] <-deseq_full_pipeline(all_phyloseq[[phname]], phname, vars2deseq, opt)
 }
@@ -471,7 +476,7 @@ if(!dir.exists(opt$out)) dir.create(opt$out)
 opt <- restaurar(opt)
 
 all_model_results <- list()
-for(i in names(all_phyloseq)){
+for(i in phseq_to_use){
   cat("Doing Predictive models for: ", i, "\n")
   all_model_results[[i]] <- list()
   phobj <- all_phyloseq[[i]]
@@ -535,57 +540,23 @@ pcBarplots <- map(names(all_model_results), makePCBarplot, all_model_results, pc
 names(pcBarplots) <- names(all_model_results)
 
 # Plot KNN (best model)
-mod2plot <- 'KNN-K=5'
-modplots <- map(names(all_model_results[[phname]]$padj_taxa_res$models), 
-                \(modpred){
-                  tryCatch(plotPrediction(phname, modpred, all_model_results, opt), error=\(x)list())
-                })
-names(modplots) <- names(all_model_results[[phname]]$padj_taxa_res$models)
-modplots2 <- list()
-for(mn in names(modplots)){
-  m <- modplots[[mn]]
-  if(class(m)[1] == "list" & length(m)==0) next
-  modplots2[[mn]] <- m
-}
-cowplot::plot_grid(plotlist = modplots2)
 
-plotPrediction<-function(phname, mod2plot, all_model_results, opt){
-  outdir <- paste0(opt$out, "/PredictDAA/", phname)
-  if(!dir.exists(outdir)) dir.create(outdir)
-  predictions <- all_model_results[[phname]]$padj_taxa_res$models[[mod2plot]]$preds_no_l1o
-  snames <- all_model_results[[phname]]$padj_taxa_pcas$Condition$pca$x %>% rownames
-  PCs <- all_model_results[[phname]]$padj_taxa_res$varnames
-  PCs_newnames <- getPCnamesFromAllresults(phname, all_model_results) %>% names
+phname <- "remove_tanda2"
+predplots <- map(names(all_model_results), plotAllModelPredictions, all_model_results, opt)
 
- df <- pcBoxplots[[phname]]$tab %>% 
-    mutate(Predicted = predictions[match(sampleID, snames)]) %>% 
-    spread(key=PC, value=score) %>% 
-    dplyr::mutate(Condition = fct_recode(Condition, "Control"="Control", "Depression"="Depr."),
-                Good = ifelse(Condition==Predicted, TRUE, FALSE),
-                size2 = ifelse(Good, 0, 1)) 
- confmat <- caret::confusionMatrix(df$Condition, df$Predicted)
-  
- gm <- ggplot(df, aes(x=`PC2 (11%)`, y = `PC11 (2.2%)`, col=Condition))+
-   geom_point(size=2)+
-   geom_point(col="black", alpha=df$size2, size=0.6)+
-   mytheme +
-   ggtitle(paste0(mod2plot, ", Acc=", as.character(round(confmat$overall["Accuracy"], 3))))
- ggsave(filename = paste0(outdir, "/", mod2plot, "_predictionPlot.pdf"))
- gm <- gm + theme(legend.position = 'none')
- return(gm)
- }
  # Make sure that it works
  
 
 library(VennDiagram)
-
-fname <- paste0(opt$out, "PredictDAA/venndiagram_3noraref_padj.png")
+outdir <- paste0(opt$out, "PredictDAA/VennDiagrams/")
+if(!dir.exists(outdir)) dir.create(outdir)
+fname <- paste0(outdir, "/venndiagram_3noraref_padj.png")
 genes2compare <- list(filtered=all_model_results$filt$padj_taxa_taxa,
                       remove=all_model_results$remove_tanda2$padj_taxa_taxa,
                       correct_batch=all_model_results$phseq_batch_tanda$padj_taxa_taxa)
 xx <-venn.diagram(genes2compare, output=TRUE, filename=fname, na="remove")
 
-fname <- paste0(opt$out, "PredictDAA/venndiagram_3noraref_praw.png")
+fname <- paste0(outdir, "/venndiagram_3noraref_praw.png")
 genes2compare <- list(filtered=all_model_results$filt$praw_taxa_taxa,
                       remove=all_model_results$remove_tanda2$praw_taxa_taxa,
                       correct_batch=all_model_results$phseq_batch_tanda$praw_taxa_taxa)
@@ -593,14 +564,14 @@ xx <-venn.diagram(genes2compare, output=TRUE, filename=fname, na="remove")
 
 ### 
 
-fname <- paste0(opt$out, "PredictDAA/venndiagram_3raref_padj.png")
+fname <- paste0(outdir, "/venndiagram_3raref_padj.png")
 genes2compare <- list(filtered_min=all_model_results$rarefied_min$padj_taxa_taxa,
                       #filtered_quant=all_model_results$rarefied_quant$padj_taxa_taxa,
                       remove=all_model_results$remove_tanda2_rarefied_min$padj_taxa_taxa,
                       correct_batch=all_model_results$phseq_batch_tanda_raref$padj_taxa_taxa)
 xx <-venn.diagram(genes2compare, output=TRUE, filename=fname, na="remove")
 
-fname <- paste0(opt$out, "PredictDAA/venndiagram_3raref_praw.png")
+fname <- paste0(outdir, "/venndiagram_3raref_praw.png")
 genes2compare <- list(filtered_min=all_model_results$rarefied_min$praw_taxa_taxa,
                       #filtered_quant=all_model_results$rarefied_quant$praw_taxa_taxa,
                       remove=all_model_results$remove_tanda2_rarefied_min$praw_taxa_taxa,
@@ -609,13 +580,13 @@ xx <-venn.diagram(genes2compare, output=TRUE, filename=fname, na="remove")
 
 ### 
 
-fname <- paste0(opt$out, "PredictDAA/venndiagram_filt_rawVSraref_padj.png")
+fname <- paste0(outdir, "/venndiagram_filt_rawVSraref_padj.png")
 genes2compare <- list(filtered=all_model_results$filt$padj_taxa_taxa,
                       raref_min=all_model_results$rarefied_min$padj_taxa_taxa,
                       raref_quant=all_model_results$rarefied_quant$padj_taxa_taxa)
 xx <-venn.diagram(genes2compare, output=TRUE, filename=fname, na="remove")
 
-fname <- paste0(opt$out, "PredictDAA/venndiagram_filt_rawVSraref_praw.png")
+fname <- paste0(outdir, "/venndiagram_filt_rawVSraref_praw.png")
 genes2compare <- list(filtered=all_model_results$filt$praw_taxa_taxa,
                       raref_min=all_model_results$rarefied_min$praw_taxa_taxa,
                       raref_quant=all_model_results$rarefied_quant$praw_taxa_taxa)
@@ -623,24 +594,24 @@ xx <-venn.diagram(genes2compare, output=TRUE, filename=fname, na="remove")
 
 #### 
 
-fname <- paste0(opt$out, "PredictDAA/venndiagram_remTanda2_rawVSraref_padj.png")
+fname <- paste0(outdir, "/venndiagram_remTanda2_rawVSraref_padj.png")
 genes2compare <- list(rm_tanda2=all_model_results$remove_tanda2$padj_taxa_taxa,
                       rm_tanda2_raref=all_model_results$remove_tanda2_rarefied_min$padj_taxa_taxa)
 xx <-venn.diagram(genes2compare, output=TRUE, filename=fname, na="remove")
 
-fname <- paste0(opt$out, "PredictDAA/venndiagram_remTanda2_rawVSraref_praw.png")
+fname <- paste0(outdir, "/venndiagram_remTanda2_rawVSraref_praw.png")
 genes2compare <- list(rm_tanda2=all_model_results$remove_tanda2$praw_taxa_taxa,
                       rm_tanda2_raref=all_model_results$remove_tanda2_rarefied_min$praw_taxa_taxa)
 xx <-venn.diagram(genes2compare, output=TRUE, filename=fname, na="remove")
 
 ####
-fname <- paste0(opt$out, "PredictDAA/venndiagram_batchrm_rawVSraref_padj.png")
+fname <- paste0(outdir, "/venndiagram_batchrm_rawVSraref_padj.png")
 genes2compare <- list(batch=all_model_results$rmbatch_tanda$padj_taxa_taxa,
                       shrink=all_model_results$rmbatch_tanda_shrink$padj_taxa_taxa,
                       batch_raref=all_model_results$rmbatch_tanda_raref$padj_taxa_taxa)
 xx <-venn.diagram(genes2compare, output=TRUE, filename=fname, na="remove")
 
-fname <- paste0(opt$out, "PredictDAA/venndiagram_batchrm_rawVSraref_praw.png")
+fname <- paste0(outdir, "/venndiagram_batchrm_rawVSraref_praw.png")
 genes2compare <- list(batch=all_model_results$rmbatch_tanda$praw_taxa_taxa,
                       shrink=all_model_results$rmbatch_tanda_shrink$praw_taxa_taxa,
                       batch_raref=all_model_results$rmbatch_tanda_raref$praw_taxa_taxa)
@@ -648,12 +619,12 @@ xx <-venn.diagram(genes2compare, output=TRUE, filename=fname, na="remove")
 
 ####
 
-fname <- paste0(opt$out, "PredictDAA/venndiagram_remTanda2_rmComorb_padj.png")
+fname <- paste0(outdir, "/venndiagram_remTanda2_rmComorb_padj.png")
 genes2compare <- list(rm_tanda2=all_model_results$remove_tanda2$padj_taxa_taxa,
                       rm_tanda2_raref=all_model_results$remove_t2_and_comorb$padj_taxa_taxa)
 xx <-venn.diagram(genes2compare, output=TRUE, filename=fname, na="remove")
 
-fname <- paste0(opt$out, "PredictDAA/venndiagram_remTanda2_rmComorb_praw.png")
+fname <- paste0(outdir, "/venndiagram_remTanda2_rmComorb_praw.png")
 genes2compare <- list(rm_tanda2=all_model_results$remove_tanda2$praw_taxa_taxa,
                       rm_tanda2_raref=all_model_results$remove_t2_and_comorb$praw_taxa_taxa)
 xx <-venn.diagram(genes2compare, output=TRUE, filename=fname, na="remove")
@@ -691,7 +662,8 @@ vars2test <- c("Tanda", "Edad_log", "Sexo", "ob_o_sobrepeso","obesidad", "IMC_lo
                 "PSS_estres", "Diabetes", "bristol_scale", "bristol_scale_cualitativo",
                "defecaciones_semana", "Euroqol", "IPAQ_act_fisica", "Mediterranean_diet_adherence",
                "tratamiento_ansioliticos", "tratamiento_anticonvulsivos",
-               "tratamiento_ISRNs", "tratamiento_antidiabeticos", "tratamiento_coagul_betabloq_etc" 
+               "tratamiento_ISRNs", "tratamiento_antidiabeticos", "tratamiento_coagul_betabloq_etc", 
+               "DII"
 )
 
 opt$reserva_0 <- opt$out
@@ -729,7 +701,8 @@ vargroups <- list(
   health=c("Diabetes", "TG_mayor_200", "Colesterol_mayor_200", "Mediterranean_diet_adherence", "IPAQ_act_fisica"),
   exer=c("Mediterranean_diet_adherence", "Euroqol","IPAQ_act_fisica", "bristol_scale_cualitativo", "PSS_estres")
 )
-outdir <- paste0(opt$out, "DESeq2_ControlVars/")
+outdir <- paste0(opt$out, "DESeq2_ControlVars/SummaryHeatmaps/")
+if(!dir.exists(outdir)) dir.create(outdir)
 for(phname in phseq_to_correct){
   for(vgroup in names(vargroups)){
     oname <- paste0(phname, '_', vgroup, "_p05")
@@ -804,7 +777,8 @@ opt$out <- opt$reserva_0
 save(daa_all_corrected_groups, file=paste0(opt$out, "DESeq2_ControlVarsMany/DESEQ2_controlVarsMany_all.RData"))
 
 ## Make heatmap correcting by group (many variables at a time)
-outdir <- paste0(opt$out, "DESeq2_ControlVarsMany/")
+outdir <- paste0(opt$out, "DESeq2_ControlVarsMany/SummaryHeatmaps/")
+if(!dir.exists(outdir)) dir.create(outdir)
 
 for(phname in phseq_to_correct){
   oname <- paste0(phname, '_', vgroup, "_p01")
@@ -818,7 +792,7 @@ for(phname in phseq_to_correct){
   makeHeatmapsFromMultipleDeseqResults(daa_all_corrected_groups[[phname]], 
                                          daa_all[[phname]]$resdf, 
                                          main_name = interestvar,
-                                         vars2plot = vgroup,
+                                         vars2plot = names(groups2test),
                                          italics_rownames=T, 
                                          pfilt =0.01, pplot=0.01,name=oname, outdir=outdir)
     
@@ -828,7 +802,7 @@ for(phname in phseq_to_correct){
 phseq_to_correct <- names(all_phyloseq)[4]
 interestvar <- "Condition"
 vars2test <- c("Tanda", "Edad_log", "Sexo", "ob_o_sobrepeso","obesidad", "IMC_log", "Estado.civil2", 
-               "Educacion", "reads_log10", "Fumador", 
+               "Educacion", "reads_log10", "Fumador", "DII",
                "TG", "TG_mayor_200",  "Colesterol", "Colesterol_mayor_200", 
                "PSS_estres", "Diabetes", "bristol_scale", "bristol_scale_cualitativo",
                "defecaciones_semana", "Euroqol", "IPAQ_act_fisica", "Mediterranean_diet_adherence",
@@ -859,6 +833,8 @@ opt$out <- opt$reserva_0
 save(daa_all_corrected_only, file=paste0(opt$out, "DESeq2_ControlVarsAlone/DESEQ2_controlVarsAlone_all.RData"))
 
 ##Integrate with and without correction
+outdir <- paste0(opt$out, "IntegrateWithAndWithoutCorrection/")
+if(!dir.exists(outdir)) dir.create(outdir)
 firstContrast <- daa_all$remove_tanda2
 mainContrastName <- "Depression_vs_Control"
 edad_correcting <- read_tsv(paste0(opt$out, "/DESeq2_ControlVars/DeSEQ2/remove_tanda2_Edad_log/remove_tanda2_Edad_log_Edad_log_DAAshrinkNormal.tsv"))
@@ -901,7 +877,8 @@ compareLFCContrats(contrastlist2, firstContrast,
                    plim_select= 0.05, plim_plot=0.1,
                    name2remove = name2remove2,
                    resdfname="resdf", 
-                   outdir = outdir, name="LFC_Comparison_AgeAndBMI_allCombos_p05", w=12, h=12, scale_mode = "free")
+                   outdir = outdir, 
+                   name="LFC_Comparison_AgeAndBMI_allCombos_p05", w=12, h=12, scale_mode = "free")
 compareLFCContrats(contrastlist2, firstContrast, 
                    contrastNamesOrdered2, mainContrastName, 
                    plim_select= 0.001, plim_plot=0.1,
@@ -1100,7 +1077,9 @@ opt$out <- opt$reserva_0
 
 #load("/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/DeSEQ2/remove_tanda2/DESEQ2_all_results_remove_tanda2.R")
 
-outdir <- paste0(opt$out, "DESeq2_MainVariableScales/")
+outdir <- paste0(opt$out, "IntegrateAllContrasts/")
+if(!dir.exists(outdir)) dir.create(outdir)
+
 contrastlist <- daa_all_scales$remove_tanda2$Beck_cualitativo$all_contrasts
 firstContrast <- daa_all$remove_tanda2
 mainContrastName <- "Depression_vs_Control"
@@ -1195,7 +1174,27 @@ compareLFCContrats(contrastlist2, firstContrast,
                    resdfname="resdf", 
                    outdir = outdir, name="LFC_Comparison_AllNum_pem3", w=12, h=8, 
                    scale_mode = "free")
+compareLFCContrats2(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.05, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_AllNum_p05", w=8, h=8, scale_mode = "free")
+compareLFCContrats2(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.001, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_AllNum_pem3", w=8, h=8, 
+                   scale_mode = "free")
 
+compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.001, plim_plot=0.1,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_AllNum_pem3", w=8, h=8, 
+                    scale_mode = "free")
 ## Quant depression scales Inside depressive subjects
 #Sólo he guardado resdf
 contrastlist2 <- list(daa_all_bygroup$remove_tanda2$Depression$Escala_depresión_Beck,
@@ -1246,7 +1245,7 @@ compareLFCContrats(contrastlist2, firstContrast,
 
 
 #Beck levels inside Depression
-fnames <- list.files("/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyDepression_Beck_cualitativo", 
+fnames <- list.files(paste0(opt$out, "/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyDepression_Beck_cualitativo"), 
                      pattern = "_vs_", full.names = T ) %>% 
   subset(grepl("Normal.tsv", .))
 contrastlist2 <- map(fnames, read_tsv) %>% lapply(\(x)return(list(resdf=x)))
@@ -1272,7 +1271,7 @@ compareLFCContrats(contrastlist2, firstContrast,
 
 
 #Exercise levels inside Depression
-fnames <- list.files("/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyDepression_IPAQ_act_fisica/", 
+fnames <- list.files(paste0(opt$out, "/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyDepression_IPAQ_act_fisica/"), 
                      pattern = "_vs_", full.names = T ) %>% 
   subset(grepl("Normal.tsv", .))
 contrastlist2 <- map(fnames, read_tsv) %>% lapply(\(x)return(list(resdf=x)))
@@ -1314,7 +1313,7 @@ compareLFCContrats(contrastlist2, firstContrast,
 
 
 #Diet levels inside Depression
-fnames <- list.files("/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyControl_Indice_Alimentación_saludable//", 
+fnames <- list.files(paste0(opt$out, "/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyControl_Indice_Alimentación_saludable//"), 
                      pattern = "_vs_", full.names = T ) %>% 
   subset(grepl("Normal.tsv", .))
 contrastlist2 <- map(fnames, read_tsv) %>% lapply(\(x)return(list(resdf=x)))
@@ -1356,7 +1355,7 @@ compareLFCContrats(contrastlist2, firstContrast,
 
 
 #Mediterranea
-fnames <- list.files("/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyControl_Mediterranean_diet_adherence//", 
+fnames <- list.files(paste0(opt$out, "/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyControl_Mediterranean_diet_adherence//"), 
                      pattern = "_vs_", full.names = T ) %>% 
   subset(grepl("Normal.tsv", .))
 contrastlist2 <- map(fnames, read_tsv) %>% lapply(\(x)return(list(resdf=x)))
@@ -1379,7 +1378,19 @@ compareLFCContrats(contrastlist2, firstContrast,
                    resdfname="resdf", 
                    outdir = outdir, name="LFC_Comparison_DMedit_OnlyDepr_pem3", w=12, h=8, 
                    scale_mode = "fixed")
-
+compareLFCContrats2(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.05, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_DMedit_OnlyDepr_p05", w=12, h=8, scale_mode = "fixed")
+compareLFCContrats2(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.001, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_DMedit_OnlyDepr_pem3", w=12, h=8, 
+                   scale_mode = "fixed")
 firstContrast2 <- list(resdf=daa_all_bygroup$remove_tanda2$Depression$Escala_depresión_Beck)
 contrastNamesOrdered2 <- c("Beck", names(contrastlist2))
 compareLFCContrats(contrastlist2, firstContrast2, 
@@ -1398,7 +1409,7 @@ compareLFCContrats(contrastlist2, firstContrast,
 
 
 #Euroqol 
-fnames <- list.files("/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyDepression_Euroqol/", 
+fnames <- list.files(paste0(opt$out,"/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyDepression_Euroqol/"), 
                      pattern = ".tsv", full.names = T ) %>% 
   subset(grepl("Normal.tsv", .))
 contrastlist2 <- map(fnames, read_tsv) %>% lapply(\(x)return(list(resdf=x)))
@@ -1442,7 +1453,7 @@ compareLFCContrats(contrastlist2, firstContrast,
 firstContrast_edad <- list(resdf=daa_all_corrected$remove_tanda2$Edad_log)
 firstContrast_IMC <- list(resdf=daa_all_corrected$remove_tanda2$IMC_log)
 
-fnames <- list.files("/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyDepression_Beck_cualitativo", 
+fnames <- list.files(paste0(opt$out,"/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyDepression_Beck_cualitativo"), 
                      pattern = "_vs_", full.names = T ) %>% 
   subset(grepl("Normal.tsv", .))
 contrastlist2 <- map(fnames, read_tsv) %>% lapply(\(x)return(list(resdf=x)))
@@ -1602,7 +1613,8 @@ opt$out <- opt$reserva_0
 
 # Integrate
 ## Corr edad cualitativo vs corr edad cuantitativo
-outdir <- paste0(opt$out, "DESeq2_MainVariableScales_Corrected/")
+outdir <- paste0(opt$out, "DESeq2_MainVariableScales_Corrected/IntegrateContrasts/")
+if(!dir.exists(outdir)) dir.create(outdir)
 contrastlist2 <- list(daa_all_corrected_scales$remove_tanda2$Escala_depresión_Beck$Edad_log$all_contrasts[[1]],
                       daa_all_corrected_scales$remove_tanda2$Montgomery.Asberg$Edad_log$all_contrasts[[1]],
                       daa_all_corrected_scales$remove_tanda2$Escala_Hamilton$Edad_log$all_contrasts[[1]],

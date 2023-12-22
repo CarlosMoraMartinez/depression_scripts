@@ -63,10 +63,10 @@ MODE = "LOCAL"
 
 if(MODE == "IATA"){
   opt <- list(out = "/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_3/predictive/",
-            phobj_raw ="/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_3/phyloseq/phyloseq_object_analysis1.RData",
-            phobj_filt ="/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_3/phyloseq/pre_phyloseq_filt10.RData",
+            phobj_raw ="/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_v2_5/phyloseq/phyloseq_object_analysis1.RData",
+            phobj_filt ="/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_v2_5/phyloseq/pre_phyloseq_filt10.RData",
             phobj_rare = "", 
-            DEA = "/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_3/DESEQ2_all_results_filtNoRaref.R",
+            DEA = "/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_v2_5/DESEQ2_all_results_filtNoRaref.R",
             fooddata = "/home/ccarlos/Documentos/202309_DEPRESION/Dieta_actualizada_09112023_CM.xlsx",
             fc=1, 
             pval=0.05, 
@@ -74,14 +74,14 @@ if(MODE == "IATA"){
             fctype="shrunk"
             )
 }else{
-  opt <- list(out = "/home/carmoma/Desktop/202311_DEPRESION/descriptive_v2/",
-            phobj_raw ="/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_3/phyloseq/phyloseq_object_analysis1.RData",
-            phobj_filt ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_3/phyloseq/pre_phyloseq_filt_noTanda2.RData",
+  opt <- list(out = "/home/carmoma/Desktop/202311_DEPRESION/descriptive_v3/",
+            phobj_raw ="/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_v2_5/phyloseq/phyloseq_object_analysis1.RData",
+            phobj_filt ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_5/phyloseq/pre_phyloseq_filt_noTanda2.RData",
             #phobj_rare = "", 
             #DEA = "/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_3/DESEQ2_all_results_filtNoRaref.R",
             fooddata = "/home/carmoma/Desktop/202311_DEPRESION/Dieta_actualizada_09112023_CM.xlsx",
-            r_functions="/home/carmoma/Desktop/202311_DEPRESION/metagenomics_core_functions.R",
-            predictive_functions="/home/carmoma/Desktop/202311_DEPRESION/metagenomics_predictive_functions.R",
+            r_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/metagenomics_core_functions.R",
+            predictive_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/metagenomics_predictive_functions.R",
             fc=1, 
             pval=0.05, 
             ptype="adjusted", 
@@ -340,9 +340,9 @@ makeHistogramsAndBoxplots <- function(df, variables, groupvars, outdir="", name=
         # scale_color_lancet() +
         mytheme
        g3 <- ggplot(df, aes_string(y = v, x=g, col=g, fill=g))+
-        geom_boxplot(alpha=0.5)+
+        geom_boxplot(alpha=0.5, outlier.size = 0)+
         geom_jitter(position = position_jitter(seed = 1))+
-        geom_text_repel(aes(label=sampleID), position = position_jitter(seed = 1))+
+        #geom_text_repel(aes(label=sampleID), position = position_jitter(seed = 1))+
         # scale_fill_lancet()+
         # scale_color_lancet() +
         mytheme

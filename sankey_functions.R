@@ -120,6 +120,7 @@ prepareSankeyPlot <- function(daa_proc_all,
   
   nodelist_1 <- data.frame(value = c(control_name, case_name), 
                            value2match = c(control_name, case_name), 
+                           xpos = c(0,0),
                            color = c(C_CTRL, C_CASE),
                            nodesize = c(prop.table(table(metad$Condition))[control_name],
                                         prop.table(table(metad$Condition))[case_name]))
@@ -133,6 +134,7 @@ prepareSankeyPlot <- function(daa_proc_all,
                       data.frame(
                         value = {if(include_longnames)paste(daa_proc1$Pathway, daa_proc1$process_name, sep=":") else daa_proc1$Pathway},
                         value2match = daa_proc1$Pathway,
+                        xpos = 0.25,
                         color = scale_proc(daa_proc1$log2FoldChange),
                         #color = ifelse(daa_proc1$log2FoldChange < 0, C_CASE, C_CTRL), 
                         nodesize = tb_norm[match(daa_proc1$Pathway, tab_quant_all$Pathway)]
@@ -148,6 +150,7 @@ prepareSankeyPlot <- function(daa_proc_all,
   nodelist_3 <- data.frame(
     value = species$node2,
     value2match = species$node2,
+    xpos = 1,
     #color = species$color, 
     color = scale_species_node(species$LFC),
     nodesize = species$SumExpr
@@ -158,6 +161,7 @@ prepareSankeyPlot <- function(daa_proc_all,
     nodelist <- rbind(nodelist, 
                       data.frame(value = others_name, 
                                  value2match = others_name,
+                                 xpos = 1,
                                  color=C_NS, 
                                  nodesize=1, nodenum=nrow(nodelist))
     )
@@ -174,10 +178,12 @@ prepareSankeyPlot <- function(daa_proc_all,
   return(list(nodelist=nodelist, linklist=full_v1))
 }
 
-makeSankeyPlot <- function(nodelist, linklist, name, fname, outdir){
+makeSankeyPlot <- function(nodelist, linklist, name, fname, outdir, fontsize=18){
   # From https://plotly.com/r/sankey-diagram/
+  print(head(nodelist))
   fig <- plot_ly(
     type = "sankey",
+    arrangement="fixed",
     domain = list(
       x =  c(0,1),
       y =  c(0,1)
@@ -189,6 +195,7 @@ makeSankeyPlot <- function(nodelist, linklist, name, fname, outdir){
       label = nodelist$value,
       color = nodelist$color,
       value = nodelist$nodesize,
+      x = nodelist$xpos,
       pad = 15,
       thickness = 15,
       line = list(
@@ -208,7 +215,7 @@ makeSankeyPlot <- function(nodelist, linklist, name, fname, outdir){
   fig <- fig %>% layout(
     title = name,
     font = list(
-      size = 14
+      size = fontsize
     ),
     xaxis = list(showgrid = F, zeroline = F),
     yaxis = list(showgrid = F, zeroline = F)

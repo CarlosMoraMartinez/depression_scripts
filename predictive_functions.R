@@ -552,7 +552,6 @@ dev.off()
 
 }
 
-
 getPCnamesFromAllresults <- function(phname, all_model_results){
   PCs <- all_model_results[[phname]]$padj_taxa_res$varnames
   sumPCA <- summary(all_model_results[[phname]]$padj_taxa_pcas$Condition$pca)$importance
@@ -573,18 +572,18 @@ makePCsBoxplot <- function(phname, all_model_results, opt){
     as.data.frame() %>% 
     dplyr::select(all_of(PCs)) %>% 
     rownames_to_column("sampleID") %>% 
-    mutate(Condition = metadata$Condition[match(sampleID, metadata$sampleID)]) %>% 
-    gather("PC", "score", -sampleID, -Condition) %>% 
+    dplyr::mutate(Condition = metadata$Condition[match(sampleID, metadata$sampleID)]) %>% 
+    tidyr::gather("PC", "score", -sampleID, -Condition) %>% 
     group_by(PC) 
   
   # Multiplicar por -1 si el componente es menor en deprimidos, para plotear más fácil
-  pcfactors <- dfsamples %>% group_by(PC, Condition) %>% summarise(media = mean(score)) %>% 
-    spread(Condition, media) %>% 
+  pcfactors <- dfsamples %>% group_by(PC, Condition) %>% dplyr::summarise(media = mean(score)) %>% 
+    tidyr::spread(Condition, media) %>% 
     dplyr::mutate(factor = ifelse(Depression < Control, -1, 1))
   
   dfsamples <- dfsamples %>% 
     dplyr::mutate(score = score*pcfactors$factor[match(PC, pcfactors$PC)]) %>% 
-    mutate(PC = factor(PC, levels = PCs),
+    dplyr::mutate(PC = factor(PC, levels = PCs),
            PC = fct_recode(PC, !!!PCs_newnames),
            Condition = gsub("Depression", "Depr.", Condition))
   
@@ -613,10 +612,10 @@ makePCBarplot <- function(phname, all_model_results, pcBoxplots, opt, w=8, h=14)
     as.data.frame() %>% 
     dplyr::select(all_of(PCs)) %>% 
     rownames_to_column("taxon") %>% 
-    mutate(across(all_of(PCs), \(x)x*pcfactors[cur_column(), 1])) ## Multiplicar por factor para que coincida con LFC
+    dplyr::mutate(across(all_of(PCs), \(x)x*pcfactors[cur_column(), 1])) ## Multiplicar por factor para que coincida con LFC
   
   dfmerged <- merge(df, daatab, by="taxon", all.x=T, all.y=F) %>% 
-    arrange(desc(!!sym(PCs[1]))) %>% 
+    dplyr::arrange(desc(!!sym(PCs[1]))) %>% 
     dplyr::mutate(taxon = gsub("_", " ", taxon),
                   taxon = gsub("[\\[\\]]", "", taxon),
                   taxon = factor(taxon, levels = taxon))
@@ -649,4 +648,53 @@ makePCBarplot <- function(phname, all_model_results, pcBoxplots, opt, w=8, h=14)
   ggsave(filename = paste0(outdir, "/", phname, "_barplots_PCs_and_LFC.pdf"), gbars, width = w, height = h)
   write_tsv(dflong,  paste0(outdir, "/", phname, "_barplots_PCs_and_LFC_data.tsv"))
   return(gbars)
+}
+
+plotPrediction<-function(phname, mod2plot, all_model_results, opt){
+  outdir <- paste0(opt$out, "/PredictDAA/", phname)
+  if(!dir.exists(outdir)) dir.create(outdir)
+  predictions <- all_model_results[[phname]]$padj_taxa_res$models[[mod2plot]]$preds_no_l1o
+  snames <- all_model_results[[phname]]$padj_taxa_pcas$Condition$pca$x %>% rownames
+  PCs <- all_model_results[[phname]]$padj_taxa_res$varnames
+  PCs_newnames <- getPCnamesFromAllresults(phname, all_model_results) %>% names
+  
+  df <- pcBoxplots[[phname]]$tab %>% 
+    mutate(Predicted = predictions[match(sampleID, snames)]) %>% 
+    spread(key=PC, value=score) %>% 
+    dplyr::mutate(Condition = fct_recode(Condition, "Control"="Control", "Depression"="Depr."),
+                  Good = ifelse(Condition==Predicted, TRUE, FALSE),
+                  size2 = ifelse(Good, 0, 1)) 
+  confmat <- caret::confusionMatrix(df$Condition, df$Predicted)
+  
+  gm <- ggplot(df, aes(x=!!sym(PCs_newnames[1]), y =!!sym(PCs_newnames[2]), col=Condition))+
+    geom_point(size=2)+
+    geom_point(col="black", alpha=df$size2, size=0.6)+
+    mytheme +
+    ggtitle(paste0(mod2plot, ", Acc=", as.character(round(confmat$overall["Accuracy"], 3))))
+  ggsave(filename = paste0(outdir, "/", mod2plot, "_predictionPlot.pdf"))
+  gm <- gm + theme(legend.position = 'none')
+  return(gm)
+}
+
+plotAllModelPredictions <- function(phname, all_model_results, opt){
+  modplots <- map(names(all_model_results[[phname]]$padj_taxa_res$models), 
+                  \(modpred){
+                    tryCatch(plotPrediction(phname, modpred, all_model_results, opt), error=\(x)list())
+                  })
+  names(modplots) <- names(all_model_results[[phname]]$padj_taxa_res$models)
+  modplots2 <- list()
+  for(mn in names(modplots)){
+    m <- modplots[[mn]]
+    if(class(m)[1] == "list" & length(m)==0) next
+    modplots2[[mn]] <- m
+  }
+  if(length(modplots2) > 1){
+  cw <- cowplot::plot_grid(plotlist = modplots2)
+  pdf(paste0(opt$out, "PredictDAA/", phname, "/all_model_predictions.pdf"), width = 16, height = 12)
+  print(cw)
+  dev.off()
+  }else{
+    cat("FAILED prediction plots for", phname)
+  }
+  return(list(cw=cw, plots=modplots))
 }
