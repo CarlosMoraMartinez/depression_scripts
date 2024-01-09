@@ -3052,7 +3052,7 @@ compareLFCContratsNumeric <- function(contrastlist, firstContrast,
                           mutate(comparison=mainContrastName)) %>% 
     mutate(taxon = gsub("_", " ", taxon))
   
- 
+  tax2plot <- alldeatables %>% dplyr::filter(comparison==i & padj<=plim_select) %>% pull(taxon) %>% unique
   
   # 1) Calculate correlations
   mat2cor <- alldeatables %>% dplyr::filter(taxon %in% tax2plot) %>% 
@@ -3092,42 +3092,41 @@ compareLFCContratsNumeric <- function(contrastlist, firstContrast,
       " Down" = tmp %>% dplyr::filter(log2FoldChangeShrink < 0) %>% pull(taxon)
     )
     names(vars2venn)[3:4] <- paste0(x, names(vars2venn)[3:4])
-    makeVennLocal(vars2venn, name=paste0(name, "_", x, "_VennDiagram"), outdir, w=6, h=6)
+    gvenn <- makeVennLocal(vars2venn, name=paste0(name, "_", x, "_VennDiagram"), outdir, w=8, h=8)
+    return(list(groups=vars2venn, plot = gvenn))
   })
+  names(venplots)<- names(mat2cor[, names(mat2cor)!=i])
+   ## 3) Mosaic plot
+  library(ggmosaic)
   
-    
-
-  tax2plot %>% length
-  taxorder <- firstContrast[[resdfname]] %>% arrange(desc(log2FoldChangeShrink)) %>% 
-    mutate(taxon = gsub("_", " ", taxon)) %>% 
-    filter(taxon %in% tax2plot) %>% pull(taxon)
-  
-  alldeatables_filt <- alldeatables %>% 
-    dplyr::filter(taxon %in% taxorder) %>% 
-    dplyr::mutate(taxon=factor(taxon, levels=taxorder),
-                  comparison=gsub(name2remove, "", comparison),
-                  comparison=gsub("_", " ", comparison),
-                  comparison=factor(comparison, 
-                                    levels=contrastNamesOrdered),
-                  UpOrDown = ifelse(log2FoldChangeShrink<0, "Down", "Up"),
-                  UpOrDownSig = ifelse(padj<=plim_plot & !is.na(padj), UpOrDown, "NS"),
-                  UpOrDownSig = factor(UpOrDownSig, levels=c("Up", "NS", "Down"))
+  df2mosaic <- alldeatables %>% 
+    dplyr::mutate(direction = ifelse(padj > plim_select | is.na(padj), "NS",
+                                     ifelse(log2FoldChangeShrink < 0, "Down", "Up"))) %>%
+   
+    dplyr::select(taxon, comparison,direction) %>% 
+    tidyr::spread(key = comparison, value = direction) %>% 
+    dplyr::filter(taxon %in% tax2plot) %>% 
+    dplyr::mutate(across(-taxon, \(x)ifelse(is.na(x), "NS", x)),
+     across(-taxon, \(x)factor(x, levels=c("Down", "NS", "Up" ))),
+     across(!!sym(mainContrastName), \(x)factor(x, levels=c("Down", "NS", "Up")))
     )
   
-  g1<-ggplot(alldeatables_filt, aes(x=taxon, y=log2FoldChangeShrink, fill=UpOrDownSig)) +
-    facet_grid(. ~ comparison, scales=scale_mode) +
-    geom_hline(yintercept = 0, linetype=3, col="gray80") +
-    geom_bar(stat="identity") +
-    scale_fill_manual(values=c(C_CASE, C_NS,C_CTRL))+
-    mytheme +
-    theme_classic()+
-    theme(strip.text.y = element_text(size = 8, 
-                                      colour = "black", angle = 0, face = "bold"))+
-    theme(axis.text.y = element_text(size = 8, 
-                                     colour = "black", angle = 0, 
-                                     face = "italic", hjust=1, vjust=0))+
-    coord_flip()
-  
-  ggsave(filename = paste0(outdir, "/", name, "2.pdf"), g1, width = w, height = h)
-  return(g1)
+  gmosplots <- map(names(df2mosaic)[!names(df2mosaic) %in% c("taxon", mainContrastName)], \(contr){
+    gmos <- ggplot(data = df2mosaic) +
+      geom_mosaic(aes(x = product(!!sym(mainContrastName), !!sym(contr)), fill=!!sym(mainContrastName)), na.rm=T) +
+      geom_mosaic_text(aes(x = product(!!sym(mainContrastName), !!sym(contr)), 
+                         fill=!!sym(mainContrastName), label=after_stat(.wt)),
+      na.rm=T, as.label=T, size=6) +
+      scale_fill_manual(values = c(C_CASE, C_NS, C_CTRL))+
+      theme_classic() +
+      mytheme +
+      theme(axis.text=element_text(size=10),
+          axis.title=element_text(size=10,face="bold"),
+          legend.position = 'none')+
+      xlab(gsub("_", " ", contr))+
+      ylab(gsub("_", " ", mainContrastName))
+    ggsave(filename = paste0(outdir, '/', name,'_',contr, "_MosaicPlots.pdf"), width = 4, height = 4) 
+    return(gmos)
+  })
+  return(list(correlations=cordf, vennplots=venplots, mosaicplots=gmosplots))
 }

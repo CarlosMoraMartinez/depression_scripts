@@ -1188,22 +1188,37 @@ compareLFCContrats2(contrastlist2, firstContrast,
                    outdir = outdir, name="LFC_Comparison_AllNum_pem3", w=8, h=8, 
                    scale_mode = "free")
 
-compareLFCContratsNumeric(contrastlist2, firstContrast, 
+cont001 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
                     contrastNamesOrdered2, mainContrastName, 
                     plim_select= 0.001, plim_plot=0.1,
                     name2remove = name2remove2,
                     resdfname="resdf", 
                     outdir = outdir, name="LFC_Comparison_AllNum_pem3", w=8, h=8, 
                     scale_mode = "free")
+cont01 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                     contrastNamesOrdered2, mainContrastName, 
+                                     plim_select= 0.01, plim_plot=0.1,
+                                     name2remove = name2remove2,
+                                     resdfname="resdf", 
+                                     outdir = outdir, name="LFC_Comparison_AllNum_pem2", w=8, h=8, 
+                                     scale_mode = "free")
+cont05 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.05, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_AllNum_05", w=8, h=8, 
+                                    scale_mode = "free")
 ## Quant depression scales Inside depressive subjects
 #Sólo he guardado resdf
 contrastlist2 <- list(daa_all_bygroup$remove_tanda2$Depression$Escala_depresión_Beck,
                       daa_all_bygroup$remove_tanda2$Depression$Montgomery.Asberg,
                       daa_all_bygroup$remove_tanda2$Depression$Escala_Hamilton,
-                      daa_all_bygroup$remove_tanda2$Depression$DMSV_puntuacion_total
+                      daa_all_bygroup$remove_tanda2$Depression$DMSV_puntuacion_total,
+                      daa_all_bygroup$remove_tanda2$Depression$PSS_estres
 ) %>% lapply(\(x)return(list(resdf=x)))
 name2remove2 <- "xxx"
-names(contrastlist2) <- c("Beck", "Montgomery", "Hamiliton", "DMSV")
+names(contrastlist2) <- c("Beck", "Montgomery", "Hamiliton", "DMSV", "PSS")
 contrastNamesOrdered2 <- c("Depression vs Control", names(contrastlist2))
 compareLFCContrats(contrastlist2, firstContrast, 
                    contrastNamesOrdered2, mainContrastName, 
@@ -1218,7 +1233,43 @@ compareLFCContrats(contrastlist2, firstContrast,
                    resdfname="resdf", 
                    outdir = outdir, name="LFC_Comparison_AllNum_OnlyDepr_pem3", w=12, h=8, 
                    scale_mode = "free")
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.05, plim_plot=0.05,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_AllNum_OnlyDepr_p05", w=12, h=8, scale_mode = "free")
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.001, plim_plot=0.05,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_AllNum_OnlyDepr_pem3", w=12, h=8, 
+                    scale_mode = "free")
 
+cont001 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                     contrastNamesOrdered2, mainContrastName, 
+                                     plim_select= 0.001, plim_plot=0.1,
+                                     name2remove = name2remove2,
+                                     resdfname="resdf", 
+                                     outdir = outdir, name="LFC_Comparison_AllNum_OnlyDepr_pem3", w=8, h=8, 
+                                     scale_mode = "free")
+cont01 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.01, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_AllNum_OnlyDepr_pem2", w=8, h=8, 
+                                    scale_mode = "free")
+cont05 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.05, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_AllNum_OnlyDepr_05", w=8, h=8, 
+                                    scale_mode = "free")
+
+vstdf <- 
 ## Beck, DSMV and stress Inside depressive subjects
 #Sólo he guardado resdf
 contrastlist2 <- list(daa_all_bygroup$remove_tanda2$Depression$Escala_depresión_Beck,
@@ -1243,7 +1294,41 @@ compareLFCContrats(contrastlist2, firstContrast,
                    outdir = outdir, name="LFC_Comparison_BeckDMSStress_OnlyDepr_pem3", w=12, h=8, 
                    scale_mode = "free")
 
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.05, plim_plot=0.1,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_BeckDMSStress_OnlyDepr_05", w=8, h=8, scale_mode = "free")
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.001, plim_plot=0.1,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_BeckDMSStress_OnlyDepr_pem3", w=8, h=8, 
+                    scale_mode = "free")
 
+cont001 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                     contrastNamesOrdered2, mainContrastName, 
+                                     plim_select= 0.001, plim_plot=0.1,
+                                     name2remove = name2remove2,
+                                     resdfname="resdf", 
+                                     outdir = outdir, name="LFC_Comparison_BeckDMSStress_OnlyDepr_pem3", w=8, h=8, 
+                                     scale_mode = "free")
+cont01 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.01, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_BeckDMSStress_OnlyDepr_pem2", w=8, h=8, 
+                                    scale_mode = "free")
+cont05 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.05, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_BeckDMSStress_OnlyDepr_05", w=8, h=8, 
+                                    scale_mode = "free")
 #Beck levels inside Depression
 fnames <- list.files(paste0(opt$out, "/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyDepression_Beck_cualitativo"), 
                      pattern = "_vs_", full.names = T ) %>% 
@@ -1294,7 +1379,49 @@ compareLFCContrats(contrastlist2, firstContrast,
                    resdfname="resdf", 
                    outdir = outdir, name="LFC_Comparison_IPAQ_OnlyDepr_pem3", w=12, h=8, 
                    scale_mode = "fixed")
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.05, plim_plot=0.1,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_IPAQ_OnlyDepr_p05", w=10, h=12, scale_mode = "free")
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.001, plim_plot=0.1,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_IPAQ_OnlyDepr_pem3", w=10, h=8, 
+                    scale_mode = "free")
+names(contrastlist2) <- gsub(" ", "_", names(contrastlist2))
+contrastNamesOrdered2[2:length(contrastNamesOrdered2)] <- gsub(" ", "_",contrastNamesOrdered2[2:length(contrastNamesOrdered2)])
+cont001 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                     contrastNamesOrdered2, mainContrastName, 
+                                     plim_select= 0.001, plim_plot=0.1,
+                                     name2remove = name2remove2,
+                                     resdfname="resdf", 
+                                     outdir = outdir, name="LFC_Comparison_IPAQ_OnlyDepr_pem3", w=12, h=8, 
+                                     scale_mode = "free")
+cont01 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.01, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_IPAQ_OnlyDepr_pem2", w=8, h=8, 
+                                    scale_mode = "free")
+cont05 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.05, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_IPAQ_OnlyDepr_p05", w=8, h=12, 
+                                    scale_mode = "free")
+cont05$correlations %>% select(1,2,3,5,9,10) %>% mutate_if(is.numeric, round,3) %>%  datatable()
 
+##
+contrastlist2 <- map(fnames, read_tsv) %>% lapply(\(x)return(list(resdf=x)))
+newnames <- basename(fnames) %>% sapply(\(x)strsplit(x, "fisica_")[[1]][3]) %>% 
+  gsub("_DAAshrinkNormal.tsv", "", .) %>% gsub("_", " ", .)
+names(contrastlist2) <- newnames
 firstContrast2 <- list(resdf=daa_all_bygroup$remove_tanda2$Depression$Escala_depresión_Beck)
 contrastNamesOrdered2 <- c("Beck", names(contrastlist2))
 compareLFCContrats(contrastlist2, firstContrast2, 
@@ -1383,14 +1510,38 @@ compareLFCContrats2(contrastlist2, firstContrast,
                    plim_select= 0.05, plim_plot=0.1,
                    name2remove = name2remove2,
                    resdfname="resdf", 
-                   outdir = outdir, name="LFC_Comparison_DMedit_OnlyDepr_p05", w=12, h=8, scale_mode = "fixed")
+                   outdir = outdir, name="LFC_Comparison_DMedit_OnlyDepr_p05", w=12, h=12, scale_mode = "fixed")
 compareLFCContrats2(contrastlist2, firstContrast, 
                    contrastNamesOrdered2, mainContrastName, 
                    plim_select= 0.001, plim_plot=0.1,
                    name2remove = name2remove2,
                    resdfname="resdf", 
-                   outdir = outdir, name="LFC_Comparison_DMedit_OnlyDepr_pem3", w=12, h=8, 
+                   outdir = outdir, name="LFC_Comparison_DMedit_OnlyDepr_pem3", w=12, h=10, 
                    scale_mode = "fixed")
+
+names(contrastlist2) <- gsub(" ", "_", names(contrastlist2))
+contrastNamesOrdered2[2:length(contrastNamesOrdered2)] <- gsub(" ", "_",contrastNamesOrdered2[2:length(contrastNamesOrdered2)])
+cont001 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                     contrastNamesOrdered2, mainContrastName, 
+                                     plim_select= 0.001, plim_plot=0.1,
+                                     name2remove = name2remove2,
+                                     resdfname="resdf", 
+                                     outdir = outdir, name="LFC_Comparison_DMedit_OnlyDepr_pem3", w=12, h=8, 
+                                     scale_mode = "free")
+cont01 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.01, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_DMedit_OnlyDepr_pem2", w=8, h=8, 
+                                    scale_mode = "free")
+cont05 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.05, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_DMedit_OnlyDepr_p05", w=8, h=12, 
+                                    scale_mode = "free")
 firstContrast2 <- list(resdf=daa_all_bygroup$remove_tanda2$Depression$Escala_depresión_Beck)
 contrastNamesOrdered2 <- c("Beck", names(contrastlist2))
 compareLFCContrats(contrastlist2, firstContrast2, 
@@ -1448,6 +1599,84 @@ compareLFCContrats(contrastlist2, firstContrast,
                    outdir = outdir, name="LFC_Comparison_BeckInside_Euroqol_OnlyDepr_pem3", w=12, h=8, 
                    scale_mode = "free")
 
+
+#DII 
+fnames <- list.files(paste0(opt$out,"/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyDepression_DII/"), 
+                     pattern = ".tsv", full.names = T ) %>% 
+  subset(grepl("Normal.tsv", .))
+contrastlist2 <- map(fnames, read_tsv) %>% lapply(\(x)return(list(resdf=x)))
+
+names(contrastlist2) <- c("DII")
+name2remove2 <- "xxx"
+
+contrastNamesOrdered2 <- c("Depression vs Control", names(contrastlist2))
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.05, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_DII_OnlyDepr_p05", w=12, h=8, scale_mode = "fixed")
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.001, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_DII_OnlyDepr_pem3", w=12, h=8, 
+                   scale_mode = "fixed")
+
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.05, plim_plot=0.1,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_DII_OnlyDepr_p05", w=12, h=12, scale_mode = "fixed")
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.001, plim_plot=0.1,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_DII_OnlyDepr_pem3", w=12, h=10, 
+                    scale_mode = "fixed")
+
+names(contrastlist2) <- gsub(" ", "_", names(contrastlist2))
+contrastNamesOrdered2[2:length(contrastNamesOrdered2)] <- gsub(" ", "_",contrastNamesOrdered2[2:length(contrastNamesOrdered2)])
+cont001 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                     contrastNamesOrdered2, mainContrastName, 
+                                     plim_select= 0.001, plim_plot=0.1,
+                                     name2remove = name2remove2,
+                                     resdfname="resdf", 
+                                     outdir = outdir, name="LFC_Comparison_DII_OnlyDepr_pem3", w=12, h=8, 
+                                     scale_mode = "free")
+cont01 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.01, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_DII_OnlyDepr_pem2", w=8, h=8, 
+                                    scale_mode = "free")
+cont05 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.05, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_DII_OnlyDepr_p05", w=8, h=12, 
+                                    scale_mode = "free")
+
+firstContrast2 <- list(resdf=daa_all_bygroup$remove_tanda2$Depression$Escala_depresión_Beck)
+contrastNamesOrdered2 <- c("Beck", names(contrastlist2))
+compareLFCContrats(contrastlist2, firstContrast2, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.05, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_BeckInside_Euroqol_OnlyDepr_p05", w=12, h=8, scale_mode = "free")
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.001, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_BeckInside_Euroqol_OnlyDepr_pem3", w=12, h=8, 
+                   scale_mode = "free")
 
 ## CorrectedByAge and BMI against Beck levels in depressed
 firstContrast_edad <- list(resdf=daa_all_corrected$remove_tanda2$Edad_log)
