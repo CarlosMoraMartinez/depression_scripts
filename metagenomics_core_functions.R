@@ -1365,8 +1365,10 @@ getDeseqResults <- function(phobj, opt, name="", variables = c("Condition")){
   ##Add pseudocount if necessary
   anyNonZero <- raw_counts %>% apply(MAR=1, all) %>% any
   if(!anyNonZero){
+    do_poscounts = TRUE
     dds <- DESeq(dds, betaPrior = F, sfType = "poscounts")
   }else{
+    do_poscounts = FALSE
     dds <- DESeq(dds, betaPrior = F)
   }
   
@@ -1463,7 +1465,9 @@ getDeseqResults <- function(phobj, opt, name="", variables = c("Condition")){
     "norm_counts_df"=norm_counts_df,
     "vstds"=vstds, 
     "vst_counts_df"=vst_counts_df,
-    "all_combos_done"=all_combos_done
+    "all_combos_done"=all_combos_done,
+    "options"= list(mincount=opt$mincount, minsampleswithcount=opt$minsampleswithcount, 
+                    minfreq=opt$minfreq, poscount=do_poscounts)
   )
   save(file = paste0(opt$out, "DESEQ2_all_results_", name, ".R"), all_results_list)
   return(all_results_list)
@@ -1495,9 +1499,11 @@ getDeseqResults_paired <- function(phobj, opt, name="", variables = c("Condition
   ##Add pseudocount if necessary
   anyNonZero <- raw_counts %>% apply(MAR=1, all) %>% any
   if(!anyNonZero){
+    do_poscounts = TRUE
     dds_null <- DESeq(dds, betaPrior = F, sfType = "poscounts")
     dds <- DESeq(dds, betaPrior = F, sfType = "poscounts", reduced=reduced_formula, test="LRT")
   }else{
+    do_poscounts = FALSE
     dds_null <- DESeq(dds, betaPrior = F)
     dds <- DESeq(dds, betaPrior = F, reduced=reduced_formula, test="LRT")
   }
@@ -1552,7 +1558,9 @@ getDeseqResults_paired <- function(phobj, opt, name="", variables = c("Condition
     "norm_counts"=norm_counts,
     "norm_counts_df"=norm_counts_df,
     "vstds"=vstds, 
-    "vst_counts_df"=vst_counts_df
+    "vst_counts_df"=vst_counts_df,
+    "options"= list(mincount=opt$mincount, minsampleswithcount=opt$minsampleswithcount, 
+                    minfreq=opt$minfreq, poscount=do_poscounts)
   )
   save(file = paste0(opt$out, "DESEQ2_all_results_", name, ".R"), all_results_list)
   return(all_results_list)
@@ -2762,8 +2770,10 @@ deseq_full_pipeline <- function(phobj, name, vars2deseq, opt){
   opt$reserva <- opt$out
   opt$out <- outdir
   if(!dir.exists(opt$out)) dir.create(opt$out)
-  opt$minsampleswithcount <- opt$minfreq*nsamples(phobj)
-  
+  if(opt$minfreq > 0){
+    opt$minsampleswithcount <- opt$minfreq*nsamples(phobj)
+    cat("Minfreq: ", opt$minfreq, ", setting minsampleswithcount to ", opt$minsampleswithcount)
+  }
   dearesults <- getDeseqResults(phobj, opt, name, variables = vars2deseq)
   
   list2env(dearesults, envir = environment())
@@ -3130,3 +3140,19 @@ compareLFCContratsNumeric <- function(contrastlist, firstContrast,
   })
   return(list(correlations=cordf, vennplots=venplots, mosaicplots=gmosplots))
 }
+
+
+filter_taxa_padj <- function(resdf, plim=0.05, fc=1){
+  taxa <- resdf %>% 
+    dplyr::filter(padj <= plim & abs(log2FoldChangeShrink) >= log2(fc) ) %>% 
+    pull(taxon)
+  return(taxa)
+}
+
+filter_taxa_praw <- function(resdf, plim=0.05, fc=1){
+  taxa <- resdf %>% 
+    dplyr::filter(pvalue <= plim & abs(log2FoldChangeShrink) >= log2(fc) ) %>% 
+    pull(taxon)
+  return(taxa)
+}
+

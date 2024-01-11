@@ -39,7 +39,7 @@ if(MODE == "IATA"){
             num_genes_default=5
             )
 }else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_6/",
+  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_8/",
               indir = "/home/carmoma/Desktop/202311_DEPRESION/mg09_combinempa/" ,
               r_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/metagenomics_core_functions.R",
               predictive_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/predictive_functions.R",
@@ -234,7 +234,7 @@ if(!file.exists(rmtanda2_fname) | opt$rewrite){
 
 ##  Eliminar tanda 2 - Rarefaction min
 raref_min_filename_not2 <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTanda2_rarefMin.RData')
-if(!file.exists(raref_min_filename) | opt$rewrite){
+if(!file.exists(raref_min_filename_not2) | opt$rewrite){
   pre_phyloseq_rarefied_not2 <-rarefy_even_depth(pre_phyloseq_removet2, rngseed = SEED)
   save(pre_phyloseq_rarefied_not2, file =raref_min_filename_not2)
 }else{
@@ -296,20 +296,11 @@ if(!file.exists(phseq_batch_tanda_raref_fname) | opt$rewrite){
 # Rm samples with co-morbidities
 rmdisease_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTanda2_noDisease.RData')
 standa1 <- metadata %>% dplyr::filter(Tanda==1 & is.na(COMORBILIDADES)) %>% pull(sampleID) %>% as.character()
-if(!file.exists(rmtanda2_fname) | opt$rewrite){
+if(!file.exists(rmdisease_fname) | opt$rewrite){
   pre_phyloseq_removet2_and_comor <- phyloseq::prune_samples(standa1, pre_phyloseq_filt) 
   save(pre_phyloseq_removet2_and_comor, file = rmdisease_fname)
 }else{load(rmdisease_fname)}
 
-
-##  Eliminar tanda 2 - Rarefaction min
-raref_min_filename_not2 <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTanda2_rarefMin.RData')
-if(!file.exists(raref_min_filename) | opt$rewrite){
-  pre_phyloseq_rarefied_not2 <-rarefy_even_depth(pre_phyloseq_removet2, rngseed = SEED)
-  save(pre_phyloseq_rarefied_not2, file =raref_min_filename_not2)
-}else{
-  load(raref_min_filename_not2)
-}
 
 allphyloseqlist_fname <- paste0(path_phyloseq, "/phyloseq_all_list.RData")
 if(!file.exists(allphyloseqlist_fname) | opt$rewrite){
@@ -500,15 +491,15 @@ for(i in phseq_to_use){
   all_pcas_adj01 <- makeAllPCAs(phobj, df2pca, taxa_padj01, vars2pca, opt, "DiffTaxaPadj01")
   all_pcas_adj001 <- makeAllPCAs(phobj, df2pca, taxa_padj001, vars2pca, opt, "DiffTaxaPadj001")
   
-  
+  this_metadata <- sample_data(phobj) %>% data.frame
   all_model_results[[i]][["padj_taxa_taxa"]] <- taxa_padj
   all_model_results[[i]][["praw_taxa_taxa"]] <- taxa_praw
   all_model_results[[i]][["padj_taxa_pcas"]] <- all_pcas_adj
   all_model_results[[i]][["praw_taxa_pcas"]] <- all_pcas_praw
-  all_model_results[[i]][["padj_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadj"), vars2pca=c("Condition"))
-  all_model_results[[i]][["praw_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPraw"), vars2pca=c("Condition"))
-  all_model_results[[i]][["padj_taxa_res01"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01, name=paste0(i, "ConditionPadj01"), vars2pca=c("Condition"))
-  all_model_results[[i]][["padj_taxa_res001"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj001, name=paste0(i, "ConditionPadj001"), vars2pca=c("Condition"))
+  all_model_results[[i]][["padj_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadj"), metadata=this_metadata, vars2pca=c("Condition"))
+  all_model_results[[i]][["praw_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPraw"), metadata=this_metadata, vars2pca=c("Condition"))
+  all_model_results[[i]][["padj_taxa_res01"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01, name=paste0(i, "ConditionPadj01"), metadata=this_metadata, vars2pca=c("Condition"))
+  all_model_results[[i]][["padj_taxa_res001"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj001, name=paste0(i, "ConditionPadj001"), metadata=this_metadata, vars2pca=c("Condition"))
   
   PCs <- all_model_results[[i]][["padj_taxa_res"]]$varnames
   modelo_svm <- all_model_results[[i]][["padj_taxa_res"]]$models$`SVM-linear`$mod_noscale
@@ -519,6 +510,7 @@ for(i in phseq_to_use){
                                                                                             daa_all[[i]]$resdf, 
                                                                                             topns = c(5, 10, 20))
   
+  all_model_results[[i]]$metadata <- sample_data(phobj) %>% data.frame
   opt <- restaurar(opt)
 }
 opt <- restaurar(opt)
@@ -526,17 +518,19 @@ save(all_model_results, file=paste0(opt$out, "PredictDAA/all_model_results.RData
 #load(file=paste0(opt$out, "PredictDAA/all_model_results.RData"))
 
 #Integrate
+opt$out <- paste0(opt$out, "PredictDAA/")
 makeLinePlotComparingPhobjs(all_model_results, opt)
 ## Compare with Bacteria in componets
 
-walk(names(all_model_results), makeLinePlotComparingSamePhobjModels, all_model_results, opt)
+walk(names(all_model_results), makeLinePlotComparingSamePhobjModels, 
+     all_model_results, opt)
 
 ## Plot boxplot PCs
 pcBoxplots <- map(names(all_model_results), makePCsBoxplot, all_model_results, opt)
 names(pcBoxplots) <- names(all_model_results)
 
 ## Plot barplot PCs and LFC
-pcBarplots <- map(names(all_model_results), makePCBarplot, all_model_results, pcBoxplots, opt, w=8, h=14)
+pcBarplots <- map(names(all_model_results), makePCBarplot, all_model_results, pcBoxplots, daa_all, opt, w=8, h=14)
 names(pcBarplots) <- names(all_model_results)
 
 # Plot KNN (best model)
@@ -545,7 +539,7 @@ phname <- "remove_tanda2"
 predplots <- map(names(all_model_results), plotAllModelPredictions, all_model_results, opt)
 
  # Make sure that it works
- 
+opt <- restaurar(opt)
 
 library(VennDiagram)
 outdir <- paste0(opt$out, "PredictDAA/VennDiagrams/")
@@ -665,7 +659,7 @@ vars2test <- c("Tanda", "Edad_log", "Sexo", "ob_o_sobrepeso","obesidad", "IMC_lo
                "tratamiento_ISRNs", "tratamiento_antidiabeticos", "tratamiento_coagul_betabloq_etc", 
                "DII"
 )
-
+vars2test <- "IMC_log"
 opt$reserva_0 <- opt$out
 opt$out <- paste0(opt$out, "DESeq2_ControlVars/")
 if(!dir.exists(opt$out)) dir.create(opt$out)
@@ -687,7 +681,7 @@ for(phname in phseq_to_correct){
     res_tmp <-deseq_full_pipeline(phobj_filt, name, vars2deseq, opt)
     daa_all_corrected[[phname]][[var]] <- res_tmp$resdf
   }}
-opt$out <- opt$reserva_0
+opt <- restaurar(opt)
 save(daa_all_corrected, file=paste0(opt$out, "DESeq2_ControlVars/DESEQ2_controlVars_all.RData"))
 
 ## Plot heatmap with significant differences in all 
@@ -721,6 +715,33 @@ for(phname in phseq_to_correct){
                                          pfilt =0.01, pplot=0.01,name=oname, outdir=outdir)
   
 }}
+
+## DAA Control Reverse (control for Depression)
+interestvar <- "Condition"
+vars2test <- c("IPAQ_act_fisica", "Mediterranean_diet_adherence","DII")
+opt$reserva_0 <- opt$out
+opt$out <- paste0(opt$out, "DESeq2_ControlForDepr/")
+if(!dir.exists(opt$out)) dir.create(opt$out)
+daa_all_corrected_reverse <- list()
+for(phname in phseq_to_correct){
+  cat("Doing DESeq2 Analysys with correction for: ", phname, "\n")
+  phobj <- all_phyloseq[[phname]]
+  phobj <- updatePsWithLogs(phobj, c("Edad", "IMC"))
+  daa_all_corrected_reverse[[phname]] <- list()
+  for(var in vars2test){
+    cat("Doing DESeq2 Analysys with correction for: ", phname, '-', var, "\n")
+    samples <- sample_data(phobj)$sampleID[! is.na(sample_data(phobj)[, var])]
+    phobj_filt <- phyloseq::prune_samples(samples, phobj)
+    cases <- sample_data(phobj_filt)[, var] %>% unlist %>%  table
+    if(length(which(cases > 0)) < 2 ){cat("Only one level, skipping this variable");next}
+    
+    vars2deseq <- c(var, interestvar) #Reverse here
+    name <- paste0(phname, '_', var)
+    res_tmp <-deseq_full_pipeline(phobj_filt, name, vars2deseq, opt)
+    daa_all_corrected_reverse[[phname]][[var]] <- res_tmp$resdf
+  }}
+opt <- restaurar(opt)
+save(daa_all_corrected_reverse, file=paste0(opt$out, "DESeq2_ControlForDepr/DESEQ2_controlVars_all.RData"))
 
 
 ## DAA correcting for several variables at the same time
@@ -809,7 +830,7 @@ vars2test <- c("Tanda", "Edad_log", "Sexo", "ob_o_sobrepeso","obesidad", "IMC_lo
                "tratamiento_ansioliticos", "tratamiento_anticonvulsivos",
                "tratamiento_ISRNs", "tratamiento_antidiabeticos", "tratamiento_coagul_betabloq_etc" 
 )
-
+vars2test <- "IMC_log"
 opt$reserva_0 <- opt$out
 opt$out <- paste0(opt$out, "DESeq2_ControlVarsAlone/")
 if(!dir.exists(opt$out)) dir.create(opt$out)
@@ -1269,7 +1290,7 @@ cont05 <- compareLFCContratsNumeric(contrastlist2, firstContrast,
                                     outdir = outdir, name="LFC_Comparison_AllNum_OnlyDepr_05", w=8, h=8, 
                                     scale_mode = "free")
 
-vstdf <- 
+
 ## Beck, DSMV and stress Inside depressive subjects
 #Sólo he guardado resdf
 contrastlist2 <- list(daa_all_bygroup$remove_tanda2$Depression$Escala_depresión_Beck,
@@ -1890,3 +1911,156 @@ compareLFCContrats(contrastlist2, firstContrast_IMC,
                    resdfname="resdf", 
                    outdir = outdir, name="LFC_Comparison_CorrectIMC_AllNumCorrected_pem3", w=12, h=8, 
                    scale_mode = "free")
+
+
+
+## Predict DEPR + OBESITY
+
+editObesity <- function(vec){
+  return(ifelse(is.na(vec), NA, ifelse(vec == "Normopeso", "normal weight", "overweight")))
+}
+combineClasses <- function(phobj, v1, v2, newname, sep=":"){
+  v1vec <- sample_data(phobj)[[v1]] %>% gsub("Depression", "D", .) %>% gsub("Control", "C", .)
+  sample_data(phobj)[[newname]] <- paste(v1vec, sample_data(phobj)[[v2]], sep=sep)
+  sample_data(phobj)[[newname]][is.na(sample_data(phobj)[[v1]]) | is.na(sample_data(phobj)[[v2]])] <- NA
+  
+  return(phobj)
+}
+
+
+interestvar <- "Condition"
+var2add <- "obesidad"
+newname <- "Depr_and_Ob"
+vars2pca <- c(interestvar, var2add, newname)
+phseq_to_use <- c("remove_tanda2")
+
+opt$out <- paste0(opt$out, "PredictDAA_multiclass")
+if(!dir.exists(opt$out)) dir.create(opt$out)
+opt <- restaurar(opt)
+
+all_model_multi_results <- list()
+for(i in phseq_to_use){
+  cat("Doing Predictive models for: ", i, "\n")
+  all_model_results[[i]] <- list()
+  phobj <- all_phyloseq[[i]]
+  
+  sample_data(phobj)[[var2add]] <- editObesity(sample_data(phobj)[[var2add]])
+  phobj <- combineClasses(phobj, interestvar, var2add, newname)
+  samples <- sample_data(phobj)$sampleID[! is.na(sample_data(phobj)[, var2add])]
+  phobj_filt <- phyloseq::prune_samples(samples, phobj)
+  
+  outdir <- paste0(opt$out, "PredictDAA_multiclass/", i, "/")
+  opt$reserva <- opt$out
+  opt$out <- outdir
+  if(!dir.exists(opt$out)) dir.create(opt$out)
+  
+  ## Get data for PCA 
+  df2pca <- if(is.null(daa_all[[i]]$vst_counts_df)){ daa_all[[i]]$norm_counts_df}else{ daa_all[[i]]$vst_counts_df }
+  
+  ## Get taxa 
+  taxa_padj <- daa_all[[i]]$resdf %>% filter_taxa_padj
+  taxa_praw <- daa_all[[i]]$resdf %>% filter_taxa_praw
+  taxa_cov_padj <- daa_all_corrected_only[[i]]$IMC_log %>% filter_taxa_padj
+  taxa_cov_praw <- daa_all[[i]]$resdf %>% filter_taxa_praw
+  taxa_padj01 <- daa_all[[i]]$resdf %>% filter_taxa_padj(plim=0.01)
+  taxa_padj001 <- daa_all[[i]]$resdf %>% filter_taxa_padj(plim=0.001)
+  taxa_cov_padj01 <- daa_all_corrected_only[[i]]$IMC_log %>% filter_taxa_padj(plim=0.01)
+  taxa_cov_padj001 <- daa_all_corrected_only[[i]]$IMC_log %>% filter_taxa_padj(plim=0.001)
+  
+  taxa_padj_corr <- daa_all_corrected[[i]]$IMC_log %>% filter_taxa_padj 
+  taxa_padj_corr_01 <- daa_all_corrected[[i]]$IMC_log %>% filter_taxa_padj(plim=0.01)
+  taxa_padj_corr_001 <- daa_all_corrected[[i]]$IMC_log %>% filter_taxa_padj(plim=0.001)
+  imcfname <- paste0(opt$reserva, "DESeq2_ControlVars/DeSEQ2/", i, "_IMC_log/",i, "_IMC_log_IMC_log_DAAshrinkNormal.tsv" )
+  imctab <- read_tsv(imcfname)
+  taxa_padj_cov_corr <- imctab %>% filter_taxa_padj
+  taxa_padj_cov_corr_01 <- imctab %>% filter_taxa_padj(plim = 0.01)
+  taxa_padj_cov_corr_001 <- imctab %>% filter_taxa_padj(plim = 0.001)
+  
+  taxa_padj_05 <- unique(c(taxa_padj, taxa_cov_padj))
+  taxa_praw_05 <- unique(c(taxa_praw, taxa_cov_praw))
+  taxa_padj_01 <- unique(c(taxa_padj01, taxa_cov_padj01))
+  taxa_padj_001 <- unique(c(taxa_cov_padj001, taxa_padj001))
+  taxa_padj_cov_05 <- unique(c(taxa_padj_corr, taxa_padj_cov_corr))
+  taxa_padj_cov_01 <- unique(c(taxa_padj_corr_01, taxa_padj_cov_corr_01))
+  taxa_padj_cov_001 <- unique(c(taxa_padj_corr_001, taxa_padj_cov_corr_001))
+  
+  taxa_padj_covorsingle_05 <- unique(c(taxa_padj_cov_05, taxa_padj_05))
+  taxa_padj_covorsingle_01 <- unique(c(taxa_padj_01, taxa_padj_cov_01))
+  taxa_padj_covorsingle_001 <- unique(c(taxa_padj_001, taxa_padj_cov_001))
+  ## Make PCAs
+  
+  taxa_list <- list(
+    "DiffTaxaPadjBase" = taxa_padj,
+    "DiffTaxaPraw" = taxa_praw_05,
+    "DiffTaxaPadj" = taxa_padj_05,
+    "DiffTaxaPadj01" = taxa_padj_01,
+    "DiffTaxaPadj001" = taxa_padj_001,
+    "DiffTaxaPadjCov05" = taxa_padj_cov_05,
+    "DiffTaxaPadjCov01" = taxa_padj_cov_01,
+    "DiffTaxaPadjCov001" = taxa_padj_cov_001,
+    "DiffTaxaPadjCovOrSingle05" = taxa_padj_covorsingle_05,
+    "DiffTaxaPadjCovOrSingle01" = taxa_padj_covorsingle_01,
+    "DiffTaxaPadjCovOrSingle001" = taxa_padj_covorsingle_001
+  )
+  all_pcalists <- map(names(taxa_list), 
+                      \(x)makeAllPCAs(phobj_filt, df2pca, taxa_list[[x]], vars2pca, opt, x))
+  names(all_pcalists) <- paste0("PCA_", names(taxa_list))
+  
+  all_models_this <- map2(all_pcalists, names(taxa_list),
+                                            \(x, y)callDoAllModelsFromALLPCAs(x, name=paste0(i, y), 
+                                                                              metadata=this_metadata, 
+                                                                              vars2pca=c("Depr_and_Ob")))
+  names(all_models_this) <- names(taxa_list)
+  names(taxa_list) <- paste0("taxa_", names(taxa_list))
+  
+  
+  all_model_results[[i]] <- c(all_models_this, all_pcalists, taxa_list)
+  all_model_results[[i]]$metadata <- sample_data(phobj_filt) %>% data.frame
+  
+  opt <- restaurar(opt)
+}
+opt <- restaurar(opt)
+save(all_model_results, file=paste0(opt$out, "PredictDAA_multiclass/all_model_results.RData"))
+#load(file=paste0(opt$out, "PredictDAA/all_model_results.RData"))
+
+#for(k in names(all_model_results[[i]]$modresults)) {cat("\n\n", k);all_model_results[[i]]$modresults[[k]]$modummary %>% head(2) %>% print}
+
+#Integrate
+opt$out <- paste0(opt$out, "PredictDAA_multiclass/")
+makeLinePlotComparingPhobjs( all_model_results, opt, models_name1 = "DiffTaxaPadjBase", models_name2 = "DiffTaxaPadjCov05")
+## Compare with Bacteria in componets
+condnames <- names(all_model_results$remove_tanda2)[c(1,6,7,9,10)]
+makeLinePlotComparingSamePhobjModels_Cov(phname, condnames, all_model_results, "TaxaGroups_trim", opt, w=8, h=5)
+
+walk(names(all_model_results), \(x)makeLinePlotComparingSamePhobjModels(x, all_model_results, 
+     opt, w=6, h=8, get_pcnames_from = "DiffTaxaPadjCov05"))
+## Plot boxplot PCs
+pca2use <- "DiffTaxaPadjCov05"
+pcBoxplots <- map(names(all_model_results), \(x){
+  makePCsBoxplot(x, all_model_results, opt, 
+                 get_pcnames_from = pca2use,
+                 pca_name =  paste0("PCA_", pca2use), 
+                 varname = "Depr_and_Ob",
+                 w=12, h=8)
+  })
+names(pcBoxplots) <- names(all_model_results)
+
+## Plot barplot PCs and LFC
+pcBarplots <- map(names(all_model_results), makePCBarplot, all_model_results, pcBoxplots, daa_all, opt,
+                  get_pcnames_from = pca2use,
+                  pca_name =  paste0("PCA_", pca2use), 
+                  varname = "Depr_and_Ob",
+                  w=12, h=20)
+names(pcBarplots) <- names(all_model_results)
+
+# Plot KNN (best model)
+
+phname <- "remove_tanda2"
+predplots <- map(names(all_model_results), plotAllModelPredictions, all_model_results, opt,
+                 get_pcnames_from = pca2use,
+                 pca_name =  paste0("PCA_", pca2use), 
+                 varname = "Depr_and_Ob",
+                 pred_mode="l1o")
+
+
+opt <- restaurar(opt)
