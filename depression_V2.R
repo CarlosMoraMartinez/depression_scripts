@@ -129,10 +129,12 @@ metadata$Educacion[metadata$Educacion == "Estudios superiores:universidad y post
 metadata$Educacion[metadata$Educacion == "fp"] <- "Bachiller y fp" 
 metadata$Estado.civil2 <- ifelse(metadata$`Estado civil` == "pareja", "pareja", "soltero" )
 metadata$DII.cualitativo[metadata$`DII cualitativo` == "Nuetra"] <- "Neutral"
+metadata$Mediterranean_diet_adherence[metadata$Mediterranean_diet_adherence=="low"]<- "Low"
 metadata$Mediterranean_diet_adherence2 <- ifelse(
   is.na(metadata$Mediterranean_diet_adherence), NA, 
   ifelse(metadata$Mediterranean_diet_adherence=="Low", "Low", "Good")
 )
+metadata$IPAQ_act_fisica <- with(metadata, recode(IPAQ_act_fisica, "Bajo"="Low", "Moderado"="Mid", "Alto"="High"))
 metadata <- metadata %>% 
   mutate_if(is.character, str_to_title) %>% 
   mutate_if(~ (all(as.integer(.) == .) & length(unique(.)) < 5) | is.character(.),  as.factor)
@@ -659,7 +661,7 @@ vars2test <- c("Tanda", "Edad_log", "Sexo", "ob_o_sobrepeso","obesidad", "IMC_lo
                "tratamiento_ISRNs", "tratamiento_antidiabeticos", "tratamiento_coagul_betabloq_etc", 
                "DII"
 )
-vars2test <- "IMC_log"
+vars2test <- c("IMC_log", "Mediterranean_diet_adherence2", "Mediterranean_diet_adherence", "IPAQ_act_fisica")
 opt$reserva_0 <- opt$out
 opt$out <- paste0(opt$out, "DESeq2_ControlVars/")
 if(!dir.exists(opt$out)) dir.create(opt$out)
@@ -695,6 +697,7 @@ vargroups <- list(
   health=c("Diabetes", "TG_mayor_200", "Colesterol_mayor_200", "Mediterranean_diet_adherence", "IPAQ_act_fisica"),
   exer=c("Mediterranean_diet_adherence", "Euroqol","IPAQ_act_fisica", "bristol_scale_cualitativo", "PSS_estres")
 )
+vargroups <- list(pobl1=names(daa_all_corrected[[1]]))
 outdir <- paste0(opt$out, "DESeq2_ControlVars/SummaryHeatmaps/")
 if(!dir.exists(outdir)) dir.create(outdir)
 for(phname in phseq_to_correct){
@@ -715,33 +718,6 @@ for(phname in phseq_to_correct){
                                          pfilt =0.01, pplot=0.01,name=oname, outdir=outdir)
   
 }}
-
-## DAA Control Reverse (control for Depression)
-interestvar <- "Condition"
-vars2test <- c("IPAQ_act_fisica", "Mediterranean_diet_adherence","DII")
-opt$reserva_0 <- opt$out
-opt$out <- paste0(opt$out, "DESeq2_ControlForDepr/")
-if(!dir.exists(opt$out)) dir.create(opt$out)
-daa_all_corrected_reverse <- list()
-for(phname in phseq_to_correct){
-  cat("Doing DESeq2 Analysys with correction for: ", phname, "\n")
-  phobj <- all_phyloseq[[phname]]
-  phobj <- updatePsWithLogs(phobj, c("Edad", "IMC"))
-  daa_all_corrected_reverse[[phname]] <- list()
-  for(var in vars2test){
-    cat("Doing DESeq2 Analysys with correction for: ", phname, '-', var, "\n")
-    samples <- sample_data(phobj)$sampleID[! is.na(sample_data(phobj)[, var])]
-    phobj_filt <- phyloseq::prune_samples(samples, phobj)
-    cases <- sample_data(phobj_filt)[, var] %>% unlist %>%  table
-    if(length(which(cases > 0)) < 2 ){cat("Only one level, skipping this variable");next}
-    
-    vars2deseq <- c(var, interestvar) #Reverse here
-    name <- paste0(phname, '_', var)
-    res_tmp <-deseq_full_pipeline(phobj_filt, name, vars2deseq, opt)
-    daa_all_corrected_reverse[[phname]][[var]] <- res_tmp$resdf
-  }}
-opt <- restaurar(opt)
-save(daa_all_corrected_reverse, file=paste0(opt$out, "DESeq2_ControlForDepr/DESEQ2_controlVars_all.RData"))
 
 
 ## DAA correcting for several variables at the same time
@@ -1016,6 +992,7 @@ vars2test <- c("Edad_log", "Sexo", "IMC_log", "Estado.civil2",
                "Escala_depresión_Beck", "Beck_cualitativo", "Escala_Hamilton", "Escala_Hamilton_cualitativo",
                "Montgomery.Asberg", "Montgomery.Asberg_qual", "DII", "DII.cualitativo", "Indice_Alimentación_saludable"
 )
+vars2test <- c("Euroqol", "IPAQ_act_fisica", "Mediterranean_diet_adherence", "Mediterranean_diet_adherence2")
 escalas_qual <- c( "Beck_cualitativo", "Escala_Hamilton_cualitativo","Montgomery.Asberg_qual")
 escalas_quant <- c( "Escala_depresión_Beck", "Escala_Hamilton", "Montgomery.Asberg", "DMSV_puntuacion_total")
 
@@ -1230,6 +1207,9 @@ cont05 <- compareLFCContratsNumeric(contrastlist2, firstContrast,
                                     resdfname="resdf", 
                                     outdir = outdir, name="LFC_Comparison_AllNum_05", w=8, h=8, 
                                     scale_mode = "free")
+
+
+
 ## Quant depression scales Inside depressive subjects
 #Sólo he guardado resdf
 contrastlist2 <- list(daa_all_bygroup$remove_tanda2$Depression$Escala_depresión_Beck,
@@ -1438,7 +1418,73 @@ cont05 <- compareLFCContratsNumeric(contrastlist2, firstContrast,
                                     scale_mode = "free")
 cont05$correlations %>% select(1,2,3,5,9,10) %>% mutate_if(is.numeric, round,3) %>%  datatable()
 
-##
+#Exercise levels adjusted by Condition vs Condition (unadjusted)
+fnames <- list.files(paste0(opt$out, "/DESeq2_ControlVars/DeSEQ2/remove_tanda2_IPAQ_act_fisica/"), 
+                     pattern = "_vs_", full.names = T ) %>% 
+  subset(grepl("Normal.tsv", .)) %>% subset(!grepl("Depression_vs_Control", .))
+contrastlist2 <- map(fnames, read_tsv) %>% lapply(\(x)return(list(resdf=x)))
+newnames <- basename(fnames) %>% sapply(\(x)strsplit(x, "fisica_")[[1]][3]) %>% 
+  gsub("_DAAshrinkNormal.tsv", "", .) %>% gsub("_", " ", .)
+names(contrastlist2) <- newnames
+name2remove2 <- "xxx"
+
+contrastNamesOrdered2 <- c("Depression vs Control", names(contrastlist2))
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.05, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_IPAQ_CorrectedByDepr_p05", w=12, h=8, scale_mode = "fixed")
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.001, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_IPAQ_CorrectedByDepr_pem3", w=12, h=8, 
+                   scale_mode = "fixed")
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.05, plim_plot=0.1,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_IPAQ_CorrectedByDepr_p05", w=10, h=12, scale_mode = "free")
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.001, plim_plot=0.1,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_CorrectedByDepr_pem3", w=10, h=8, 
+                    scale_mode = "free")
+names(contrastlist2) <- gsub(" ", "_", names(contrastlist2))
+contrastNamesOrdered2[2:length(contrastNamesOrdered2)] <- gsub(" ", "_",contrastNamesOrdered2[2:length(contrastNamesOrdered2)])
+cont001 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                     contrastNamesOrdered2, mainContrastName, 
+                                     plim_select= 0.001, plim_plot=0.1,
+                                     name2remove = name2remove2,
+                                     resdfname="resdf", 
+                                     outdir = outdir, name="LFC_Comparison_IPAQ_CorrectedByDepr_pem3", w=12, h=8, 
+                                     scale_mode = "free")
+cont01 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.01, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_IPAQ_CorrectedByDepr_pem2", w=8, h=8, 
+                                    scale_mode = "free")
+cont05 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.05, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_IPAQ_CorrectedByDepr_p05", w=8, h=12, 
+                                    scale_mode = "free")
+#cont05$correlations %>% select(1,2,3,5,9,10) %>% mutate_if(is.numeric, round,3) %>%  datatable()
+
+
+## Beck inside Depr vs IPAQ inside depr
+fnames <- list.files(paste0(opt$out, "/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyDepression_IPAQ_act_fisica/"), 
+                     pattern = "_vs_", full.names = T ) %>% 
+  subset(grepl("Normal.tsv", .))
 contrastlist2 <- map(fnames, read_tsv) %>% lapply(\(x)return(list(resdf=x)))
 newnames <- basename(fnames) %>% sapply(\(x)strsplit(x, "fisica_")[[1]][3]) %>% 
   gsub("_DAAshrinkNormal.tsv", "", .) %>% gsub("_", " ", .)
@@ -1563,6 +1609,155 @@ cont05 <- compareLFCContratsNumeric(contrastlist2, firstContrast,
                                     resdfname="resdf", 
                                     outdir = outdir, name="LFC_Comparison_DMedit_OnlyDepr_p05", w=8, h=12, 
                                     scale_mode = "free")
+
+## Mediterranea ajustada por depresion
+#Mediterranea
+fnames <- list.files(paste0(opt$out, "/DESeq2_ControlVars/DeSEQ2/remove_tanda2_Mediterranean_diet_adherence"), 
+                     pattern = "_vs_", full.names = T ) %>% 
+  subset(grepl("Normal.tsv", .)) %>% subset(!grepl("Depression_vs_Control", .))
+contrastlist2 <- map(fnames, read_tsv) %>% lapply(\(x)return(list(resdf=x)))
+newnames <- basename(fnames) %>% sapply(\(x)strsplit(x, "herence_")[[1]][3]) %>% 
+  gsub("_DAAshrinkNormal.tsv", "", .) %>% gsub("_", " ", .)
+names(contrastlist2) <- newnames
+name2remove2 <- "xxx"
+
+contrastNamesOrdered2 <- c("Depression vs Control", names(contrastlist2))
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.05, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_DMedit_CorrectedByDepr_p05", w=12, h=8, scale_mode = "fixed")
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.001, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_DMedit_CorrectedByDepr_pem3", w=12, h=8, 
+                   scale_mode = "fixed")
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.05, plim_plot=0.1,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_DMedit_CorrectedByDepr_p05", w=12, h=12, scale_mode = "fixed")
+
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.01, plim_plot=0.01,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_DMedit_CorrectedByDepr_p01", w=12, h=10, 
+                    scale_mode = "fixed")
+
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.001, plim_plot=0.1,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_DMedit_CorrectedByDepr_pem3", w=12, h=10, 
+                    scale_mode = "fixed")
+
+names(contrastlist2) <- gsub(" ", "_", names(contrastlist2))
+contrastNamesOrdered2[2:length(contrastNamesOrdered2)] <- gsub(" ", "_",contrastNamesOrdered2[2:length(contrastNamesOrdered2)])
+cont001 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                     contrastNamesOrdered2, mainContrastName, 
+                                     plim_select= 0.001, plim_plot=0.1,
+                                     name2remove = name2remove2,
+                                     resdfname="resdf", 
+                                     outdir = outdir, name="LFC_Comparison_CorrectedByDepr_OnlyDepr_pem3", w=12, h=8, 
+                                     scale_mode = "free")
+cont01 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.01, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_CorrectedByDepr_OnlyDepr_pem2", w=8, h=8, 
+                                    scale_mode = "free")
+cont05 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.05, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_CorrectedByDepr_OnlyDepr_p05", w=8, h=12, 
+                                    scale_mode = "free")
+
+## Mediterranea2 (2 clases) ajustada por depresion
+
+fnames <- list.files(paste0(opt$out, "/DESeq2_ControlVars/DeSEQ2/remove_tanda2_Mediterranean_diet_adherence2"), 
+                     pattern = "_vs_", full.names = T ) %>% 
+  subset(grepl("Normal.tsv", .)) %>% subset(!grepl("Depression_vs_Control", .))
+contrastlist2 <- map(fnames, read_tsv) %>% lapply(\(x)return(list(resdf=x)))
+newnames <- basename(fnames) %>% sapply(\(x)strsplit(x, "herence2_")[[1]][3]) %>% 
+  gsub("_DAAshrinkNormal.tsv", "", .) %>% gsub("_", " ", .)
+names(contrastlist2) <- newnames
+name2remove2 <- "xxx"
+
+contrastNamesOrdered2 <- c("Depression vs Control", names(contrastlist2))
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.05, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_DMedit2_CorrectedByDepr_p05", w=12, h=8, scale_mode = "fixed")
+compareLFCContrats(contrastlist2, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.001, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_DMedit2_CorrectedByDepr_pem3", w=12, h=8, 
+                   scale_mode = "fixed")
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.05, plim_plot=0.1,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_DMedit2_CorrectedByDepr_p05", w=12, h=12, scale_mode = "fixed")
+
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.01, plim_plot=0.01,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_DMedit2_CorrectedByDepr_p01", w=12, h=10, 
+                    scale_mode = "fixed")
+
+compareLFCContrats2(contrastlist2, firstContrast, 
+                    contrastNamesOrdered2, mainContrastName, 
+                    plim_select= 0.001, plim_plot=0.1,
+                    name2remove = name2remove2,
+                    resdfname="resdf", 
+                    outdir = outdir, name="LFC_Comparison_DMedit2_CorrectedByDepr_pem3", w=12, h=10, 
+                    scale_mode = "fixed")
+
+names(contrastlist2) <- gsub(" ", "_", names(contrastlist2))
+contrastNamesOrdered2[2:length(contrastNamesOrdered2)] <- gsub(" ", "_",contrastNamesOrdered2[2:length(contrastNamesOrdered2)])
+cont001 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                     contrastNamesOrdered2, mainContrastName, 
+                                     plim_select= 0.001, plim_plot=0.1,
+                                     name2remove = name2remove2,
+                                     resdfname="resdf", 
+                                     outdir = outdir, name="LFC_Comparison_CorrectedByDepr_OnlyDepr_pem3", w=12, h=8, 
+                                     scale_mode = "free")
+cont01 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.01, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_CorrectedByDepr_OnlyDepr_pem2", w=8, h=8, 
+                                    scale_mode = "free")
+cont05 <- compareLFCContratsNumeric(contrastlist2, firstContrast, 
+                                    contrastNamesOrdered2, mainContrastName, 
+                                    plim_select= 0.05, plim_plot=0.1,
+                                    name2remove = name2remove2,
+                                    resdfname="resdf", 
+                                    outdir = outdir, name="LFC_Comparison_CorrectedByDepr_OnlyDepr_p05", w=8, h=12, 
+                                    scale_mode = "free")
+
+## Escala de Beck dentro de Depr vs Mediterranea dentro de Depr
+fnames <- list.files(paste0(opt$out, "/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyControl_Mediterranean_diet_adherence//"), 
+                     pattern = "_vs_", full.names = T ) %>% 
+  subset(grepl("Normal.tsv", .))
 firstContrast2 <- list(resdf=daa_all_bygroup$remove_tanda2$Depression$Escala_depresión_Beck)
 contrastNamesOrdered2 <- c("Beck", names(contrastlist2))
 compareLFCContrats(contrastlist2, firstContrast2, 
@@ -1579,6 +1774,8 @@ compareLFCContrats(contrastlist2, firstContrast,
                    outdir = outdir, name="LFC_Comparison_BeckInside_DMedit_OnlyDepr_pem3", w=12, h=8, 
                    scale_mode = "free")
 
+
+# Mediterranea, Adjusted by Depression
 
 #Euroqol 
 fnames <- list.files(paste0(opt$out,"/DESeq2_ByGroup/DeSEQ2/remove_tanda2_onlyDepression_Euroqol/"), 
@@ -1913,7 +2110,7 @@ compareLFCContrats(contrastlist2, firstContrast_IMC,
                    scale_mode = "free")
 
 
-
+#####################################
 ## Predict DEPR + OBESITY
 
 editObesity <- function(vec){

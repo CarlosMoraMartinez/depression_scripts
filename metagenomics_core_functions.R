@@ -1350,6 +1350,44 @@ makePermanovaSeveralFactors <- function(phobj,
 ##################################################################
 ### DESEQ
 
+getDeseqContrastFromCategorical <- function(dds, lev_combin, opt){
+  contrastvec <- c(lev_combin[1], lev_combin[3], lev_combin[2])
+  contrast_name <- paste0(lev_combin[1],'_', lev_combin[3], '_vs_', lev_combin[2]) %>% gsub(" ", ".", .)
+  res <- results(dds, contrast = contrastvec)
+  resLFC <- lfcShrink(dds, contrast = contrastvec, type="normal", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
+  resLFC_ape <- tryCatch(lfcShrink(dds, coef = contrast_name, type="apeglm", lfcThreshold = log2(opt$fc)),error=\(x)data.frame() ) #apeglm gives weird results
+  resLFC_ashr <- lfcShrink(dds, contrast = contrastvec, type="ashr", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
+  resdf <- defWriteDEAResults(res, resLFC, opt, paste0(name, "_",contrast_name, "_DAAshrinkNormal.tsv"))
+  resdf_ape <- defWriteDEAResults(res, resLFC_ape, opt, paste0(name, "_", contrast_name, "_DAAshrinkApe.tsv"))
+  resdf_ashr <- defWriteDEAResults(res, resLFC_ashr, opt, paste0(name, "_", contrast_name, "_DAAshrinkAshr.tsv"))
+  
+  return(list("res"=res,
+              "resLFC"=resLFC,
+              "resLFC_ape"=resLFC_ape, 
+              "resLFC_ashr"=resLFC_ashr,
+              "resdf"=resdf,
+              "resdf_ape"=resdf_ape,
+              "resdf_shr"=resdf_ashr))
+}
+
+getDeseqContrastFromNumerical <- function(dds, nvarname, opt){
+  res <- results(dds, name = nvarname)
+  resLFC <- lfcShrink(dds, coef = nvarname, type="normal", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
+  resLFC_ape <- tryCatch(lfcShrink(dds, coef = nvarname, type="apeglm", lfcThreshold = log2(opt$fc)),error=\(x)data.frame() ) #apeglm gives weird results
+  resLFC_ashr <- lfcShrink(dds, coef = nvarname, type="ashr", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
+  resdf <- defWriteDEAResults(res, resLFC, opt, paste0(name, "_",contrast_name, "_DAAshrinkNormal.tsv"))
+  resdf_ape <- defWriteDEAResults(res, resLFC_ape, opt, paste0(name, "_", contrast_name, "_DAAshrinkApe.tsv"))
+  resdf_ashr <- defWriteDEAResults(res, resLFC_ashr, opt, paste0(name, "_", contrast_name, "_DAAshrinkAshr.tsv"))
+  
+  return(list("res"=res,
+              "resLFC"=resLFC,
+              "resLFC_ape"=resLFC_ape, 
+              "resLFC_ashr"=resLFC_ashr,
+              "resdf"=resdf,
+              "resdf_ape"=resdf_ape,
+              "resdf_shr"=resdf_ashr))
+}
+
 getDeseqResults <- function(phobj, opt, name="", variables = c("Condition")){
   formula <- paste0("~ ", paste(variables, sep=" + ", collapse=" + ")) %>% 
     as.formula
@@ -1373,77 +1411,38 @@ getDeseqResults <- function(phobj, opt, name="", variables = c("Condition")){
   }
   
   write_file(paste(resultsNames(dds), collapse="\t" ), file=paste0(opt$out, name, "_", "DEA_resultsNames.tsv"))
-  # if(length(variables)==1){
-  #   res <- results(dds)
-  # }else{
-  #   design <- sample_data(phobj) %>% data.frame # dds@colData %>% as.data.frame() #s
-  #   design <- design[colnames(dds) ,]
-  #   if(is.numeric(design[, variables[1]])){
-  #     res <-results(dds, contrast = list(variables[1]))
-  #   }else{
-  #     levs <- levels(design[, variables[1]])
-  #     res <- results(dds, contrast = c(variables[1], levs[2], levs[1]))
-  #   }
-  # }
-  
-  design <- dds@colData %>% as.data.frame()
-  if(length(variables) == 1 & !is.numeric(unlist(design[, variables[1]]))){
-    all_combos_done <- TRUE
-    levs <- levels(design[, variables[1]] %>% unlist) 
-    combins <- lapply(combn(1:length(levs), 2, simplify = F), \(x)levs[x])
-    all_contrasts <- lapply(combins, function(lev_combin){
-      contrastvec <- c(variables[1], lev_combin[2], lev_combin[1])
-      contrast_name <- paste0(variables[1],'_', lev_combin[2], '_vs_', lev_combin[1]) %>% gsub(" ", ".", .)
-      res <- results(dds, contrast = contrastvec)
-      resLFC <- lfcShrink(dds, contrast = contrastvec, type="normal", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
-      resLFC_ape <- tryCatch(lfcShrink(dds, coef = contrast_name, type="apeglm", lfcThreshold = log2(opt$fc)),error=\(x)data.frame() ) #apeglm gives weird results
-      resLFC_ashr <- lfcShrink(dds, contrast = contrastvec, type="ashr", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
-      resdf <- defWriteDEAResults(res, resLFC, opt, paste0(name, "_",contrast_name, "_DAAshrinkNormal.tsv"))
-      resdf_ape <- defWriteDEAResults(res, resLFC_ape, opt, paste0(name, "_", contrast_name, "_DAAshrinkApe.tsv"))
-      resdf_ashr <- defWriteDEAResults(res, resLFC_ashr, opt, paste0(name, "_", contrast_name, "_DAAshrinkAshr.tsv"))
 
-      return(list("res"=res,
-                  "resLFC"=resLFC,
-                  "resLFC_ape"=resLFC_ape, 
-                  "resLFC_ashr"=resLFC_ashr,
-                  "resdf"=resdf,
-                  "resdf_ape"=resdf_ape,
-                  "resdf_shr"=resdf_ashr))
-    })  
-    names(all_contrasts) <- lapply(combins, \(x)paste0(variables[1],'_', x[2], '_vs_', x[1]) %>% gsub(" ", ".", .))
-  }else{
-    all_combos_done <- FALSE
-    all_contrasts <- lapply(resultsNames(dds)[-1], function(contrast_name){
-      res <- results(dds, name=contrast_name)
-      resLFC <- lfcShrink(dds, coef=contrast_name, type="normal", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
-      resLFC_ape <- lfcShrink(dds, coef=contrast_name, type="apeglm", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
-      resLFC_ashr <- lfcShrink(dds, coef=contrast_name, type="ashr", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
-      resdf <- defWriteDEAResults(res, resLFC, opt, paste0(name, "_",contrast_name, "_DAAshrinkNormal.tsv"))
-      resdf_ape <- defWriteDEAResults(res, resLFC_ape, opt, paste0(name, "_", contrast_name, "_DAAshrinkApe.tsv"))
-      resdf_ashr <- defWriteDEAResults(res, resLFC_ashr, opt, paste0(name, "_", contrast_name, "_DAAshrinkAshr.tsv"))
-      return(list("res"=res,
-                "resLFC"=resLFC,
-                "resLFC_ape"=resLFC_ape, 
-                "resLFC_ashr"=resLFC_ashr,
-                "resdf"=resdf,
-                "resdf_ape"=resdf_ape,
-                "resdf_shr"=resdf_ashr))
-    })  
-    names(all_contrasts) <- resultsNames(dds)[-1]
-  }
+  design <- dds@colData %>% as.data.frame()
+  all_combos_done <- TRUE
   
+  all_combins <- map(variables, \(x){
+    if(is.numeric(design[, x])){
+      return(list(c(x, "NUMERIC")))
+    }
+    levs <- levels(design[, x] %>% unlist) 
+    combins <- lapply(combn(1:length(levs), 2, simplify = F), \(y)c(x, levs[y]))
+  }) %>% flatten
+
+  all_contrasts <- map(all_combins, \(lev_combin){
+    if(lev_combin[2] == "NUMERIC"){
+      getDeseqContrastFromNumerical(dds, lev_combin[1], opt)
+    }else{
+      getDeseqContrastFromCategorical(dds, lev_combin, opt)
+    }
+  })  
+  names(all_contrasts) <- lapply(all_combins, \(x)ifelse(x[2]=="NUMERIC", x[1], paste0(x[1],'_', x[3], '_vs_', x[2]) %>% gsub(" ", ".", .)))
+  all_combos_done <- TRUE
   # Write raw counts  
   rawc_df <- defWriteMatAsDF(raw_counts, opt, paste0(name, "_", "raw_counts.tsv") )
   #filtx_df <- defWriteMatAsDF(filt_counts, opt, "raw_counts_filtered.tsv") 
 
   # Normalized counts  
-  #  dds <- estimateSizeFactors(dds)##  already done
   norm_counts <- counts(dds, normalized = T)
   norm_counts_df <- defWriteMatAsDF(norm_counts, opt, paste0(name, "_", "norm_counts.tsv") )
   
   tryCatch({
-  vstds <- varianceStabilizingTransformation(raw_counts, blind=F)
-  vst_counts_df <- defWriteMatAsDF(vstds, opt, paste0(name, "_", "vst_counts.tsv") )
+    vstds <- varianceStabilizingTransformation(raw_counts, blind=F)
+    vst_counts_df <- defWriteMatAsDF(vstds, opt, paste0(name, "_", "vst_counts.tsv") )
   }, error= function(x){
     vstds <<- NULL
     vst_counts_df <<- data.frame()
