@@ -175,8 +175,45 @@ makeMediationComplex_mergedMEdiat2 <- function(df, xname="Edad",
   return(resdf)
 }
 
+getTotalColors <- function(bacorder, plim_plot,custom_colors){
+  cols <- ifelse(bacorder$Estimate < 0, C_CTRL, C_CASE)
+  if(is.null(custom_colors)){
+    cols <- ifelse(bacorder$p.value <= plim_plot, cols, C_NS)
+  }else{
+    if(is.na(custom_colors$total)){
+      cols <- ifelse(bacorder$p.value <= plim_plot, cols, C_NS)
+    }else if(!custom_colors$total){
+      cols <- rep(C_NS, nrow(bacorder))
+    }
+  }
+  cols <- c(cols, C_CASE, C_OTHER)
+  return(cols)
+}
+
+getEdgeColors <- function(param, p.value, Estimate, plim_plot, custom_colors){
+  cols <- ifelse(Estimate < 0, C_CTRL, C_CASE)
+  if(is.null(custom_colors)){
+    cols <- ifelse(p.value > plim_plot, C_NS, cols)
+  }else{
+    cols <- ifelse(param=="b", 
+                   cols,
+                   ifelse(grepl("^a", param), 
+                          ifelse(is.na(custom_colors$indirect),
+                                 ifelse(p.value > plim_plot, C_NS, cols),
+                                 ifelse(custom_colors$indirect, cols, C_NS)
+                          ),
+                          ifelse(is.na(custom_colors$direct),
+                                 ifelse(p.value > plim_plot, C_NS, cols),
+                                 ifelse(custom_colors$direct, cols, C_NS)
+                          )
+                   )
+    )
+  }
+  return(cols)
+}
+
 plotIMCMediationSimple <- function(res, vars2test, outdir, outname, 
-                                   plim_plot = 0.05, use_color_scale=FALSE, w=14, h=10){
+                                   plim_plot = 0.05, use_color_scale=FALSE, w=14, h=10,custom_colors=NULL){
   C_CTRL = C_CTRL2
   edge_width_factor <- 10 ##Constants to adjust edge width. However, not used anymore
   minq <- 0.2
@@ -197,14 +234,11 @@ plotIMCMediationSimple <- function(res, vars2test, outdir, outname,
                          size = c(rep(4, length(vars2test)), 10, 10),
                          totaleffect = c(bacorder$Estimate, NA, NA),
                          total_pvalue = c(bacorder$p.value, NA, NA),
-                         colors = c(ifelse(bacorder$p.value <= plim_plot, 
-                                           ifelse(bacorder$Estimate< 0, C_CTRL, C_CASE), 
-                                           C_NS),
-                                    C_CASE, C_OTHER),
+                         colors = getTotalColors(bacorder, plim_plot, custom_colors),
                          xoffset = ifelse(vnames == "D", 0.5, ifelse(vnames== "BMI", 1, 0))
   )
   
-  
+  #print(vertices$colors)
   edgenames <- expand.grid(c("a", "cp"), as.character(1:length(vars2test)) ) %>% 
     as.matrix %>% apply(MAR=1,paste,sep="", collapse="")
   edgenames <- c("b", edgenames)
@@ -225,15 +259,16 @@ plotIMCMediationSimple <- function(res, vars2test, outdir, outname,
                           ifelse(to=="D", paste0("c'=", as.character(round(Estimate*10,2))), 
                                  paste0("a=", as.character(round(Estimate*10,2))))
       ),
-      color = ifelse(Estimate < 0, C_CTRL, C_CASE),
-      color = ifelse(p.value > plim_plot, C_NS, color),
-      linetype = ifelse(p.value > plim_plot, 2, 1),
+      color = getEdgeColors(param, p.value, Estimate, plim_plot, custom_colors),
+      #linetype = ifelse(color == C_NS, 2, 1),
       width = abs(Estimate)*edge_width_factor,
       width = ifelse(width <  minval, minval, 
                      ifelse(width > rangefactor*minval, 
                             rangefactor*minval, width))
-    ) %>% dplyr::select(from, to, everything())
-  
+    ) %>% 
+    dplyr::mutate(linetype = ifelse(color == C_NS, 2, 1)) %>% 
+    dplyr::select(from, to, everything())
+  #print(edgetab$color)
   edgetab$y1[edgetab$to=="D" & edgetab$from=="BMI"] = edgetab$y1[edgetab$to=="D" & edgetab$from=="BMI"]-0.75
   edgetab$x1[edgetab$to=="D" & edgetab$from=="BMI"] = edgetab$x1[edgetab$to=="D" & edgetab$from=="BMI"]+0.1
   
@@ -282,7 +317,8 @@ plotIMCMediationSimple <- function(res, vars2test, outdir, outname,
       xlim(c(min(vertices$xpos1-7), max(vertices$xpos1+7)))+
       theme_void()
   )
-  ggsave(filename = paste0(opt$out, "/", name,'_p', as.character(plim_plot), ".pdf"), g1, 
+  ofname <- paste0(outdir, "/", name,'_p', as.character(plim_plot), ifelse(is.null(custom_colors),"", "CS"), ".pdf")
+  ggsave(filename = ofname, g1, 
          width = w, height = h)
   return(list(plot=g1, bacorder=bacorder, vertices=vertices, edges=edgetab))
 }
@@ -397,7 +433,7 @@ plotAgeMediationSimple <- function(res, vars2test, outdir, outname,
       ylim(c(-1, max(vertices$ypos1)+2))+
       theme_void()
   )
-  ggsave(filename = paste0(opt$out, "/", name,'_p', as.character(plim_plot), ".pdf"), g1, 
+  ggsave(filename = paste0(outdir, "/", name,'_p', as.character(plim_plot), ".pdf"), g1, 
          width = w, height = h)
   return(list(plot=g1, bacorder=bacorder, vertices=vertices, edges=edgetab))
 }
@@ -531,14 +567,14 @@ plotAgeAndIMCMediationComplex <- function(res, vars2test, outdir, outname,
       ylim(c(-1, max(vertices$ypos1)+2))+
       theme_void()
   )
-  ggsave(filename = paste0(opt$out, "/", name,'_p', as.character(plim_plot), ".pdf"), g1, 
+  ggsave(filename = paste0(outdir, "/", name,'_p', as.character(plim_plot), ".pdf"), g1, 
          width = w, height = h)
   
   return(list(plot=g1, bacorder=bacorder, vertices=vertices, edges=edgetab))
 }
 makePlotBySpecies <- function(bacnames, df_all, outdir, name, quantvar="IMC_log", 
                               quantvar_name = "log(IMC)",
-                              corrmethod="pearson", w=8, h=10){
+                              corrmethod="pearson", plim_plot=0.05, w=8, h=10){
   assertthat::assert_that(all(bacnames %in% names(df_all)))
   vars2factor <- bacnames %>% gsub("_", " ", .) %>% 
     gsub("sp ", "sp. ", .) #%>% 
@@ -572,7 +608,7 @@ makePlotBySpecies <- function(bacnames, df_all, outdir, name, quantvar="IMC_log"
                                      face = "plain")) +
     #theme(axis.text.y = element_blank())+
     ylab("Taxon abundance")
-  ggsave(filename = paste0(opt$out, "/", name, ".pdf"), g1, width = w, height = h)
+  ggsave(filename = paste0(outdir, "/", name, ".pdf"), g1, width = w, height = h)
   
   mods <- do.call('rbind', map(bacnames, \(x){
     form <- as.formula(paste0(quantvar, " ~ ", x))
@@ -590,7 +626,7 @@ makePlotBySpecies <- function(bacnames, df_all, outdir, name, quantvar="IMC_log"
                   gsub("sp ", "sp. ", .) %>% 
                   #paste0("italic('", ., "')") %>% 
                   factor(levels=vars2factor),
-                color = ifelse(correlation_pvalue > 0.05, C_NS, 
+                color = ifelse(correlation_pvalue > plim_plot, C_NS, 
                                ifelse(slope <0 , C_CTRL, C_CASE))
                 )
   
@@ -612,20 +648,20 @@ makePlotBySpecies <- function(bacnames, df_all, outdir, name, quantvar="IMC_log"
                                      face = "italic"))+
     ylab(paste0(make_clean_names(corrmethod, case="big_camel"), " corr. ", quantvar_name))
     
-  ggsave(filename = paste0(opt$out, "/", name,'_',quantvar ,"_barplot.pdf"), g2, width = w, height = h)
+  ggsave(filename = paste0(outdir, "/", name,'_',quantvar ,"_barplot.pdf"), g2, width = w, height = h)
   
   g3 <- g1 + theme(strip.text.y = element_blank()) + theme(legend.position = "none")
   cw <- cowplot::plot_grid(plotlist=list(g2, g3), nrow = 1, rel_widths = c(2,1))
-  pdf(paste0(opt$out, name, "_merged.pdf"), width = w, height = h)
+  pdf(paste0(outdir, name, "_merged.pdf"), width = w, height = h)
   print(cw)
   dev.off()
-  write_tsv(mods, file = paste0(opt$out, name,'_',quantvar ,"_correlations.tsv"))
+  write_tsv(mods, file = paste0(outdir, name,'_',quantvar ,"_correlations.tsv"))
   return(list(box=g1, bars=g2, cw=cw, correlations=mods))
 }
 
 
 makePlotBySpeciesEffects_BMI <- function(bacnames, df_all, res_final, outdir, name, 
-                               w=8, h=10){
+                               w=8, h=10, plim_plot=0.05, fix_limits=FALSE){
   assertthat::assert_that(all(bacnames %in% names(df_all)))
   vars2factor <- bacnames %>% gsub("_", " ", .) %>% 
     gsub("sp ", "sp. ", .) #%>% 
@@ -660,7 +696,7 @@ makePlotBySpeciesEffects_BMI <- function(bacnames, df_all, res_final, outdir, na
                                      face = "plain")) +
     #theme(axis.text.y = element_blank())+
     ylab("Taxon abundance")
-  ggsave(filename = paste0(opt$out, "/", name, ".pdf"), g1, width = w, height = h)
+  ggsave(filename = paste0(outdir, "/", name, ".pdf"), g1, width = w, height = h)
   
   
   res_mod <- res_final %>% dplyr::mutate(
@@ -672,12 +708,12 @@ makePlotBySpeciesEffects_BMI <- function(bacnames, df_all, res_final, outdir, na
                     gsub("sp ", "sp. ", .) %>% 
                     #paste0("italic('", ., "')") %>% 
                     factor(levels=vars2factor),
-                  color = ifelse(p.value <= plim, ifelse(Estimate< 0, "Neg", "Pos") , "NS"),
+                  color = ifelse(p.value <= plim_plot, ifelse(Estimate< 0, "Neg", "Pos") , "NS"),
                   color = factor(color, levels = c("Neg", "Pos", "NS")),
-                  color2 = ifelse(p.value <= plim, ifelse(Estimate< 0, C_CTRL, C_CASE) , C_NS),
+                  color2 = ifelse(p.value <= plim_plot, ifelse(Estimate< 0, C_CTRL, C_CASE) , C_NS),
                   Estimate = 10*Estimate
                   )
-  
+  val_lims = c(min(res_mod$Estimate), max(res_mod$Estimate))
   plots <- map(c("Total (c' + a*b)", "Direct (c')", "Indirect (a*b)"), \(xx){
     ptab <- res_mod %>% dplyr::filter(Effect == xx) %>% 
       dplyr::mutate(taxon = factor(taxon, levels = rev(vars2factor)))
@@ -698,7 +734,9 @@ makePlotBySpeciesEffects_BMI <- function(bacnames, df_all, res_final, outdir, na
                                      colour = "black", angle = 0, 
                                       face = "italic"))+
       ylab("")
-  
+    if(fix_limits){
+      g2 <- g2 + ylim(val_lims)
+    }
     return(g2)
   })
   
@@ -707,15 +745,15 @@ makePlotBySpeciesEffects_BMI <- function(bacnames, df_all, res_final, outdir, na
   gc = plots[[3]] + theme(legend.position = "none")  + theme(axis.text.y = element_blank())+ xlab("") + ylab("Indirect Effects (a*b)")
   gd <- g1 + theme(legend.position = "none") + theme(strip.text.y = element_blank()) 
   cw <- cowplot::plot_grid(plotlist=list(ga, gb, gc, gd), nrow = 1, rel_widths = c(2,1, 1,1))
-  pdf(paste0(opt$out, name, "_BarplotEffectsmerged.pdf"), width = w, height = h)
+  pdf(paste0(outdir, name, "_BarplotEffectsmerged.pdf"), width = w, height = h)
   print(cw)
   dev.off()
-  write_tsv(res_mod, file = paste0(opt$out, name ,"_BarplotEffectsmerged.tsv"))
+  write_tsv(res_mod, file = paste0(outdir, name ,"_BarplotEffectsmerged.tsv"))
   return(list(box=g1, bars=plots, cw=cw, tab=res_mod))
 }
 
 
-makeBarplotDAA <- function(daalist, outdir, plim=0.05){
+makeBarplotDAA <- function(daalist, outdir, plim=0.05, name=""){
   daatab <- lapply(names(daalist), \(x){daalist[[x]]$contrast <- x; return(daalist[[x]])}) %>% bind_rows() %>% 
     dplyr::select(taxon, log2FoldChangeShrink, padj, contrast) %>% 
     dplyr::mutate(padj = ifelse(is.na(padj), 1, padj)) %>% 
@@ -782,13 +820,102 @@ makeBarplotDAA <- function(daalist, outdir, plim=0.05){
                        rel_heights = c(plots$CondAdjusted$size, plots$CondOnly$size, plots$CondAdjustedOnly$size),
                      ncol=1)
   
-  filename = paste0(outdir, "/", "Barplot_LFC_all1.pdf")
+  filename = paste0(outdir, "/", name, "_Barplot_LFC_all1.pdf")
   pdf(filename, w=8, h=16)
   print(cw)
   dev.off()
-  ggsave(filename = paste0(outdir, "/", "Barplot_LFC_all_BMI.pdf"), plots$BMIAdjusted$plot, w=8, h=12)
-  ggsave(filename = paste0(outdir, "/", "Barplot_LFC_all_Age.pdf"), plots$AgeAdjusted$plot, w=8, h=6)
-  write_tsv(daatab, file =  paste0(outdir, "/", "Barplot_LFC_all1.tsv"))
+  ggsave(filename = paste0(outdir, "/", name, "_Barplot_LFC_all_BMI.pdf"), plots$BMIAdjusted$plot, w=8, h=12)
+  ggsave(filename = paste0(outdir, "/", name, "_Barplot_LFC_all_Age.pdf"), plots$AgeAdjusted$plot, w=8, h=6)
+  write_tsv(daatab, file =  paste0(outdir, "/", name, "_Barplot_LFC_all1.tsv"))
+  return(list(plots=plots, tab=daatab))
+}
+
+makeBarplotDAA2 <- function(daalist, outdir, plim=0.05, name=""){
+  daatab <- lapply(names(daalist), \(x){daalist[[x]]$contrast <- x; return(daalist[[x]])}) %>% bind_rows() %>% 
+    dplyr::select(taxon, log2FoldChangeShrink, padj, contrast) %>% 
+    dplyr::mutate(padj = ifelse(is.na(padj), 1, padj)) %>% 
+    gather(key="param", value ="value", padj, log2FoldChangeShrink) %>% 
+    unite(col="tmp", contrast, param, sep="__") %>% 
+    spread(tmp, value) %>% 
+    dplyr::mutate(
+      CondAdjusted = D_vs_C_adj_BMI__padj <= plim & D_vs_C__padj <= plim,
+      CondOnly = D_vs_C_adj_BMI__padj > plim & D_vs_C__padj <= plim,
+      CondAdjustedOnly = D_vs_C_adj_BMI__padj <= plim & D_vs_C__padj > plim,
+      BMIAdjusted = BMI_adj_Depr__padj <= plim & D_vs_C_adj_BMI__padj > plim &  D_vs_C__padj > plim
+    ) %>% 
+    gather(key="param", value="value", -taxon, -CondAdjusted, -CondOnly, -CondAdjustedOnly, -BMIAdjusted) %>% 
+    separate(param, into=c("Contrast", "param"), sep="__") %>% 
+    spread(key=param, value = value) %>% 
+    dplyr::mutate(Contrast= gsub("plus", "+", Contrast),
+                  Contrast = gsub("_", " ", Contrast),
+                  Contrast = gsub("adj", "adj.", Contrast),
+                  Contrast = gsub("Depr", "Depr.", Contrast),
+                  taxon = gsub("_", " ", taxon),
+                  taxon = gsub("[\\[\\]]", "", taxon),
+                  color = ifelse(padj < plim, ifelse(log2FoldChangeShrink < 0, "Down", "Up"), "NS"),
+                  color = factor(color, levels=c("Down", "Up", "NS")))
+  
+  orderedlevels <- daatab %>% filter(Contrast == "D vs C") %>% arrange(log2FoldChangeShrink) %>% pull(taxon)
+  contrastlevels <- c("D vs C", "D vs C adj. BMI", "BMI", "BMI adj. Depr.")
+  daatab <- daatab %>% mutate(taxon=factor(taxon, levels=orderedlevels),
+                              Contrast = factor(Contrast, levels = contrastlevels))
+  
+  vars2separate <- c("CondAdjusted", "CondOnly", "CondAdjustedOnly", "BMIAdjusted")
+  vars2separatenames <- c("Different in D vs C after adjusting", "Not significant after BMI correction",
+                          "Significant only after correction", "Significant BMI after Depr correction")
+  plots <- map2(vars2separate, vars2separatenames,\(x, y){
+    tmptab <- daatab %>% dplyr::filter(!!sym(x))
+    g1 <- ggplot(tmptab, aes(x=taxon, y=log2FoldChangeShrink, fill=color))+
+      facet_grid( . ~ Contrast) +
+      geom_hline(yintercept = 0, linetype=2, col=C_NS) +
+      scale_fill_manual(values=c(C_CTRL, C_CASE, C_NS)) +
+      geom_col() +
+      coord_flip() +
+      theme_minimal() +
+      theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+      theme(strip.text.y = element_text(size = 10, 
+                                        colour = "black", angle = 0, face = "italic")) +
+      theme(axis.text.x = element_text(size = 8, 
+                                       colour = "black", angle = 0, 
+                                       face = "plain"))+
+      theme(axis.text.y = element_text(size = 8, 
+                                       colour = "black", angle = 0, 
+                                       face = "italic")) +
+      theme(legend.position = 'none')+
+      #theme(axis.text.y = element_blank())+
+      xlab(y)+
+      ylab("") +
+      ylim(c(-9, 9))
+    return(list(plot=g1, size=length(unique(tmptab$taxon))))
+  })
+  names(plots) <- vars2separate
+  cw <- cowplot::plot_grid(plotlist = list(plots$CondAdjusted$plot, 
+                                           plots$CondOnly$plot + theme(strip.text.x = element_blank()), 
+                                           plots$CondAdjustedOnly$plot+ theme(strip.text.x = element_blank()) + ylab("LFC")
+  ), 
+  rel_heights = c(plots$CondAdjusted$size, plots$CondOnly$size, plots$CondAdjustedOnly$size),
+  ncol=1)
+  
+  filename = paste0(outdir, "/", name, "_Barplot_LFC_all1.pdf")
+  pdf(filename, w=8, h=16)
+  print(cw)
+  dev.off()
+  ggsave(filename = paste0(outdir, "/", name, "_Barplot_LFC_all_BMI.pdf"), plots$BMIAdjusted$plot, w=8, h=12)
+  write_tsv(daatab, file =  paste0(outdir, "/", name, "_Barplot_LFC_all1.tsv"))
+  
+  ## Cowplot including BMI
+  cw <- cowplot::plot_grid(plotlist = list(plots$CondAdjusted$plot, 
+                                           plots$CondOnly$plot + theme(strip.text.x = element_blank()), 
+                                           plots$CondAdjustedOnly$plot+ theme(strip.text.x = element_blank()),
+                                           plots$BMIAdjusted$plot + theme(strip.text.x = element_blank()) + ylab("LFC")
+  ), 
+  rel_heights = c(plots$CondAdjusted$size, plots$CondOnly$size, plots$CondAdjustedOnly$size, plots$BMIAdjusted$size),
+  ncol=1)
+  
+  filename = paste0(outdir, "/", name, "_Barplot_LFC_all2.pdf")
+  pdf(filename, w=8, h=20)
+  print(cw)
+  dev.off()
   return(list(plots=plots, tab=daatab))
 }
 
@@ -804,8 +931,10 @@ makeVenn <- function(vars2venn, name="VennDiagram", opt, w=5, h=5){
 }
 
 makeFullMediationAnalysisIMC <- function(opt, getVarsFunction, mediator_name="IMC", y_name="Condition_bin", 
-                                         plim=0.05, name="analysis_IMC_separateModel_vjust", 
-                                         wnet=14, hnet=12, wbars=8, hbars=10, wbars2=10, hbars2=12){
+                                         plim=0.05, plim_plot=0.05, name="analysis_IMC_separateModel_vjust", 
+                                         wnet=14, hnet=12, wbars=8, hbars=10, wbars2=10, hbars2=12, use_color_scale=FALSE,
+                                         fix_barplot_limits=FALSE, custom_colors=NULL, make_boxplots=TRUE){
+  print(paste0("OUTPUT: ", opt$out))
   summary_df <- data.frame(variable = gsub("-", ".", vstdf$gene) %>% 
                              gsub("\\[|\\]", "", .) %>% 
                              gsub("\\._", "_", .) %>% 
@@ -910,19 +1039,141 @@ makeFullMediationAnalysisIMC <- function(opt, getVarsFunction, mediator_name="IM
   write_tsv(res_final, file=paste0(opt$out, "mediation_analysis_IMC_separate_reformat.tsv"))
   write_tsv(bs_only, file=paste0(opt$out, "mediation_analysis_IMC_separate_bs.tsv"))
   
-  plotres <- plotIMCMediationSimple(res_final, vars2test, opt$out, name, plim_plot = 0.05, 
-                                    use_color_scale = FALSE, w=wnet, h=hnet)
+  plotres <- plotIMCMediationSimple(res_final, vars2test, opt$out, name, plim_plot = plim_plot, 
+                                    use_color_scale = use_color_scale, w=wnet, h=hnet, custom_colors=custom_colors)
   
   ## Make also boxplot
   bacnames <- plotres$bacorder$x_labels
-  plots1 <- makePlotBySpecies(bacnames, df_all, opt$out, "IMC_separate_BySpeciesPearson", quantvar="IMC_log", 
-                              quantvar_name = "log(IMC)", corrmethod = "pearson", w=wbars, h=hbars)
-  plots2 <- makePlotBySpecies(bacnames, df_all, opt$out, "IMC_separate_BySpeciesSpearman", quantvar="IMC_log", 
-                              quantvar_name = "log(IMC)", corrmethod = "spearman", w=wbars, h=hbars)
-  plots3 <- makePlotBySpecies(bacnames, df_all, opt$out, "IMC_separate_BySpeciesKendall", quantvar="IMC_log", 
-                              quantvar_name = "log(IMC)", corrmethod = "kendall", w=wbars, h=hbars)
+  barplot_list <- list()
+  if(make_boxplots){
+    barplot_list$plots1 <- makePlotBySpecies(bacnames, df_all, opt$out, paste0("IMC_separate_BySpeciesPearson", as.character(plim_plot)), quantvar="IMC_log", 
+                              quantvar_name = "log(IMC)", corrmethod = "pearson", w=wbars, h=hbars, plim_plot = plim_plot)
+    barplot_list$plots2 <- makePlotBySpecies(bacnames, df_all, opt$out, paste0("IMC_separate_BySpeciesSpearman", as.character(plim_plot)), quantvar="IMC_log", 
+                              quantvar_name = "log(IMC)", corrmethod = "spearman", w=wbars, h=hbars, plim_plot = plim_plot)
+    barplot_list$plots3 <- makePlotBySpecies(bacnames, df_all, opt$out, paste0("IMC_separate_BySpeciesKendall", as.character(plim_plot)), quantvar="IMC_log", 
+                              quantvar_name = "log(IMC)", corrmethod = "kendall", w=wbars, h=hbars, plim_plot = plim_plot)
   
-  plots4 <- makePlotBySpeciesEffects_BMI(bacnames, df_all, res_final, opt$out, "IMC_separate_BySpeciesEffects", w=wbars2, h=hbars2)
+    barplot_list$plots4 <- makePlotBySpeciesEffects_BMI(bacnames, df_all, res_final, opt$out, paste0("IMC_separate_BySpeciesEffects", as.character(plim_plot)), 
+                                         w=wbars2, h=hbars2, plim_plot=plim_plot, fix_limits = fix_barplot_limits)
+  }
+  return(list(plotNet=plotres, barplots = barplot_list, res_final=res_final))
+}
+
+
+
+makeFullMediationAnalysisIMC_Aggregate <- function(opt, getVarsFunctions, mediator_name="IMC", y_name="Condition_bin", 
+                                         plim=0.05, plim_plot=0.05, name="analysis_IMC_separateModel_vjust", 
+                                         wnet=14, hnet=12, wbars=8, hbars=10, wbars2=10, hbars2=12, use_color_scale=FALSE,
+                                         fix_barplot_limits=FALSE, custom_colors=NULL){
+  cat(opt$out)
+  summary_df <- data.frame(variable = gsub("-", ".", vstdf$gene) %>% 
+                             gsub("\\[|\\]", "", .) %>% 
+                             gsub("\\._", "_", .) %>% 
+                             gsub("\\/|\\(|\\)", ".", .) %>% 
+                             gsub("\\.$", "", .) 
+  )
+  
+  assertthat::assert_that(all(summary_df$variable %in% names(df_all)))
+  
+  list2merge <- list(
+    depr_only_padj = dea2contrasts$firstContrast$resdf,
+    imc_only_padj = dea2contrasts$contrastlist2$BMI_alone$resdf,
+    depr_adjimc_padj = dea2contrasts$contrastlist2$Condition_corrIMC$resdf,
+    imc_adjdepr_padj = dea2contrasts$contrastlist2$BMI_corrCond$resdf
+  )
+  
+  merged_pvals <- list2merge %>% 
+    lapply(\(x){
+      x$taxon <- x$taxon %>% 
+        gsub("-", ".", .) %>% 
+        gsub("\\[|\\]", "", .) %>% 
+        gsub("\\._", "_", .) %>% 
+        gsub("\\/|\\(|\\)", ".", .) %>% 
+        gsub("\\.$", "", .) 
+      x <- x[match(summary_df$variable, x$taxon), ]
+      #x$padj[is.na(x$padj)] <- 1
+      return(x$padj)
+    }) %>% bind_cols()
+  summary_df <- cbind(summary_df, merged_pvals)
+  
+  vars2test <- getVarsFunction(summary_df)
+  
+  medresults <- lapply(vars2test, \(x, df_all){
+    df <- df_all %>% dplyr::select(all_of(c(x, y_name, mediator_name)))
+    with_nas <-  df %>% apply(MAR=1, \(x)any(is.na(x)))
+    df <- df[!with_nas, ]
+    param_names <- c("b", "cp", "a", "a*b", "cp+a*b")
+    res <- tryCatch({makeMediationSimple(df, x, y_name, mediator_name)}, error=\(x){
+      xx <- data.frame(Estimate=rep(NA, 5), 
+                       S.E. = rep(NA, 5), 
+                       `Z-score`=rep(NA, 5), 
+                       p.value=rep(NA, 5))
+      rownames(xx) <- c(param_names)
+      return(list(estimates=xx))   
+    })
+    res2 <- res$estimates %>% rownames_to_column("param") %>% 
+      dplyr::select(param, Estimate, p.value) %>% 
+      gather(key="var", value="value", Estimate, p.value) %>% 
+      filter(param %in% param_names) %>% 
+      unite("tmp", param, var, sep="_") %>% 
+      spread(tmp, value) %>% 
+      mutate(Xvar = x, Yvar = y_name, Mediator=mediator_name, fullmodel=list(res$estimates))
+    return(res2)
+  }, df_all) %>% bind_rows()
+  #all(medresults$Xvar %in% summary_df$variable)
+  medresults_merged <- merge(medresults %>% dplyr::select(-fullmodel), summary_df, by.x="Xvar", by.y="variable")
+  write_tsv(medresults_merged, file=paste0(opt$out, "mediation_analysis_IMC.tsv"))
+  save(medresults_merged, file=paste0(opt$out, "mediation_analysis_IMC.RData"))
+  
+  ## Transform to plot
+  def_effects <- c('a', 'b', 'cp','a*b', 'cp+a*b') 
+  res_trans <- map(1:nrow(medresults), \(i){
+    res_i <- medresults$fullmodel[[i]]
+    oldnames2 <- rownames(res_i) %>% 
+      sapply(\(x)strsplit(x, "\\*|\\+",perl = TRUE)[[1]][1]) 
+    resdf_i <- res_i %>% 
+      rownames_to_column("param") %>% 
+      mutate(x_labels = ifelse(param %in% def_effects, 
+                               medresults$Xvar[i],
+                               gsub("V\\[|\\]", "", param)),
+             param = ifelse(param %in% def_effects, 
+                            gsub("(b|a|cp)", paste0("\\1", as.character(i)), param, perl=T), param) 
+      )
+  }) %>% bind_rows()
+  bs_only <- res_trans %>% dplyr::filter(grepl("^b[0-9]+$", param))
+  g_bs <- ggplot(bs_only,aes(x=Estimate))+geom_histogram()+mytheme+ggtitle("Histogram of b (IMC->Depr)")
+  ggsave(filename = paste0(opt$out, "histogram_bs_IMC_separate.pdf"), g_bs)
+  
+  res_final <- rbind(
+    bs_only %>% 
+      mutate_if(is.character, \(x)"b") %>% 
+      group_by(param, x_labels) %>% 
+      dplyr::summarise_all(mean) %>% 
+      dplyr::select(all_of(names(res_trans))),
+    res_trans %>% dplyr::filter(!grepl("^b[0-9]+$", param)) %>% 
+      dplyr::mutate(param=gsub("b[0-9]+$", "b", param))
+  )
+  if(AJUST_PVALS){
+    res_final$p_raw <- res_final$p.value
+    res_final$p.value <- p.adjust(res_final$p.value, method = "BH")
+  }
+  write_tsv(res_final, file=paste0(opt$out, "mediation_analysis_IMC_separate_reformat.tsv"))
+  write_tsv(bs_only, file=paste0(opt$out, "mediation_analysis_IMC_separate_bs.tsv"))
+  
+  plotres <- plotIMCMediationSimple(res_final, vars2test, opt$out, name, plim_plot = plim_plot, 
+                                    use_color_scale = use_color_scale, w=wnet, h=hnet, custom_colors=custom_colors)
+  
+  ## Make also boxplot
+  bacnames <- plotres$bacorder$x_labels
+  plots1 <- makePlotBySpecies(bacnames, df_all, opt$out, paste0("IMC_separate_BySpeciesPearson", as.character(plim_plot)), quantvar="IMC_log", 
+                              quantvar_name = "log(IMC)", corrmethod = "pearson", w=wbars, h=hbars, plim_plot = plim_plot)
+  plots2 <- makePlotBySpecies(bacnames, df_all, opt$out, paste0("IMC_separate_BySpeciesSpearman", as.character(plim_plot)), quantvar="IMC_log", 
+                              quantvar_name = "log(IMC)", corrmethod = "spearman", w=wbars, h=hbars, plim_plot = plim_plot)
+  plots3 <- makePlotBySpecies(bacnames, df_all, opt$out, paste0("IMC_separate_BySpeciesKendall", as.character(plim_plot)), quantvar="IMC_log", 
+                              quantvar_name = "log(IMC)", corrmethod = "kendall", w=wbars, h=hbars, plim_plot = plim_plot)
+  
+  plots4 <- makePlotBySpeciesEffects_BMI(bacnames, df_all, res_final, opt$out, paste0("IMC_separate_BySpeciesEffects", as.character(plim_plot)), 
+                                         w=wbars2, h=hbars2, plim_plot=plim_plot, fix_limits = fix_barplot_limits)
   
   return(list(plotNet=plotres, barplots = list(plots1, plots2, plots3, plots4), res_final=res_final))
 }

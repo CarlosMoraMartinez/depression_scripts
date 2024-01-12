@@ -65,7 +65,7 @@ alphadiv <- read_tsv(paste0(opt$indir, "AlphaDiversity/remove_tanda2_AlphaDiv.ts
 
 metadata2 <- merge(metadata, alphadiv, by="sampleID")
 
-load(paste0(opt$indir, "DESeq2_ControlVars/DeSEQ2/remove_tanda2_IMC_log/DESEQ2_all_results_remove_tanda2_IMC_log.R"))
+#load(paste0(opt$indir, "DESeq2_ControlVars/DeSEQ2/remove_tanda2_IMC_log/DESEQ2_all_results_remove_tanda2_IMC_log.R"))
 load(paste0(opt$indir, "DESeq2_ControlVarsMany/LFC_Comparison_AgeAndBMI_allCombos.RData"))
 vstdf <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_vst_counts.tsv"))
 normdf <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_norm_counts.tsv"))
@@ -134,11 +134,18 @@ daalist <- list(
   "D_vs_C_adj_BMIplusAge" = dea2contrasts$contrastlist2$Condition_corr2$resdf,
   "BMI_adj_DeprplusAge" = dea2contrasts$contrastlist2$BMI_corr2$resdf,
   "Age_adj_DeprplusBMI" = dea2contrasts$contrastlist2$Age_corr2$resdf
+) 
+
+batplotsdaa <- makeBarplotDAA(daalist, opt$out, plim=0.05, name="corrAgeIMC")
+
+daalist <- list(
+  "D_vs_C" = dea2contrasts$firstContrast$resdf,
+  "D_vs_C_adj_BMI" = dea2contrasts$contrastlist2$Condition_corrIMC$resdf,
+  "BMI" = dea2contrasts$contrastlist2$BMI_alone$resdf,
+  "BMI_adj_Depr" = dea2contrasts$contrastlist2$BMI_corrCond$resdf
 )
-
-batplotsdaa <- makeBarplotDAA(daalist, opt$out, plim=0.05)
-
-
+batplotsdaa2 <- makeBarplotDAA2(daalist, opt$out, plim=0.05, name="corrIMC")
+batplotsdaa2 <- makeBarplotDAA2(daalist, opt$out, plim=0.01, name="corrIMC01")
 #### Read data 
 
 expr_df <- vstdf %>% column_to_rownames("gene") %>% 
@@ -177,6 +184,7 @@ ss <- broom::glance(mod)
 write_tsv(ss, file = paste0(opt$out, "Age_vs_BMI_regression.tsv"))
 
 ### MEDIATION ANALYSIS WITH IMC
+
 getvars_MAIN_ANALYSIS_CondAndIMC <- function(summary_df){
   vars2test <- summary_df %>% 
     dplyr::filter(depr_only_padj < plim &
@@ -186,6 +194,15 @@ getvars_MAIN_ANALYSIS_CondAndIMC <- function(summary_df){
   return(vars2test)
 }
 
+getvars_CondAdjAndIMC <- function(summary_df){
+  vars2test <- summary_df %>% 
+    dplyr::filter(depr_only_padj < plim &
+                    depr_adjimc_padj < plim &
+                    imc_only_padj < plim  & 
+                    imc_adjdepr_padj < plim) %>% 
+    pull(variable)
+  return(vars2test)
+}
 
 getvars_onlyAfterAdjusting <- function(summary_df){
   vars2test <- summary_df %>% 
@@ -200,14 +217,13 @@ getvars_onlyBeforeAdj <- function(summary_df){
     dplyr::filter(depr_only_padj < plim &
                     depr_adjimc_padj > plim) %>% 
     pull(variable) 
-  return(vars3test)
+  return(vars2test)
 }
 
 getvars_onlyNotIMC <- function(summary_df){
   vars2test <- summary_df %>% 
     dplyr::filter(depr_only_padj < plim &
                     depr_adjimc_padj < plim &
-                    imc_only_padj > plim &
                     imc_adjdepr_padj > plim) %>% 
     pull(variable)
   return(vars2test)
@@ -215,33 +231,65 @@ getvars_onlyNotIMC <- function(summary_df){
 
 
 #####################################################
+mediator_name <- "IMC"
+y_name <- "Condition_bin"
+plim <- 0.05
+plim_plot <- 0.05
 
-opt <- restaurar(opt)
-opt$out <- paste0(opt$out, "/mediation_BMI_separate/")
-if(!dir.exists(opt$out)) dir.create(opt$out)
-makeFullMediationAnalysisIMC(opt, getvars_MAIN_ANALYSIS_CondAndIMC, mediator_name, y_name, plim, "analysis_IMC_separateModel_vjust",
-                             wnet=14, hnet=10, wbars=8, hbars=10, wbars2=10, hbars2=10)
+custom_cols <- list(
+  main_mediation_BMI_separate=list(total=TRUE, direct=NA, indirect=TRUE),
+  main_mediation_BMI_separate2=list(total=TRUE, direct=TRUE, indirect=TRUE),
+  mixed_mediation_BMI_CondSigBeforeAndAfterAdj=list(total=TRUE, direct=TRUE, indirect=TRUE),
+  opos_mediation_BMI_OnlySigAfterAdjust_separate=list(total=FALSE, direct=TRUE, indirect=TRUE),
+  indir_onlySigBeforeAdj=list(total=TRUE, direct=FALSE, indirect=TRUE),
+  dir_onlyNotIMC=list(total=TRUE, direct=TRUE, indirect=FALSE)
+)
 
-### MEDIATION ANALYSIS WITH IMC - ONLY BACTERIA SIGNIFICANT IN D VS C AFTER ADJUSTING FOR BMI
-opt <- restaurar(opt)
-opt$out <- paste0(opt$out, "/mediation_BMI_OnlyAfterAdjust_separate/")
-if(!dir.exists(opt$out)) dir.create(opt$out)
+getvars_funcs <- list(
+  main_mediation_BMI_separate=getvars_MAIN_ANALYSIS_CondAndIMC,
+  main_mediation_BMI_separate2=getvars_MAIN_ANALYSIS_CondAndIMC,
+  mixed_mediation_BMI_CondSigBeforeAndAfterAdj=getvars_CondAdjAndIMC,
+  opos_mediation_BMI_OnlySigAfterAdjust_separate=getvars_onlyAfterAdjusting,
+  indir_onlySigBeforeAdj=getvars_onlyBeforeAdj,
+  dir_onlyNotIMC=getvars_onlyNotIMC
+)
 
-makeFullMediationAnalysisIMC(opt, getvars_onlyAfterAdjusting, mediator_name, y_name, plim, "analysis_IMC_separateModel_vjust")
+getvars_funcs_ <- list(
+  mediation_BMI_separate=getvars_MAIN_ANALYSIS_CondAndIMC,
+  mediation_BMI_CondSigBeforeAndAfterAdj=getvars_CondAdjAndIMC,
+  mediation_BMI_OnlySigAfterAdjust_separate=getvars_onlyAfterAdjusting,
+  onlySigBeforeAdj=getvars_onlyBeforeAdj,
+  onlyNotIMC=getvars_onlyNotIMC
+)
 
-### MEDIATION ANALYSIS WITH IMC - ONLY BACTERIA SIGNIFICANT IN D VS C BUT NOT AFTER ADJUSTING
-opt <- restaurar(opt)
-opt$out <- paste0(opt$out, "/mediation_BMI_NonSigAfterAdjustingBMI_separate/")
-if(!dir.exists(opt$out)) dir.create(opt$out)
+allMedPlots <- map(c(0.2, 0.05, 1),\(plim_plot){
+  map(names(getvars_funcs), \(x){
+    opt <- restaurar(opt)
+    opt$out <- paste0(opt$out, "/", x, "/")
+    if(!dir.exists(opt$out)) dir.create(opt$out)
+    makeFullMediationAnalysisIMC(opt, 
+                             getVarsFunction = getvars_funcs[[x]], 
+                             mediator_name = mediator_name, 
+                             y_name = y_name, 
+                             plim = plim, 
+                             plim_plot = plim_plot,
+                             name = "analysis_IMC_separateModel_vjust",
+                             wnet=14, hnet=10, wbars=8, hbars=10, wbars2=10, hbars2=10, use_color_scale = FALSE,
+                             fix_barplot_limits = TRUE, custom_colors=NULL, make_boxplots = TRUE)
+    if(plim_plot<1){
+      makeFullMediationAnalysisIMC(opt, 
+                                 getVarsFunction = getvars_funcs[[x]], 
+                                 mediator_name = mediator_name, 
+                                 y_name = y_name, 
+                                 plim = plim, 
+                                 plim_plot = plim_plot,
+                                 name = "analysis_IMC_separateModel_vjust",
+                                 wnet=14, hnet=10, wbars=8, hbars=10, wbars2=10, hbars2=10, use_color_scale = FALSE,
+                                 fix_barplot_limits = TRUE, custom_colors=custom_cols[[x]], make_boxplots=FALSE)
+    }
+})})
 
-makeFullMediationAnalysisIMC(opt, getvars_onlyBeforeAdj, mediator_name, y_name, plim, "analysis_IMC_separateModel_vjust")
 
-### MEDIATION ANALYSIS WITH IMC - ONLY BACTERIA SIGNIFICANT IN D VS C BUT NOT AFTER ADJUSTING
-opt <- restaurar(opt)
-opt$out <- paste0(opt$out, "/mediation_BMI_SigCondAndNotBMI_separate/")
-if(!dir.exists(opt$out)) dir.create(opt$out)
-
-makeFullMediationAnalysisIMC(opt, getvars_onlyNotIMC, mediator_name, y_name, plim, "analysis_IMC_separateModel_vjust")
 
 ###########################################################################
 ### MEDIATION WITH IMC, MERGED
@@ -282,6 +330,7 @@ summary_df <- cbind(summary_df, merged_pvals)
 mediator_name <- "IMC"
 y_name <- "Condition_bin"
 plim <- 0.05
+plim_plot <- 0.05
 
 vars2test <- summary_df %>% 
   dplyr::filter(depr_only_padj<plim & 
@@ -303,7 +352,7 @@ write_tsv(res, file=paste0(opt$out, "mediation_analysis_IMC_mergedModel.tsv"))
 ### PLOT 
 
 name<-"analysis_IMC_mergedModel_vjust"
-plotres2 <- plotIMCMediationSimple(res, vars2test, opt$out, name, plim_plot = 0.05, use_color_scale = FALSE)
+plotres2 <- plotIMCMediationSimple(res, vars2test, opt$out, name, plim_plot = plim_plot, use_color_scale = FALSE)
 
 
 ## Make also boxplot
