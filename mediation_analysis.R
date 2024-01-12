@@ -224,6 +224,7 @@ getvars_onlyNotIMC <- function(summary_df){
   vars2test <- summary_df %>% 
     dplyr::filter(depr_only_padj < plim &
                     depr_adjimc_padj < plim &
+                    imc_only_padj > plim  &
                     imc_adjdepr_padj > plim) %>% 
     pull(variable)
   return(vars2test)
@@ -253,13 +254,13 @@ getvars_funcs <- list(
   indir_onlySigBeforeAdj=getvars_onlyBeforeAdj,
   dir_onlyNotIMC=getvars_onlyNotIMC
 )
-
-getvars_funcs_ <- list(
-  mediation_BMI_separate=getvars_MAIN_ANALYSIS_CondAndIMC,
-  mediation_BMI_CondSigBeforeAndAfterAdj=getvars_CondAdjAndIMC,
-  mediation_BMI_OnlySigAfterAdjust_separate=getvars_onlyAfterAdjusting,
-  onlySigBeforeAdj=getvars_onlyBeforeAdj,
-  onlyNotIMC=getvars_onlyNotIMC
+heights <- list(
+  # main_mediation_BMI_separate=10,
+  # main_mediation_BMI_separate2=10,
+  # mixed_mediation_BMI_CondSigBeforeAndAfterAdj=10,
+  # opos_mediation_BMI_OnlySigAfterAdjust_separate=10,
+  # indir_onlySigBeforeAdj=10,
+  dir_onlyNotIMC=15
 )
 
 allMedPlots <- map(c(0.2, 0.05, 1),\(plim_plot){
@@ -274,7 +275,7 @@ allMedPlots <- map(c(0.2, 0.05, 1),\(plim_plot){
                              plim = plim, 
                              plim_plot = plim_plot,
                              name = "analysis_IMC_separateModel_vjust",
-                             wnet=14, hnet=10, wbars=8, hbars=10, wbars2=10, hbars2=10, use_color_scale = FALSE,
+                             wnet=14, hnet=heights[[x]], wbars=8, hbars=10, wbars2=10, hbars2=10, use_color_scale = FALSE,
                              fix_barplot_limits = TRUE, custom_colors=NULL, make_boxplots = TRUE)
     if(plim_plot<1){
       makeFullMediationAnalysisIMC(opt, 
@@ -284,7 +285,7 @@ allMedPlots <- map(c(0.2, 0.05, 1),\(plim_plot){
                                  plim = plim, 
                                  plim_plot = plim_plot,
                                  name = "analysis_IMC_separateModel_vjust",
-                                 wnet=14, hnet=10, wbars=8, hbars=10, wbars2=10, hbars2=10, use_color_scale = FALSE,
+                                 wnet=14, hnet=heights[[x]], wbars=8, hbars=10, wbars2=10, hbars2=10, use_color_scale = FALSE,
                                  fix_barplot_limits = TRUE, custom_colors=custom_cols[[x]], make_boxplots=FALSE)
     }
 })})
