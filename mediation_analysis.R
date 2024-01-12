@@ -35,7 +35,7 @@ MODE = "LOCAL"
 if(MODE == "IATA"){
   opt <- list()
 }else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/mediation_analysis4/",
+  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_8/mediation_analysis5/",
               indir = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/",
               phyloseq_list = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/phyloseq/phyloseq_all_list.RData",
               phyloseq_name = "remove_tanda2",
@@ -65,6 +65,7 @@ alphadiv <- read_tsv(paste0(opt$indir, "AlphaDiversity/remove_tanda2_AlphaDiv.ts
 
 metadata2 <- merge(metadata, alphadiv, by="sampleID")
 
+load(paste0(opt$indir, "DESeq2_ControlVars/DeSEQ2/remove_tanda2_IMC_log/DESEQ2_all_results_remove_tanda2_IMC_log.R"))
 load(paste0(opt$indir, "DESeq2_ControlVarsMany/LFC_Comparison_AgeAndBMI_allCombos.RData"))
 vstdf <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_vst_counts.tsv"))
 normdf <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_norm_counts.tsv"))
