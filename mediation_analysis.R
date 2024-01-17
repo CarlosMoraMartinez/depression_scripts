@@ -255,15 +255,15 @@ getvars_funcs <- list(
   dir_onlyNotIMC=getvars_onlyNotIMC
 )
 heights <- list(
-  # main_mediation_BMI_separate=10,
-  # main_mediation_BMI_separate2=10,
-  # mixed_mediation_BMI_CondSigBeforeAndAfterAdj=10,
-  # opos_mediation_BMI_OnlySigAfterAdjust_separate=10,
-  # indir_onlySigBeforeAdj=10,
+  main_mediation_BMI_separate=10,
+  main_mediation_BMI_separate2=10,
+  mixed_mediation_BMI_CondSigBeforeAndAfterAdj=10,
+  opos_mediation_BMI_OnlySigAfterAdjust_separate=10,
+  indir_onlySigBeforeAdj=10,
   dir_onlyNotIMC=15
 )
 
-allMedPlots <- map(c(0.2, 0.05, 1),\(plim_plot){
+allMedPlots <- map(c(0.1),\(plim_plot){
   map(names(getvars_funcs), \(x){
     opt <- restaurar(opt)
     opt$out <- paste0(opt$out, "/", x, "/")
