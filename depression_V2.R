@@ -39,10 +39,13 @@ if(MODE == "IATA"){
             num_genes_default=5
             )
 }else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_8/",
+  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/",
               indir = "/home/carmoma/Desktop/202311_DEPRESION/mg09_combinempa/" ,
               r_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/metagenomics_core_functions.R",
               predictive_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/predictive_functions.R",
+              read_metadata_script = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/read_metadata.R",
+              create_phyloseq_script = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/generate_phyloseq_objects.R",
+              read_otutable_script = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/read_otu_table.R",
               metadata = "/home/carmoma/Desktop/202311_DEPRESION/metadatos_MC_AL12042023_CM_corrected.xlsx",
               rewrite=FALSE,
               minfreq = 0.05,
@@ -58,270 +61,17 @@ if(MODE == "IATA"){
   )
 }
 if(! dir.exists(opt$out)){dir.create(opt$out)}
-path_phyloseq <- paste0(opt$out, "/phyloseq")
-if(! dir.exists(path_phyloseq)){dir.create(path_phyloseq)}
 
 source(opt$r_functions)
 
 restaurar <- restauraropt_mk(opt)
+
 # Read OTUs
-
-s_abund <- read_tsv(paste0(opt$indir, "species.mpa.combined.clean2.txt"))
-s_tax_tab <- s_abund %>%
-  dplyr::rename("taxonomy" = "#Classification") %>%
-  dplyr::select(taxonomy) %>%
-  dplyr::mutate(Species = sub('.*\\|', '', taxonomy),
-                Species = gsub("s__", "", Species),
-                spec_row = Species) %>%
-  dplyr::select(-taxonomy) %>%
-  tibble::column_to_rownames(var = "spec_row")
-
-##Parsing Kraken's taxonomic lineage strings
-classification <- gsub("[a-z]__", "", s_abund$`#Classification`)
-classification <- strsplit(classification, split = "\\|")
-classification <- plyr::ldply(classification, rbind)
-colnames(classification) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species", "Strain")
-rownames(classification) <- s_tax_tab$Species
-#rownames(classification) <- rownames(s_tax_tab)
-
-## otu table
-s_otu_tab <- s_abund %>%
-  dplyr::rename("taxonomy" = "#Classification") %>%
-  dplyr::mutate(taxonomy = sub('.*\\|', '', taxonomy),
-                taxonomy = gsub("s__", "", taxonomy)) %>%
-  tibble::column_to_rownames(var = "taxonomy")
-names(s_otu_tab) <- sapply(names(s_otu_tab), FUN=function(x) strsplit(x, '_')[[1]][1]) %>% 
-  gsub("G4M", "", .) %>% gsub("^0", "", .)
-
-
-########################################
+source(opt$read_otutable_script)
 # Read MetaData
-########################################
-escalas_qual <- c( "Beck_cualitativo", "Escala_Hamilton_cualitativo","Montgomery.Asberg_qual")
-escalas_quant <- c( "Escala_depresión_Beck", "Escala_Hamilton", "Montgomery.Asberg", "DMSV_puntuacion_total")
-
-metadata <- read_excel(opt$metadata,
-                       sheet = 'Hoja1', na="NA") %>% 
-  mutate(Tanda=as.factor(Tanda)) %>% 
-  mutate( Condition = ifelse(CP =="DEPRESIVO", "Depression", "Control"), 
-         tandacaso=paste0(Tanda,'-', Condition),
-         procedenciacaso=paste(PROCEDENCIA, '-', Condition),
-         obesidadcaso=paste(obesidad, '-', Condition),
-         sexocaso=paste(Sexo, '-', Condition),
-         Beck_cualitativo = ifelse(Beck_cualitativo=="Ligero", "Leve", Beck_cualitativo),
-         ob_o_sobrepeso = recode_factor(ob_o_sobrepeso, '1'="normopeso", '2'="ob_o_sobr")) %>% 
-  mutate_at(escalas_qual, \(x) dplyr::recode_factor(x, "No depresion"="Healthy", 
-                                                            "Leve"="Mild", 
-                                                            "Moderada"="Moderate",
-                                                            "Severa"="Severe" ))
-        
-colnames(metadata)[3] <- 'sampleID'
-nreads <- s_otu_tab %>% colSums()
-
-tratamientos <- names(metadata)[grep("tratamiento", names(metadata))]
-metadata <- metadata %>% 
-  dplyr::mutate_at(tratamientos, as.factor) %>% 
-  dplyr::mutate(reads = nreads[as.character(sampleID)], 
-                reads_log10 = log10(nreads[as.character(sampleID)]))
-
-names(metadata)[84] <- "Colesterol_ajuste"
-metadata$Educacion[metadata$Educacion == "Estudios superiores:universidad y postgrado"] <- "universitarios" 
-metadata$Educacion[metadata$Educacion == "fp"] <- "Bachiller y fp" 
-metadata$Estado.civil2 <- ifelse(metadata$`Estado civil` == "pareja", "pareja", "soltero" )
-metadata$DII.cualitativo[metadata$`DII cualitativo` == "Nuetra"] <- "Neutral"
-metadata$Mediterranean_diet_adherence[metadata$Mediterranean_diet_adherence=="low"]<- "Low"
-metadata$Mediterranean_diet_adherence2 <- ifelse(
-  is.na(metadata$Mediterranean_diet_adherence), NA, 
-  ifelse(metadata$Mediterranean_diet_adherence=="Low", "Low", "Good")
-)
-metadata$IPAQ_act_fisica <- with(metadata, recode(IPAQ_act_fisica, "Bajo"="Low", "Moderado"="Mid", "Alto"="High"))
-metadata <- metadata %>% 
-  mutate_if(is.character, str_to_title) %>% 
-  mutate_if(~ (all(as.integer(.) == .) & length(unique(.)) < 5) | is.character(.),  as.factor)
-
-omit_from_factors <- c("Condition", "CODIGO", "Presion.Sanguinea", "TRATAMIENTO" , "COMORBILIDADES", "tandacaso", "procedenciacaso", "obesidadcaso", "sexo", "sampleID")
-#metad2 %>% select_if(is.numeric) %>% get_summary_stats
-
-factors_all <- getValidFactors(metadata, max_nas = 1, min_pct = 0, max_classes = 5, exclude=omit_from_factors) %>% filter(is_valid) %>% pull(var)
-numvars_all <- getValidNumeric(metadata)%>% filter(is_valid) %>% pull(var)
-numvars_all <- numvars_all[numvars_all != "sampleID"]
-## metadata table
-s_meta <- data.frame(sampleID = names(s_otu_tab))
-s_meta <- s_meta %>%
-  dplyr::mutate(sampleNames_row = sampleID) %>%
-  tibble::column_to_rownames(var = "sampleNames_row") 
-# filter(! sampleID %in% c(82, 83)) #FALTAN ESTAS MUESTRAS EN EL EXCEL!
-s_meta <- merge(s_meta, metadata, all.x = T)
-row.names(s_meta) <- s_meta$sampleID
-
-########################################
-# Generate Phyloseq basic
-########################################
-
-ps_bracken_species <- phyloseq(sample_data(s_meta),
-                                otu_table(s_otu_tab, taxa_are_rows = TRUE),
-                                tax_table(as.matrix(classification)))
-pre_phyloseq <- ps_bracken_species
-save(file=paste0(path_phyloseq, "/phyloseq_object_analysis1.RData"), ps_bracken_species)
-
-filterPhyla <- NA
-(pre_phyloseq1 = subset_taxa(pre_phyloseq, !Phylum %in% filterPhyla))
-filterPhyla <- c("Chloroplast", "Mitochondria", "Eukaryota", "Metazoa", "Viruses")
-pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Kingdom %in% filterPhyla)
-pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Phylum %in% filterPhyla)
-pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Class %in% filterPhyla)
-pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Order %in% filterPhyla) # 12 a nivel Order
-pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Family %in% filterPhyla) # 7 a nivel Family
-pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Genus %in% filterPhyla)
-
-all_phyloseq <- list(raw = pre_phyloseq1)
-
-## Calculate prevalence
-ottmp <- phyloseq::otu_table(pre_phyloseq1)
-pre_prevalence <- apply(X = ottmp,
-                        MARGIN = ifelse(taxa_are_rows(pre_phyloseq1), yes = 1, no = 2),
-                        FUN = function(x){sum(x > opt$mincountspersample)})
-pre_prevalence = data.frame(Prevalence = pre_prevalence,
-                            TotalAbundance = phyloseq::taxa_sums(pre_phyloseq1),
-                            tax_table(pre_phyloseq1), 
-                            relative_prevalence = pre_prevalence/ nsamples(pre_phyloseq1)
-                  )
-write_tsv(pre_prevalence, paste0(opt$out, "/raw_prevalence.tsv"))
-########################################
-# Generate all Phyloseqs 
-########################################
-
-## Filtered to frequency
-prevalenceThreshold = opt$minfreq * nsamples(all_phyloseq$raw)
-keepTaxa = rownames(pre_prevalence)[(pre_prevalence$Prevalence >= prevalenceThreshold)]
-(pre_phyloseq_filt = prune_taxa(keepTaxa, pre_phyloseq1))
-filtered_phyloseq_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt', as.character(100*opt$minfreq), '.RData')
-save(pre_phyloseq_filt, file = filtered_phyloseq_filename)
-
-## Rarefaction min
-raref_min_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt', as.character(100*opt$minfreq), '_rarefMin.RData')
-if(!file.exists(raref_min_filename) | opt$rewrite){
-  pre_phyloseq_rarefied <-rarefy_even_depth(pre_phyloseq_filt, rngseed = SEED)
-  save(pre_phyloseq_rarefied, file =raref_min_filename)
-}else{
-  load(raref_min_filename)
-}
-
-## Rarefaction 0.15
-min_depth <- otu_table(ps_bracken_species) %>% colSums() %>% quantile(opt$raref_quant)
-raref_quant_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt_raref_quant', as.character(100*opt$raref_quant), '.RData')
-if(!file.exists(raref_quant_filename) | opt$rewrite){
-  pre_phyloseq_rarefied2 <-rarefy_even_depth(pre_phyloseq_filt, sample.size = min_depth, rngseed = SEED)
-  save(pre_phyloseq_rarefied2, file =raref_quant_filename)
-}else{
-  load(raref_quant_filename)
-}
-muestras_eliminadas <- sample_names(pre_phyloseq_filt)[!sample_names(pre_phyloseq_filt) %in% sample_names(pre_phyloseq_rarefied2)]
-nreads <- otu_table(pre_phyloseq_filt) %>% colSums()
-
-eliminadas_df <- metadata %>% 
-  dplyr::filter(sampleID %in% muestras_eliminadas) %>% 
-  dplyr::select(sampleID, PROCEDENCIA, Tanda, CP, Sexo, obesidad) %>% 
-  dplyr::mutate(reads = nreads[as.character(sampleID)]) %>% 
-  dplyr::arrange(reads)
-eliminadas_df %>% write_tsv(file=paste0(opt$out, "/muestras_eliminadas_raref", as.character(opt$raref_quant), ".tsv"))
-
-## Eliminar tanda 2
-rmtanda2_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTanda2.RData')
-standa1 <- metadata %>% dplyr::filter(Tanda==1) %>% pull(sampleID) %>% as.character()
-if(!file.exists(rmtanda2_fname) | opt$rewrite){
-  pre_phyloseq_removet2 <- phyloseq::prune_samples(standa1, pre_phyloseq_filt) 
-  save(pre_phyloseq_removet2, file = rmtanda2_fname)
-}else{load(rmtanda2_fname)}
-
-##  Eliminar tanda 2 - Rarefaction min
-raref_min_filename_not2 <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTanda2_rarefMin.RData')
-if(!file.exists(raref_min_filename_not2) | opt$rewrite){
-  pre_phyloseq_rarefied_not2 <-rarefy_even_depth(pre_phyloseq_removet2, rngseed = SEED)
-  save(pre_phyloseq_rarefied_not2, file =raref_min_filename_not2)
-}else{
-  load(raref_min_filename_not2)
-}
-
-## Remove batch effect
-# https://github.com/zhangyuqing/ComBat-seq
-library(sva)
-count_matrix <- otu_table(pre_phyloseq_filt)
-data_matrix <- sample_data(pre_phyloseq_filt) %>% data.frame
-phseq_batch_tanda_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_Combat_Tanda2.RData')
-
-if(!file.exists(phseq_batch_tanda_fname) | opt$rewrite){
-  adjusted <- ComBat_seq(count_matrix, batch=data_matrix$Tanda, group=data_matrix$Condition)
-  phseq_batch_tanda <- phyloseq(sample_data(data_matrix),
-                                otu_table(adjusted, taxa_are_rows = TRUE),
-                                tax_table(as.matrix(classification)))
-
-
-  save(phseq_batch_tanda, file =phseq_batch_tanda_fname)
-}else{
-  load(phseq_batch_tanda_fname)
-}
-
-## Remove batch effect, with shrinkage
-phseq_batch_tanda_shrink_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_Combat_Tanda2_shrink.RData')
-
-if(!file.exists(phseq_batch_tanda_shrink_fname) | opt$rewrite){
-  adjusted_shrink <- ComBat_seq(count_matrix, batch=data_matrix$Tanda, group=data_matrix$Condition, shrink = T)
-  phseq_batch_tanda_shrink <- phyloseq(sample_data(data_matrix),
-                              otu_table(adjusted_shrink, taxa_are_rows = TRUE),
-                              tax_table(as.matrix(classification)))
-save(phseq_batch_tanda_shrink, file = phseq_batch_tanda_shrink_fname)
-}else{
-  load(phseq_batch_tanda_shrink_fname)
-}
-
-## Remove batch effect, rarefy
-phseq_batch_tanda_raref_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_Combat_Tanda2_raref.RData')
-if(!file.exists(phseq_batch_tanda_raref_fname) | opt$rewrite){
-  phseq_batch_tanda_raref <-rarefy_even_depth(phseq_batch_tanda, rngseed = SEED)
-  save(phseq_batch_tanda_raref, file=phseq_batch_tanda_raref_fname)
-}else{
-  load(phseq_batch_tanda_raref_fname)
-}
-
-## Remove batch effect with biological covariates --> DOES NOT WORK
-# data_matrix2 <- data_matrix %>% dplyr::select(Sexo, Edad, IMC, Condition) %>% as.matrix
-# s2remove <- is.na(data_matrix2) %>% rowSums 
-# s2remove <- names(s2remove)[s2remove>0]
-# data_matrix2 <- data_matrix2[! rownames(data_matrix2) %in% s2remove, ]
-# data_matrix2 <- data_matrix2[! rownames(data_matrix2) %in% s2remove, ]
-# count_matrix2 <- count_matrix[, !colnames(count_matrix) %in% s2remove]
-# tanda2 <- data_matrix$Tanda[!data_matrix$sampleID %in% s2remove]
-# 
-# adjusted2 <- ComBat_seq(count_matrix2, batch=tanda2, group=data_matrix2)
-
-# Rm samples with co-morbidities
-rmdisease_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTanda2_noDisease.RData')
-standa1 <- metadata %>% dplyr::filter(Tanda==1 & is.na(COMORBILIDADES)) %>% pull(sampleID) %>% as.character()
-if(!file.exists(rmdisease_fname) | opt$rewrite){
-  pre_phyloseq_removet2_and_comor <- phyloseq::prune_samples(standa1, pre_phyloseq_filt) 
-  save(pre_phyloseq_removet2_and_comor, file = rmdisease_fname)
-}else{load(rmdisease_fname)}
-
-
-allphyloseqlist_fname <- paste0(path_phyloseq, "/phyloseq_all_list.RData")
-if(!file.exists(allphyloseqlist_fname) | opt$rewrite){
-  all_phyloseq <- list(#raw = pre_phyloseq1, 
-                       filt = pre_phyloseq_filt, 
-                       rarefied_min = pre_phyloseq_rarefied, 
-                       rarefied_quant = pre_phyloseq_rarefied2, 
-                       remove_tanda2 = pre_phyloseq_removet2, 
-                       remove_tanda2_rarefied_min = pre_phyloseq_rarefied_not2,
-                       remove_t2_and_comorb = pre_phyloseq_removet2_and_comor,
-                       rmbatch_tanda =phseq_batch_tanda,
-                       rmbatch_tanda_shrink = phseq_batch_tanda_shrink,
-                       rmbatch_tanda_raref =phseq_batch_tanda_raref
-                       
-  )
-  save(all_phyloseq, file=allphyloseqlist_fname)
-}else{
-  load(allphyloseqlist_fname)
-}
+source(opt$read_metadata_script)
+# Create phyloseq objects
+source(opt$create_phyloseq_script)
 
 # Alpha 4 each
 
@@ -332,7 +82,7 @@ vars2test <- c("Condition", "Sexo", "PROCEDENCIA", "Estado.civil2", "Educacion",
                "Fumador", "Colesterol_mayor_200",
                "Mediterranean_diet_adherence",
                "obesidad", "ob_o_sobrepeso", "defecaciones_semana",  "bristol_scale_cualitativo",
-               "sexocaso", "Tanda", "tandacaso", "procedenciacaso")
+               "sexocaso", "Tanda", "tandacaso", "procedenciacaso", "IPAQ_act_fisica")
 vars2test_ampl <- c(vars2test, escalas_qual)
 
 quant_vars <- c("Edad", "IMC",  "TG", "Colesterol", "Glucosa.ayunas", "DII")
