@@ -128,7 +128,7 @@ nodeprops <- map(names(nets2), \(x){
     ))
   )
 write_tsv(nodeprops, file = paste0(outdir, "/node_properties.tsv"))
-bplot <- make_boxplot_nodeprops(nodeprops, outdir, "4groups", w=8, h=8, correct_pvals = TRUE)
+bplot <- make_boxplot_nodeprops(nodeprops, outdir, "4groups", w=12, h=6, correct_pvals = TRUE)
 
 map(names(nets), \(x){
   plotNetWithTopNames(nets[[x]], nodeprops, x, ntop=10, outdir, paste0(x, "_names"), add_labels = FALSE, w=12, h=12)

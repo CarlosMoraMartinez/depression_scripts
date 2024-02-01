@@ -2261,3 +2261,15 @@ predplots <- map(names(all_model_results), plotAllModelPredictions, all_model_re
 
 
 opt <- restaurar(opt)
+
+#Contingency table
+library(ggmosaic)
+df <- sample_data(phobj) %>% data.frame %>% 
+  dplyr::filter(!is.na(IMC)) %>% 
+  dplyr::mutate(overweight = ifelse(IMC>25, "overweight", "normal weight")) %>% 
+  dplyr::mutate(Depr_ow = paste(Condition, overweight, sep=":"))
+var1 <- "Condition"
+var2 <- "overweight"
+
+makeContingencyPlot(df, var1, var2, opt$out, "ObesityVsDepression", w=6, h=5)
+

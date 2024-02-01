@@ -153,6 +153,7 @@ make_boxplot_nodeprops <- function(nodeprops, outdir, name, w=12, h=8,
                             vjust=0.4,
                             color = "black"
       ) +
+      #coord_flip() +
       theme_pubclean()+
       theme(axis.text.x = element_text(size = 12, 
                                        colour = "black", angle = 45, 
