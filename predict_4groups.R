@@ -33,7 +33,7 @@ for(i in phseq_to_use){
   phobj <- combineClasses(phobj, interestvar, var2add, newname)
   samples <- sample_data(phobj)$sampleID[! is.na(sample_data(phobj)[, var2add])]
   phobj_filt <- phyloseq::prune_samples(samples, phobj)
-  
+  this_metadata <- sample_data(phobj_filt) %>% data.frame
   outdir <- paste0(opt$out, "PredictDAA_multiclass/", i, "/")
   opt$reserva <- opt$out
   opt$out <- outdir
@@ -95,14 +95,6 @@ for(i in phseq_to_use){
                           \(x, y)callDoAllModelsFromALLPCAs(x, name=paste0(i, y), 
                                                             metadata=this_metadata, 
                                                             vars2pca=c("Depr_and_Ob")))
-  for(kk in 1:length(all_pcalists)){
-    cat(kk, "\n")
-    x <- all_pcalists[[kk]]
-    y <- names(taxa_list)[kk]
-    callDoAllModelsFromALLPCAs(x, name=paste0(i, '_', y), 
-                               metadata=this_metadata, 
-                               vars2pca=c("Depr_and_Ob"))
-  }
   names(all_models_this) <- names(taxa_list)
   names(taxa_list) <- paste0("taxa_", names(taxa_list))
   

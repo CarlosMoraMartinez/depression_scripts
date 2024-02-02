@@ -1,5 +1,6 @@
 library(tidyverse)
 library(caret)
+library(pROC)
 
 makeKmeans <- function(datasc, levs, varnames, SEED=123){
   library(stats)
@@ -248,7 +249,7 @@ make_glm_l1o_multiclass <- function(datasc, levs, varnames){
   predict1<- colnames(predict_glm1)[apply(predict_glm1, MAR=1, \(x)which(x==max(x)))] %>% factor
   confmat1 <- confusionMatrix(predict1, factor(datasc$class))
   roc_obj <- apply(predict_glm1, MAR=2, \(x) multiclass.roc(datasc$class, x))
-  roc_auc <- sapply(roc_obj_fullmod, \(x)x$auc) %>% mean
+  roc_auc <- sapply(roc_obj, \(x)x$auc) %>% mean
   
   mod_all <- multinom(formula, data=datasc, family = binomial)
   predict2 <- predict(mod_all, df, type="probs")
