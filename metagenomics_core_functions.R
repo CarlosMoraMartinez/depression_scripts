@@ -49,6 +49,10 @@ mystyle <- theme_classic() +
   theme(axis.text = element_text(face="bold"), 
         axis.title = element_text(face="bold")) 
 
+thin_barplot_lines <- theme(panel.grid.major.y = element_line(color = "lightgray",
+                                                              size = 0.05,
+                                                              linetype = 2))
+
 restauraropt_mk <- function(opt){
   output <- opt$out
   restaurar <- function(optbad){
@@ -383,7 +387,8 @@ getAlphaDiversity <- function(phseq_obj, vars, qvars= c(),
                               indices=c("Observed", "Chao1", "Shannon", "InvSimpson", "Fisher"),
                               name="AlphaDiversity", 
                               signif_levels=c("***"=0.001, "**"=0.01, "*"=0.05, "ns"=1.1),
-                              correct_pvalues = TRUE){
+                              correct_pvalues = TRUE, correct_pvalues_indices = FALSE,
+                              test2show="wilcox.test", w=8, h=4){
   outdir <- paste0(opt$out, "AlphadivPlots")
   if(! dir.exists(outdir)){dir.create(outdir)}
   
@@ -412,9 +417,13 @@ getAlphaDiversity <- function(phseq_obj, vars, qvars= c(),
                variable == "Observed") %>% 
       nrow
     if(correct_pvalues & num_comparisons>1){
-      signif_levels_bonferroni <- c(signif_levels[1:3]/num_comparisons, signif_levels[4])
+      signif_levels_bonferroni <- c(signif_levels[1:3]/(num_comparisons*length(indices)), signif_levels[4])
     }else{
       signif_levels_bonferroni <- signif_levels
+    }
+    if(correct_pvalues_indices ){
+      signif_levels_bonferroni <- c(signif_levels_bonferroni[1:3]/length(indices), 
+                                    signif_levels_bonferroni[4])
     }
     
     plots[[v]] <- plot_richness(phseq_obj_filt, x = v,
@@ -430,11 +439,11 @@ getAlphaDiversity <- function(phseq_obj, vars, qvars= c(),
       labs(title = v, x = '') +
       theme_pubclean() +
       mytheme +
-      ggsignif::stat_signif(test="t.test", na.rm=T, comparisons = comp, 
-                  step_increase=0.03,
+      ggsignif::stat_signif(test=test2show, na.rm=T, comparisons = comp, 
+                  step_increase=0.06,
                   tip_length = 0.01,
                   map_signif_level=signif_levels_bonferroni,
-                  vjust=0.4,
+                  vjust=0.3,
                   color = "black"
       ) +
       theme(plot.title = element_text(hjust = 0.5)) +
@@ -454,7 +463,7 @@ getAlphaDiversity <- function(phseq_obj, vars, qvars= c(),
                                 color = v, 
                                 measures = c("Observed", "Chao1", "Shannon", "InvSimpson")) +
       geom_point(aes_string(fill = v), alpha = 0.7) +
-      stat_poly_eq(use_label(c("R2", "p", "n")), #c("eq", "R2", "f", "p", "n")
+      stat_poly_eq(use_label(c("R2", "p")), #c("eq", "R2", "f", "p", "n")
                    method="lm", small.p=T, small.r=F, label.y=0.99)+
       #stat_poly_line(method = "lm") +
       geom_smooth(method="lm", fullrange = TRUE, linetype=1) +
@@ -470,7 +479,7 @@ getAlphaDiversity <- function(phseq_obj, vars, qvars= c(),
       theme(axis.text.x = element_text(angle = 360, hjust = 0.5, size = 10))
   }
   names(plots) <- gsub("_", "-", names(plots))
-  WriteManyPlots(plots, name, outdir, w=12, h=7, separate=F)
+  WriteManyPlots(plots, name, outdir, w=w, h=h, separate=F)
   return(plots)
 }
 
@@ -501,7 +510,7 @@ makeAllPCoAs <- function(phobj, outdir,
                          vars2plot = c(),
                          extradims = 2:5,
                          create_pdfs = MULTI_PAGE_PDFS,
-                         labelsamples="sampleID"){
+                         labelsamples="sampleID", w=12, h=5){
   #palette2 <- RColorBrewer::brewer.pal(n = 9, name = 'Set1')[8:9]
   pcoa.bray <- ordinate(phobj, method = method, distance = dist_type)
   
@@ -518,7 +527,7 @@ makeAllPCoAs <- function(phobj, outdir,
     },phobj, pcoa.bray, evals)
     names(all_pcoas_plots) <- vars2plot
     
-    WriteManyPlots(all_pcoas_plots, name, outdir, w=12, h=5, separate=F, opt)
+    WriteManyPlots(all_pcoas_plots, name, outdir, w=w, h=h, separate=F, opt)
     
   }else{
     #Plot only one variable and return the plot without saving it
@@ -1144,7 +1153,7 @@ plotRelativeAbnBarsSpecies_ColByGenus <- function(phobj, variable="Condition", t
 
 plotRelativeAbnBars_Fantaxtic <- function(phobj, variable="Condition", topn = 15, 
                                                tax_level = "Genus",
-                                     outname="GenusBarplotFx.pdf", height=8, width=12){
+                                     outname="GenusBarplotFx.pdf", height=7, width=12){
   library(fantaxtic)
   topntx <- get_top_taxa(physeq_obj = phobj, n = topn, relative = T,
                         discard_other = T, other_label = "Other")
@@ -1152,7 +1161,12 @@ plotRelativeAbnBars_Fantaxtic <- function(phobj, variable="Condition", topn = 15
   topntx <- name_taxa(topntx, label = "", species = F, other_label = "Other")
   topntx <- fantaxtic_bar(topntx, color_by = tax_level, label_by = tax_level, 
                         facet_by = variable, grid_by = NULL, 
-                        other_color = "Grey")
+                        other_color = "Grey") +
+    mytheme +
+    theme(axis.text.x = element_text(size = 10, 
+                                     colour = "black", angle = 90, 
+                                     face = "plain", hjust=1, vjust=1))
+    #theme(strip =element_rect(fill="white"))+
   ggsave(filename = outname, topntx, height = height, width = width) 
   return(topntx)
 }
@@ -1350,7 +1364,7 @@ makePermanovaSeveralFactors <- function(phobj,
 ##################################################################
 ### DESEQ
 
-getDeseqContrastFromCategorical <- function(dds, lev_combin, opt){
+getDeseqContrastFromCategorical <- function(dds, lev_combin, opt, name){
   contrastvec <- c(lev_combin[1], lev_combin[3], lev_combin[2])
   contrast_name <- paste0(lev_combin[1],'_', lev_combin[3], '_vs_', lev_combin[2]) %>% gsub(" ", ".", .)
   res <- results(dds, contrast = contrastvec)
@@ -1367,17 +1381,19 @@ getDeseqContrastFromCategorical <- function(dds, lev_combin, opt){
               "resLFC_ashr"=resLFC_ashr,
               "resdf"=resdf,
               "resdf_ape"=resdf_ape,
-              "resdf_shr"=resdf_ashr))
+              "resdf_shr"=resdf_ashr, 
+              contrast_vec = contrastvec,
+              contrast_name = contrast_name))
 }
 
-getDeseqContrastFromNumerical <- function(dds, nvarname, opt){
+getDeseqContrastFromNumerical <- function(dds, nvarname, opt, name){
   res <- results(dds, name = nvarname)
   resLFC <- lfcShrink(dds, coef = nvarname, type="normal", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
   resLFC_ape <- tryCatch(lfcShrink(dds, coef = nvarname, type="apeglm", lfcThreshold = log2(opt$fc)),error=\(x)data.frame() ) #apeglm gives weird results
   resLFC_ashr <- lfcShrink(dds, coef = nvarname, type="ashr", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
-  resdf <- defWriteDEAResults(res, resLFC, opt, paste0(name, "_",contrast_name, "_DAAshrinkNormal.tsv"))
-  resdf_ape <- defWriteDEAResults(res, resLFC_ape, opt, paste0(name, "_", contrast_name, "_DAAshrinkApe.tsv"))
-  resdf_ashr <- defWriteDEAResults(res, resLFC_ashr, opt, paste0(name, "_", contrast_name, "_DAAshrinkAshr.tsv"))
+  resdf <- defWriteDEAResults(res, resLFC, opt, paste0(name, "_",nvarname, "_DAAshrinkNormal.tsv"))
+  resdf_ape <- defWriteDEAResults(res, resLFC_ape, opt, paste0(name, "_", nvarname, "_DAAshrinkApe.tsv"))
+  resdf_ashr <- defWriteDEAResults(res, resLFC_ashr, opt, paste0(name, "_", nvarname, "_DAAshrinkAshr.tsv"))
   
   return(list("res"=res,
               "resLFC"=resLFC,
@@ -1385,7 +1401,8 @@ getDeseqContrastFromNumerical <- function(dds, nvarname, opt){
               "resLFC_ashr"=resLFC_ashr,
               "resdf"=resdf,
               "resdf_ape"=resdf_ape,
-              "resdf_shr"=resdf_ashr))
+              "resdf_shr"=resdf_ashr,
+              "nvarname"=nvarname))
 }
 
 getDeseqResults <- function(phobj, opt, name="", variables = c("Condition")){
@@ -1425,9 +1442,9 @@ getDeseqResults <- function(phobj, opt, name="", variables = c("Condition")){
 
   all_contrasts <- map(all_combins, \(lev_combin){
     if(lev_combin[2] == "NUMERIC"){
-      getDeseqContrastFromNumerical(dds, lev_combin[1], opt)
+      getDeseqContrastFromNumerical(dds, lev_combin[1], opt, name)
     }else{
-      getDeseqContrastFromCategorical(dds, lev_combin, opt)
+      getDeseqContrastFromCategorical(dds, lev_combin, opt, name)
     }
   })  
   names(all_contrasts) <- lapply(all_combins, \(x)ifelse(x[2]=="NUMERIC", x[1], paste0(x[1],'_', x[3], '_vs_', x[2]) %>% gsub(" ", ".", .)))

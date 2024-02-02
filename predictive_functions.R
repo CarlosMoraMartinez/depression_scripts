@@ -17,7 +17,7 @@ makeKnn_l1o <- function(datasc, levs, varnames, different_ks=c(1, 3, 5, 7, 9, 11
   #library(gmodels)
   
   results <- list()
-  datasc <- datasc %>% mutate(class=factor(class))
+  datasc <- datasc %>% dplyr::mutate(class=factor(class))
   train_df_all <- datasc %>% 
     dplyr::select(-class, -sample) %>% 
     dplyr::select(all_of(varnames))
@@ -573,6 +573,8 @@ makeLinePlotComparingPhobjs <- function(all_model_results, opt, models_name1="pa
 
 makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
                                                 w=8, h=12, get_pcnames_from="padj_taxa_res"){
+  outdir <- paste0(opt$out, phname)
+  
   resph <- all_model_results[[phname]]
   pcnames <- resph[[get_pcnames_from]]$varnames
   tabs <- resph[[get_pcnames_from]]$modummary %>% dplyr::mutate(sel_method = "PCA", varsused = paste(pcnames, collapse="|"))
@@ -720,7 +722,7 @@ makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
   print(cw)
   dev.off()
 
-  cw <- cowplot::plot_grid(plotlist=list(g2,g3, g4, g5), ncol = 1)
+  cw <- cowplot::plot_grid(plotlist=list(g2, g5, g3, g4), ncol = 1)
   pdf(paste0(outdir, "/", phname, "_all_model_combined3.pdf"), width = w, height = w*1.7)
   print(cw)
   dev.off()
@@ -887,7 +889,8 @@ makePCBarplot <- function(phname, all_model_results, pcBoxplots, daa_all, opt,
                                      face = "plain"))+
     theme(strip.text.x = element_text(size = 14, 
                                       colour = "black", angle = 0, face = "plain")) +
-    theme(legend.position = 'none') 
+    thin_barplot_lines +
+    theme(legend.position="none")
   ggsave(filename = paste0(outdir, "/", get_pcnames_from, "_barplots_PCs_and_LFC.pdf"), gbars, width = w, height = h)
   write_tsv(dflong,  paste0(outdir, "/", get_pcnames_from, "_barplots_PCs_and_LFC_data.tsv"))
   return(gbars)
@@ -912,7 +915,7 @@ plotPrediction<-function(phname, mod2plot, all_model_results, opt,
   PCs_newnames <- PCs_newnames[pc_order]
   
   df <- pcBoxplots[[phname]]$tab %>% 
-    mutate(Predicted = predictions[match(sampleID, snames)]) %>% 
+    dplyr::mutate(Predicted = predictions[match(sampleID, snames)]) %>% 
     spread(key=PC, value=score)
   if(all(unique(df$Condition) %in% c("Control", "Depression", "Depr."))){
     df <- df %>% dplyr::mutate(Condition = fct_recode(Condition, "Control"="Control", "Depression"="Depr."),
