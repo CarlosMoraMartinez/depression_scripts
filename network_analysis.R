@@ -13,8 +13,8 @@ MODE = "LOCAL"
 if(MODE == "IATA"){
   opt <- list()
 }else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_8/networks1/",
-              indir = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_8/",
+  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/networks_spearman5/",
+              indir = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/",
               phyloseq_list = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/phyloseq/phyloseq_all_list.RData",
               phyloseq_name = "remove_tanda2",
               r_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/metagenomics_core_functions.R",
@@ -45,16 +45,18 @@ normdf <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_norm_co
 #daatab <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_Condition_Depression_vs_Control_DAAshrinkNormal.tsv"))
 #daataxa <- daatab %>% dplyr::filter(padj<0.05) %>% pull(taxon)
 
-load(paste0("/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/", 
-            "DESeq2_ControlVarsMany/LFC_Comparison_AgeAndBMI_allCombos.RData"))
+# load(paste0("/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/", 
+#             "DESeq2_ControlVarsMany/LFC_Comparison_AgeAndBMI_allCombos.RData")) #old
+
+load(paste0(opt$indir, "IntegrateWithAndWithoutCorrection/LFC_Comparison_AgeAndBMI_allCombos.RData"))
 daalist <- list(
   "D_vs_C" = dea2contrasts$firstContrast$resdf,
-  "D_vs_C_adj_BMI" = dea2contrasts$contrastlist2$Condition_corrIMC$resdf,
+  "D_vs_C_adj_BMI" = dea2contrasts$contrastlist2$Condition_corrBMI$resdf,
   "BMI" = dea2contrasts$contrastlist2$BMI_alone$resdf,
   "BMI_adj_Depr" = dea2contrasts$contrastlist2$BMI_corrCond$resdf
 )
-taxalist <- map(daalist, \(x)x %>% dplyr::filter(padj < opt$pval) %>% pull(taxon)) %>% unlist %>% unique
-taxalist2 <- dea2contrasts$contrastlist2$Condition_corrIMC$resdf %>% dplyr::filter(padj < opt$pval) %>% pull(taxon)
+taxalist <- map(daalist[c(2,4)], \(x)x %>% dplyr::filter(padj < opt$pval) %>% pull(taxon)) %>% unlist %>% unique
+taxalist2 <- dea2contrasts$contrastlist2$Condition_corrBMI$resdf %>% dplyr::filter(padj < opt$pval) %>% pull(taxon)
 # https://github.com/ryanjw/co-occurrence
 # https://rdrr.io/bioc/minet/man/minet.html  
 

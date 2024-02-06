@@ -65,6 +65,7 @@ getGraphFromSamples <- function(phobj, samples, daataxa, vstdf,
   if(! is.null(daatab2)){
     daatab2 <- daatab2 %>% dplyr::filter(taxon %in% daatab$taxon)
     daatab2 <- daatab2[match(daatab2$taxon, daatab$taxon), ]
+    assertthat::assert_that(all(daatab2$taxon == daatab$taxon)) # "Taxa names of daatab1 and daatab2 are not equal."
     vert_cols <- ifelse(is.na(daatab2$padj) | vert_cols != C_NS, vert_cols,
                         ifelse(daatab2$padj < opt$pval, 
                                ifelse(daatab2$log2FoldChangeShrink > 0, C_CASE3, C_CTRL3), 
@@ -84,7 +85,6 @@ getGraphFromSamples <- function(phobj, samples, daataxa, vstdf,
     keep <- apply(netres, MAR=1, \(x)any(x>0)) %>% which %>% names
     netres <- netres[, keep]
   }
-  
   
   net <- graph.adjacency(netres, mode="undirected")
   vert_cols <- vert_cols[names(V(net))] 
@@ -118,7 +118,7 @@ getGraphProps <- function(net_obj){
   return(gprop)
 }
 
-make_boxplot_nodeprops <- function(nodeprops, outdir, name, w=12, h=8,
+make_boxplot_nodeprops <- function(nodeprops, outdir, name, w=12, h=6,
                                    signif_levels=c("***"=0.001, "**"=0.01, "*"=0.05, "ns"=1.1),
                                    correct_pvals = TRUE){
   propslong <- nodeprops %>% 
@@ -147,10 +147,10 @@ make_boxplot_nodeprops <- function(nodeprops, outdir, name, w=12, h=8,
                    outlier.shape = NA,
                    notchwidth = 0.5, notch=F)+
       ggsignif::stat_signif(test="wilcox.test", na.rm=T, comparisons = comp, 
-                            step_increase=0.03,
-                            tip_length = 0.01,
+                            step_increase=0.05,
+                            tip_length = 0.02,
                             map_signif_level=signif_levels,
-                            vjust=0.4,
+                            vjust=0.3,
                             color = "black"
       ) +
       #coord_flip() +
