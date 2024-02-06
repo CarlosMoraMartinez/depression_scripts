@@ -38,7 +38,7 @@ for(phname in phseq_to_correct){
   }}
 opt <- restaurar(opt)
 save(daa_all_corrected, file=paste0(opt$out, "DESeq2_ControlVars/DESEQ2_controlVars_all.RData"))
-
+load(paste0(opt$out, "DESeq2_ControlVars/DESEQ2_controlVars_all.RData"))
 ## Plot heatmap with significant differences in all 
 vargroups <- list(
   allvars=names(daa_all_corrected[[1]]),

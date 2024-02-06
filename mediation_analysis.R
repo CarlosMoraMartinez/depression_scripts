@@ -35,9 +35,9 @@ MODE = "LOCAL"
 if(MODE == "IATA"){
   opt <- list()
 }else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_8/mediation_analysis5/",
-              indir = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/",
-              phyloseq_list = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/phyloseq/phyloseq_all_list.RData",
+  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/mediation_analysis6/",
+              indir = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/",
+              phyloseq_list = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/phyloseq/phyloseq_all_list.RData",
               phyloseq_name = "remove_tanda2",
               r_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/metagenomics_core_functions.R",
               r_functions_mediation="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/mediation_functions.R",
@@ -60,13 +60,14 @@ phobj <- all_phyloseq[[opt$phyloseq_name]]
 phobj <- updatePsWithLogs(phobj, c("Edad", "IMC"))
 metadata <- sample_data(phobj) %>% data.frame
 
-alphadiv <- read_tsv(paste0(opt$indir, "AlphaDiversity/remove_tanda2_AlphaDiv.tsv")) %>% 
+alphadiv <- read_tsv(paste0(opt$indir, "AlphaDiversity/remove_tanda2_rarefied_min_AlphaDiv.tsv")) %>% 
   dplyr::select(sampleID, Observed, Chao1, Shannon, InvSimpson)
 
 metadata2 <- merge(metadata, alphadiv, by="sampleID")
 
 #load(paste0(opt$indir, "DESeq2_ControlVars/DeSEQ2/remove_tanda2_IMC_log/DESEQ2_all_results_remove_tanda2_IMC_log.R"))
-load(paste0(opt$indir, "DESeq2_ControlVarsMany/LFC_Comparison_AgeAndBMI_allCombos.RData"))
+#load(paste0(opt$indir, "DESeq2_ControlVarsMany/LFC_Comparison_AgeAndBMI_allCombos.RData"))
+load(paste0(opt$indir, "IntegrateWithAndWithoutCorrection/LFC_Comparison_AgeAndBMI_allCombos.RData"))
 vstdf <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_vst_counts.tsv"))
 normdf <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_norm_counts.tsv"))
 
@@ -76,7 +77,8 @@ normdf <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_norm_co
 vars2venn <- list(
   "D vs C" = dea2contrasts$firstContrast$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon),
   #"D vs C adj. BMI" = summary_df %>% dplyr::filter(depr_adjimc_padj < plim) %>% pull(variable),
-  "adj BMI" = dea2contrasts$contrastlist2$Condition_corrIMC$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon),
+  "adj BMI" = dea2contrasts$contrastlist2$Condition_corrBMI$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon),
+  #"adj BMI" = dea2contrasts$contrastlist2$Condition_corrIMC$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon), #old versions
   "adj Age" = dea2contrasts$contrastlist2$Condition_corrAge$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon),
   "adj both" = dea2contrasts$contrastlist2$Condition_corr2$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon)
 )
@@ -104,7 +106,8 @@ ggsave(filename = paste0(opt$out, "VennDiagram_CvsD_control2.pdf"), gv, width = 
 
 vars2venn <- list(
   "D vs C" = dea2contrasts$firstContrast$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon),
-  "D vs C, adj BMI" = dea2contrasts$contrastlist2$Condition_corrIMC$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon)
+  #"D vs C, adj BMI" = dea2contrasts$contrastlist2$Condition_corrIMC$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon)
+  "D vs C, adj BMI" = dea2contrasts$contrastlist2$Condition_corrBMI$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon)
 )
 gv <- ggvenn(
   vars2venn, columns = names(vars2venn),
@@ -140,7 +143,8 @@ batplotsdaa <- makeBarplotDAA(daalist, opt$out, plim=0.05, name="corrAgeIMC")
 
 daalist <- list(
   "D_vs_C" = dea2contrasts$firstContrast$resdf,
-  "D_vs_C_adj_BMI" = dea2contrasts$contrastlist2$Condition_corrIMC$resdf,
+  "D_vs_C_adj_BMI" = dea2contrasts$contrastlist2$Condition_corrBMI$resdf,
+  #"D_vs_C_adj_BMI" = dea2contrasts$contrastlist2$Condition_corrIMC$resdf,
   "BMI" = dea2contrasts$contrastlist2$BMI_alone$resdf,
   "BMI_adj_Depr" = dea2contrasts$contrastlist2$BMI_corrCond$resdf
 )
@@ -232,7 +236,7 @@ getvars_onlyNotIMC <- function(summary_df){
 
 
 #####################################################
-mediator_name <- "IMC"
+mediator_name <- "IMC_log"
 y_name <- "Condition_bin"
 plim <- 0.05
 plim_plot <- 0.05
@@ -263,7 +267,7 @@ heights <- list(
   dir_onlyNotIMC=15
 )
 
-allMedPlots <- map(c(0.1),\(plim_plot){
+allMedPlots <- map(c(0.1, 0.05),\(plim_plot){
   map(names(getvars_funcs), \(x){
     opt <- restaurar(opt)
     opt$out <- paste0(opt$out, "/", x, "/")
@@ -275,7 +279,13 @@ allMedPlots <- map(c(0.1),\(plim_plot){
                              plim = plim, 
                              plim_plot = plim_plot,
                              name = "analysis_IMC_separateModel_vjust",
-                             wnet=14, hnet=heights[[x]], wbars=8, hbars=10, wbars2=10, hbars2=10, use_color_scale = FALSE,
+                             wnet=14, 
+                             hnet=heights[[x]], 
+                             wbars=8,
+                             hbars=10,
+                             wbars2=10, 
+                             hbars2=10, 
+                             use_color_scale = FALSE,
                              fix_barplot_limits = TRUE, custom_colors=NULL, make_boxplots = TRUE)
     if(plim_plot<1){
       makeFullMediationAnalysisIMC(opt, 
@@ -310,7 +320,8 @@ assertthat::assert_that(all(summary_df$variable %in% names(df_all)))
 list2merge <- list(
   depr_only_padj = dea2contrasts$firstContrast$resdf,
   imc_only_padj = dea2contrasts$contrastlist2$BMI_alone$resdf,
-  depr_adjimc_padj = dea2contrasts$contrastlist2$Condition_corrIMC$resdf,
+  #depr_adjimc_padj = dea2contrasts$contrastlist2$Condition_corrIMC$resdf,
+  depr_adjimc_padj = dea2contrasts$contrastlist2$Condition_corrBMI$resdf,
   imc_adjdepr_padj = dea2contrasts$contrastlist2$BMI_corrCond$resdf
 )
 
@@ -328,7 +339,7 @@ merged_pvals <- list2merge %>%
 summary_df <- cbind(summary_df, merged_pvals)
 
 
-mediator_name <- "IMC"
+mediator_name <- "IMC_log"
 y_name <- "Condition_bin"
 plim <- 0.05
 plim_plot <- 0.05
@@ -605,7 +616,7 @@ list2merge <- list(
   depr_adjage_padj = dea2contrasts$contrastlist2$Condition_corrAge$resdf,
   age_adjdepr_padj = dea2contrasts$contrastlist2$Age_corrCond$resdf,
   
-  depr_adjimc_padj = dea2contrasts$contrastlist2$Condition_corrIMC$resdf,
+  depr_adjimc_padj = dea2contrasts$contrastlist2$Condition_corrBMI$resdf,
   imc_adjdepr_padj = dea2contrasts$contrastlist2$BMI_corrCond$resdf,
   
   depr_adj2 = dea2contrasts$contrastlist2$Condition_corr2$resdf,
@@ -628,7 +639,7 @@ summary_df <- cbind(summary_df, merged_pvals)
 
 x_name <- "Edad"
 y_name <- "Condition_bin"
-mediator_name1 <- "IMC"
+mediator_name1 <- "IMC_log"
 plim <- 0.05
 
 # signvars <- summary_df %>% dplyr::select(-variable) %>% 
@@ -780,7 +791,7 @@ list2merge <- list(
   depr_adjage_padj = dea2contrasts$contrastlist2$Condition_corrAge$resdf,
   age_adjdepr_padj = dea2contrasts$contrastlist2$Age_corrCond$resdf,
   
-  depr_adjimc_padj = dea2contrasts$contrastlist2$Condition_corrIMC$resdf,
+  depr_adjimc_padj = dea2contrasts$contrastlist2$Condition_corrBMI$resdf,
   imc_adjdepr_padj = dea2contrasts$contrastlist2$BMI_corrCond$resdf,
   
   depr_adj2 = dea2contrasts$contrastlist2$Condition_corr2$resdf,
@@ -805,7 +816,7 @@ summary_df <- cbind(summary_df, merged_pvals)
 
 x_name <- "Edad"
 y_name <- "Condition_bin"
-mediator_name1 <- "IMC"
+mediator_name1 <- "IMC_log"
 plim <- 0.05
 # 
 # signvars <- summary_df %>% dplyr::select(-variable) %>% 

@@ -66,3 +66,5 @@ for(phname in phseq_to_correct){
 
 opt$out <- opt$reserva_0
 save(daa_all_bygroup, file=paste0(opt$out, "DESeq2_ControlVars/DESEQ2_byGroup_all.RData"))
+
+load(paste0(opt$out, "DESeq2_ControlVars/DESEQ2_byGroup_all.RData"))

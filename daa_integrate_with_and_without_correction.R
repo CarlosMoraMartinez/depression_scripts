@@ -1,4 +1,4 @@
-
+opt <- restaurar(opt)
 outdir <- paste0(opt$out, "IntegrateWithAndWithoutCorrection/")
 if(!dir.exists(outdir)) dir.create(outdir)
 firstContrast <- daa_all$remove_tanda2
@@ -173,7 +173,7 @@ contrastlist2_ob <- list(
   edad_corr2,
   edad_corr2_ob,
   
-  daa_all_corrected_only$remove_tanda2$ob_o_sobrepeso,
+  daa_all_corrected_only$remove_tanda2$BMI_log,
   imc_correcting,
   imc_corr2,
   
@@ -183,7 +183,7 @@ contrastlist2_ob <- list(
   
 ) %>% lapply(\(x)return(list(resdf=x)))
 name2remove2 <- "xxx"
-names(contrastlist2) <- c(
+names(contrastlist2_ob) <- c(
   "Condition_corrAge", 
   "Condition_corrOverweight", 
   "Condition_corr2ob", 
@@ -203,4 +203,40 @@ names(contrastlist2) <- c(
   "Overweight_corrCond",
   "Overweight_corr2")
 
-contrastNamesOrdered2 <- c("Depression vs Control",  gsub("_", " ", names(contrastlist2)))
+contrastNamesOrdered2 <- c("Depression vs Control",  gsub("_", " ", names(contrastlist2_ob)))
+
+compareLFCContrats(contrastlist2_ob, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.05, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, 
+                   name="LFC_Comparison_AgeAndOb_allCombos_p05", w=12, h=12, scale_mode = "free")
+compareLFCContrats(contrastlist2_ob, firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.001, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_allCombos_pem3", w=12, h=12, 
+                   scale_mode = "free")
+
+compareLFCContrats(contrastlist2_ob[c(2,4,10,11,13,14)], firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.05, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, 
+                   name="LFC_Comparison_AgeAndOb_BMIandOb_p05", w=12, h=12, scale_mode = "free")
+compareLFCContrats(contrastlist2_ob[c(2,4,10,11,13,14)], firstContrast, 
+                   contrastNamesOrdered2, mainContrastName, 
+                   plim_select= 0.001, plim_plot=0.1,
+                   name2remove = name2remove2,
+                   resdfname="resdf", 
+                   outdir = outdir, name="LFC_Comparison_AgeAndOb_BMIandOb_pem3", w=12, h=12, 
+                   scale_mode = "free")
+dea2contrasts <- list(firstContrast = firstContrast, contrastlist2=contrastlist2_ob)
+save(dea2contrasts, file = paste0(outdir, "/LFC_Comparison_AgeAndOb_allCombos.RData"))
+
+plot(contrastlist2_ob$BMI_corrCond$resdf$log2FoldChangeShrink, -1*contrastlist2_ob$Overweight_corrCond$resdf$log2FoldChangeShrink)
+cor(contrastlist2_ob$BMI_corrCond$resdf$log2FoldChangeShrink, -1*contrastlist2_ob$Overweight_corrCond$resdf$log2FoldChangeShrink)
+#0.818

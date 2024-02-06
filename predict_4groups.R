@@ -1,6 +1,8 @@
 #####################################
 ## Predict DEPR + OBESITY
 
+source(opt$predictive_functions)
+
 editObesity <- function(vec){
   return(ifelse(is.na(vec), NA, ifelse(vec == "Normopeso", "normal weight", "overweight")))
 }
@@ -26,7 +28,7 @@ opt <- restaurar(opt)
 all_model_multi_results <- list()
 for(i in phseq_to_use){
   cat("Doing Predictive models for: ", i, "\n")
-  all_model_results[[i]] <- list()
+  all_model_multi_results[[i]] <- list()
   phobj <- all_phyloseq[[i]]
   
   sample_data(phobj)[[var2add]] <- editObesity(sample_data(phobj)[[var2add]])
@@ -46,7 +48,7 @@ for(i in phseq_to_use){
   taxa_padj <- daa_all[[i]]$resdf %>% filter_taxa_padj
   taxa_praw <- daa_all[[i]]$resdf %>% filter_taxa_praw
   taxa_cov_padj <- daa_all_corrected_only[[i]]$BMI_log %>% filter_taxa_padj
-  taxa_cov_praw <- daa_all[[i]]$resdf %>% filter_taxa_praw
+  taxa_cov_praw <- daa_all_corrected_only[[i]]$BMI_log %>% filter_taxa_praw
   taxa_padj01 <- daa_all[[i]]$resdf %>% filter_taxa_padj(plim=0.01)
   taxa_padj001 <- daa_all[[i]]$resdf %>% filter_taxa_padj(plim=0.001)
   taxa_cov_padj01 <- daa_all_corrected_only[[i]]$BMI_log %>% filter_taxa_padj(plim=0.01)
@@ -99,49 +101,50 @@ for(i in phseq_to_use){
   names(taxa_list) <- paste0("taxa_", names(taxa_list))
   
   
-  all_model_results[[i]] <- c(all_models_this, all_pcalists, taxa_list)
-  all_model_results[[i]]$metadata <- sample_data(phobj_filt) %>% data.frame
+  all_model_multi_results[[i]] <- c(all_models_this, all_pcalists, taxa_list)
+  all_model_multi_results[[i]]$metadata <- sample_data(phobj_filt) %>% data.frame
   
   opt <- restaurar(opt)
 }
 opt <- restaurar(opt)
-save(all_model_results, file=paste0(opt$out, "PredictDAA_multiclass/all_model_results.RData"))
-#load(file=paste0(opt$out, "PredictDAA/all_model_results.RData"))
+save(all_model_multi_results, file=paste0(opt$out, "PredictDAA_multiclass/all_model_multi_results.RData"))
+#load(file=paste0(opt$out, "PredictDAA/all_model_multi_results.RData"))
 
-#for(k in names(all_model_results[[i]]$modresults)) {cat("\n\n", k);all_model_results[[i]]$modresults[[k]]$modummary %>% head(2) %>% print}
+#for(k in names(all_model_multi_results[[i]]$modresults)) {cat("\n\n", k);all_model_multi_results[[i]]$modresults[[k]]$modummary %>% head(2) %>% print}
 
 #Integrate
 opt$out <- paste0(opt$out, "PredictDAA_multiclass/")
-makeLinePlotComparingPhobjs( all_model_results, opt, models_name1 = "DiffTaxaPadjBase", models_name2 = "DiffTaxaPadjCov05")
+makeLinePlotComparingPhobjs( all_model_multi_results, opt, models_name1 = "DiffTaxaPadjBase", models_name2 = "DiffTaxaPadjCov05")
 ## Compare with Bacteria in componets
-condnames <- names(all_model_results$remove_tanda2)[c(1,6,7,9,10)]
-makeLinePlotComparingSamePhobjModels_Cov(phname, condnames, all_model_results, "TaxaGroups_trim", opt, w=8, h=5)
+condnames <- names(all_model_multi_results$remove_tanda2)[c(1,6,7,9,10)]
+phname <- "remove_tanda2"
+makeLinePlotComparingSamePhobjModels_Cov(phname, condnames, all_model_multi_results, "TaxaGroups_trim", opt, w=8, h=5)
 
-walk(names(all_model_results), \(x)makeLinePlotComparingSamePhobjModels(x, all_model_results, 
+walk(names(all_model_multi_results), \(x)makeLinePlotComparingSamePhobjModels(x, all_model_multi_results, 
                                                                         opt, w=6, h=8, get_pcnames_from = "DiffTaxaPadjCov05"))
 ## Plot boxplot PCs
 pca2use <- "DiffTaxaPadjCov05"
-pcBoxplots <- map(names(all_model_results), \(x){
-  makePCsBoxplot(x, all_model_results, opt, 
+pcBoxplots <- map(names(all_model_multi_results), \(x){
+  makePCsBoxplot(x, all_model_multi_results, opt, 
                  get_pcnames_from = pca2use,
                  pca_name =  paste0("PCA_", pca2use), 
                  varname = "Depr_and_Ob",
                  w=12, h=8)
 })
-names(pcBoxplots) <- names(all_model_results)
+names(pcBoxplots) <- names(all_model_multi_results)
 
 ## Plot barplot PCs and LFC
-pcBarplots <- map(names(all_model_results), makePCBarplot, all_model_results, pcBoxplots, daa_all, opt,
+pcBarplots <- map(names(all_model_multi_results), makePCBarplot, all_model_multi_results, pcBoxplots, daa_all, opt,
                   get_pcnames_from = pca2use,
                   pca_name =  paste0("PCA_", pca2use), 
                   varname = "Depr_and_Ob",
                   w=12, h=20)
-names(pcBarplots) <- names(all_model_results)
+names(pcBarplots) <- names(all_model_multi_results)
 
 # Plot KNN (best model)
 
 phname <- "remove_tanda2"
-predplots <- map(names(all_model_results), plotAllModelPredictions, all_model_results, opt,
+predplots <- map(names(all_model_multi_results), plotAllModelPredictions, all_model_multi_results, opt,
                  get_pcnames_from = pca2use,
                  pca_name =  paste0("PCA_", pca2use), 
                  varname = "Depr_and_Ob",
@@ -171,7 +174,7 @@ opt <- restaurar(opt)
 all_model_multi_results <- list()
 for(i in phseq_to_use){
   cat("Doing Predictive models for: ", i, "\n")
-  all_model_results[[i]] <- list()
+  all_model_multi_results[[i]] <- list()
   phobj <- all_phyloseq[[i]]
   
   sample_data(phobj)[[var2add]] <- editObesity(sample_data(phobj)[[var2add]])
@@ -179,7 +182,7 @@ for(i in phseq_to_use){
   samples <- sample_data(phobj)$sampleID[! is.na(sample_data(phobj)[, var2add])]
   phobj_filt <- phyloseq::prune_samples(samples, phobj)
   
-  outdir <- paste0(opt$out, "PredictDAA_multiclass/", i, "/")
+  outdir <- paste0(opt$out, "PredictDAA_multiclass_fromOb/", i, "/")
   opt$reserva <- opt$out
   opt$out <- outdir
   if(!dir.exists(opt$out)) dir.create(opt$out)
@@ -191,7 +194,7 @@ for(i in phseq_to_use){
   taxa_padj <- daa_all[[i]]$resdf %>% filter_taxa_padj
   taxa_praw <- daa_all[[i]]$resdf %>% filter_taxa_praw
   taxa_cov_padj <- daa_all_corrected_only[[i]]$ob_o_sobrepeso %>% filter_taxa_padj
-  taxa_cov_praw <- daa_all[[i]]$resdf %>% filter_taxa_praw
+  taxa_cov_praw <- daa_all_corrected_only[[i]]$ob_o_sobrepeso %>% filter_taxa_praw
   taxa_padj01 <- daa_all[[i]]$resdf %>% filter_taxa_padj(plim=0.01)
   taxa_padj001 <- daa_all[[i]]$resdf %>% filter_taxa_padj(plim=0.001)
   taxa_cov_padj01 <- daa_all_corrected_only[[i]]$ob_o_sobrepeso %>% filter_taxa_padj(plim=0.01)
@@ -244,49 +247,49 @@ for(i in phseq_to_use){
   names(taxa_list) <- paste0("taxa_", names(taxa_list))
   
   
-  all_model_results[[i]] <- c(all_models_this, all_pcalists, taxa_list)
-  all_model_results[[i]]$metadata <- sample_data(phobj_filt) %>% data.frame
+  all_model_multi_results[[i]] <- c(all_models_this, all_pcalists, taxa_list)
+  all_model_multi_results[[i]]$metadata <- sample_data(phobj_filt) %>% data.frame
   
   opt <- restaurar(opt)
 }
 opt <- restaurar(opt)
-save(all_model_results, file=paste0(opt$out, "PredictDAA_multiclass_fromOb/all_model_results.RData"))
-#load(file=paste0(opt$out, "PredictDAA/all_model_results.RData"))
+save(all_model_multi_results, file=paste0(opt$out, "PredictDAA_multiclass_fromOb/all_model_multi_results.RData"))
+#load(file=paste0(opt$out, "PredictDAA/all_model_multi_results.RData"))
 
 #for(k in names(all_model_results[[i]]$modresults)) {cat("\n\n", k);all_model_results[[i]]$modresults[[k]]$modummary %>% head(2) %>% print}
 
 #Integrate
-opt$out <- paste0(opt$out, "PredictDAA_multiclass/")
-makeLinePlotComparingPhobjs( all_model_results, opt, models_name1 = "DiffTaxaPadjBase", models_name2 = "DiffTaxaPadjCov05")
+opt$out <- paste0(opt$out, "PredictDAA_multiclass_fromOb/")
+makeLinePlotComparingPhobjs( all_model_multi_results, opt, models_name1 = "DiffTaxaPadjBase", models_name2 = "DiffTaxaPadjCov05")
 ## Compare with Bacteria in componets
-condnames <- names(all_model_results$remove_tanda2)[c(1,6,7,9,10)]
-makeLinePlotComparingSamePhobjModels_Cov(phname, condnames, all_model_results, "TaxaGroups_trim", opt, w=8, h=5)
+condnames <- names(all_model_multi_results$remove_tanda2)[c(1,6,7,9,10)]
+makeLinePlotComparingSamePhobjModels_Cov(phname, condnames, all_model_multi_results, "TaxaGroups_trim", opt, w=8, h=5)
 
-walk(names(all_model_results), \(x)makeLinePlotComparingSamePhobjModels(x, all_model_results, 
+walk(names(all_model_multi_results), \(x)makeLinePlotComparingSamePhobjModels(x, all_model_multi_results, 
                                                                         opt, w=6, h=8, get_pcnames_from = "DiffTaxaPadjCov05"))
 ## Plot boxplot PCs
 pca2use <- "DiffTaxaPadjCov05"
-pcBoxplots <- map(names(all_model_results), \(x){
-  makePCsBoxplot(x, all_model_results, opt, 
+pcBoxplots <- map(names(all_model_multi_results), \(x){
+  makePCsBoxplot(x, all_model_multi_results, opt, 
                  get_pcnames_from = pca2use,
                  pca_name =  paste0("PCA_", pca2use), 
                  varname = "Depr_and_Ob",
                  w=12, h=8)
 })
-names(pcBoxplots) <- names(all_model_results)
+names(pcBoxplots) <- names(all_model_multi_results)
 
 ## Plot barplot PCs and LFC
-pcBarplots <- map(names(all_model_results), makePCBarplot, all_model_results, pcBoxplots, daa_all, opt,
+pcBarplots <- map(names(all_model_multi_results), makePCBarplot, all_model_multi_results, pcBoxplots, daa_all, opt,
                   get_pcnames_from = pca2use,
                   pca_name =  paste0("PCA_", pca2use), 
                   varname = "Depr_and_Ob",
                   w=12, h=20)
-names(pcBarplots) <- names(all_model_results)
+names(pcBarplots) <- names(all_model_multi_results)
 
 # Plot KNN (best model)
 
 phname <- "remove_tanda2"
-predplots <- map(names(all_model_results), plotAllModelPredictions, all_model_results, opt,
+predplots <- map(names(all_model_multi_results), plotAllModelPredictions, all_model_multi_results, opt,
                  get_pcnames_from = pca2use,
                  pca_name =  paste0("PCA_", pca2use), 
                  varname = "Depr_and_Ob",

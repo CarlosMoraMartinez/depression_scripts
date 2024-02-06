@@ -56,7 +56,7 @@ for(phname in phseq_to_correct){
   }}
 opt$out <- opt$reserva_0
 save(daa_all_corrected_groups, file=paste0(opt$out, "DESeq2_ControlVarsMany/DESEQ2_controlVarsMany_all.RData"))
-
+#load(paste0(opt$out, "DESeq2_ControlVarsMany/DESEQ2_controlVarsMany_all.RData"))
 ## Make heatmap correcting by group (many variables at a time)
 outdir <- paste0(opt$out, "DESeq2_ControlVarsMany/SummaryHeatmaps/")
 if(!dir.exists(outdir)) dir.create(outdir)
