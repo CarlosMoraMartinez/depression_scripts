@@ -1,5 +1,6 @@
 # Alpha 4 each
 
+
 ## Cualitativas
 
 alpha_indices <- c("Observed", "Chao1", "Shannon", "InvSimpson")
@@ -10,7 +11,7 @@ vars2test <- c("Condition", "Sexo", "PROCEDENCIA", "Estado.civil2", "Educacion",
                "sexocaso", "Tanda", "tandacaso", "procedenciacaso", "IPAQ_act_fisica")
 vars2test_ampl <- c(vars2test, escalas_qual)
 
-quant_vars <- c("Edad", "BMI",  "TG", "Colesterol", "Glucosa.ayunas", "DII")
+quant_vars <- c("Edad", "BMI","BMI_log",  "TG", "Colesterol", "Glucosa.ayunas", "DII", "PSS_estres")
 quant_vars_ext <- c(quant_vars, escalas_quant)
 interestvar <- "Condition"
 extravars <- c(quant_vars, vars2test)
@@ -23,7 +24,7 @@ if(!dir.exists(outdir)) dir.create(outdir)
 interestvar <- "Condition"
 extravars <- c(quant_vars, vars2test)
 extravars <- extravars[extravars != interestvar]
-extravars2 <- c("Sexo", "Edad", "IMC")
+extravars2 <- c("Sexo", "Edad_log", "BMI_log", "PSS_estres")
 
 phseq_to_use <- c("remove_tanda2_rarefied_min")
 #load(allphyloseqlist_fname)
@@ -31,7 +32,10 @@ phseq_to_use <- c("remove_tanda2_rarefied_min")
 for(phname in phseq_to_use){
   cat("Alpha diversity in ", phname, "\n")
   phobj <- all_phyloseq[[phname]]
+  phobj <- updatePsWithLogs(phobj, c("Edad", "BMI"))
+  sample_data(phobj)$IPAQ_act_fisica <- factor(sample_data(phobj)$IPAQ_act_fisica, levels=c("Low", "Mid", "High"))
   divtab <- calculateAlphaDiversityTable(phobj, outdir, alpha_indices, paste0(phname, "_AlphaDiv") )
+  divtab$IPAQ_act_fisica <- factor(divtab$IPAQ_act_fisica, levels=c("Low", "Mid", "High"))
   models1 <- makeLinearModelsSingleVariable(divtab, interestvar, 
                                             extravars, 
                                             alpha_indices, 
@@ -43,8 +47,26 @@ for(phname in phseq_to_use){
                                             alpha_indices, 
                                             combos=1:3,
                                             outdir = outdir, name = paste0(phname, "_AlphaDiv_linModManyVars") )
-  #alphadif <- testDiversityDifferences(divtab, alpha_indices, vars2test, outdir, "AlphaDiv_rawdata")
+   models3 <- makeLinearModelsSingleVariable(divtab %>% dplyr::filter(!is.na(PSS_estres)),"PSS_estres", 
+                                             c(interestvar, "BMI_log"), 
+                                             alpha_indices, 
+                                             combos=1,
+                                             outdir = outdir, name = paste0(phname, "_AlphaDiv_linModPSS") )
+   models4 <- makeLinearModelsSingleVariable(divtab %>% dplyr::filter(!is.na(IPAQ_act_fisica)),"IPAQ_act_fisica", 
+                                             c(interestvar, "BMI_log"), 
+                                             alpha_indices, 
+                                             combos=1,
+                                             outdir = outdir, name = paste0(phname, "_AlphaDiv_linModIPAQ") )
+   
+  alphadif <- testDiversityDifferences(divtab, alpha_indices, vars2test, outdir, "AlphaDiv_rawdata")
   # Ya se hace dentro de la siguiente funcion
+  gipaq <- make_IPAQ_Boxplot(divtab, "IPAQ_act_fisica", test2show = "wilcox.test", 
+                             alpha_indices = alpha_indices, outdir = outdir, 
+                             name=phname,correct_pvalues = TRUE)
+  gipaq <- make_IPAQ_Boxplot(divtab, "IPAQ_act_fisica", test2show = "wilcox.test", 
+                             alpha_indices = alpha_indices, outdir = outdir, 
+                             name=paste0(phname, "_unadj"),correct_pvalues = FALSE)
+  
   divplots <- getAlphaDiversity(phobj, vars2test_ampl, quant_vars_ext,
                                 opt,
                                 indices= alpha_indices,
@@ -57,13 +79,69 @@ for(phname in phseq_to_use){
                                 name = paste0(phname, "_AlphaDivAdjInd"), w = 10, h = 4)
 }
 
+## REMOVING OUTLIERS
+outliers <- c(108, 113) %>% as.character
+
+for(phname in phseq_to_use){
+  cat("Alpha diversity in ", phname, "\n")
+  phobj <- all_phyloseq[[phname]]
+  phobj <- updatePsWithLogs(phobj, c("Edad", "BMI"))
+  samples <- sample_data(phobj)
+  samples <- samples[! samples %in% outliers ]
+  phobj_filt <- phyloseq::prune_samples(samples, phobj)
+  sample_data(phobj_filt)$IPAQ_act_fisica <- factor(sample_data(phobj_filt)$IPAQ_act_fisica, levels=c("Low", "Mid", "High"))
+  divtab <- calculateAlphaDiversityTable(phobj_filt, outdir, alpha_indices, paste0(phname, "_AlphaDiv_RMOL") )
+  divtab$IPAQ_act_fisica <- factor(divtab$IPAQ_act_fisica, levels=c("Low", "Mid", "High"))
+  models1 <- makeLinearModelsSingleVariable(divtab, interestvar, 
+                                            extravars, 
+                                            alpha_indices, 
+                                            combos=1,
+                                            outdir = outdir, name = paste0(phname, "_AlphaDiv_linMod1var_RMOL") )
+  
+  models2 <- makeLinearModelsSingleVariable(divtab, interestvar, 
+                                            extravars2, 
+                                            alpha_indices, 
+                                            combos=1:3,
+                                            outdir = outdir, name = paste0(phname, "_AlphaDiv_linModManyVars_RMOL") )
+  models3 <- makeLinearModelsSingleVariable(divtab %>% dplyr::filter(!is.na(PSS_estres)),"PSS_estres", 
+                                            c(interestvar, "BMI_log"), 
+                                            alpha_indices, 
+                                            combos=1,
+                                            outdir = outdir, name = paste0(phname, "_AlphaDiv_linModPSS_RMOL") )
+  models4 <- makeLinearModelsSingleVariable(divtab %>% dplyr::filter(!is.na(IPAQ_act_fisica)),"IPAQ_act_fisica", 
+                                            c(interestvar, "BMI_log"), 
+                                            alpha_indices, 
+                                            combos=1,
+                                            outdir = outdir, name = paste0(phname, "_AlphaDiv_linModIPAQ_RMOL") )
+  
+  alphadif <- testDiversityDifferences(divtab, alpha_indices, vars2test, outdir, "AlphaDiv_rawdata_RMOL")
+  # Ya se hace dentro de la siguiente funcion
+  gipaq <- make_IPAQ_Boxplot(divtab, "IPAQ_act_fisica", test2show = "wilcox.test", 
+                             alpha_indices = alpha_indices, outdir = outdir, 
+                             name=paste0(phname, "_RMOL"),correct_pvalues = TRUE)
+  gipaq <- make_IPAQ_Boxplot(divtab, "IPAQ_act_fisica", test2show = "wilcox.test", 
+                             alpha_indices = alpha_indices, outdir = outdir, 
+                             name=paste0(phname, "_unadj_RMOL"),correct_pvalues = FALSE)
+  
+  divplots <- getAlphaDiversity(phobj_filt, vars2test_ampl, quant_vars_ext,
+                                opt,
+                                indices= alpha_indices,
+                                correct_pvalues = T, correct_pvalues_indices = F,
+                                name = paste0(phname, "_AlphaDiv_RMOL"), w = 10, h = 4)
+  divplots <- getAlphaDiversity(phobj_filt, vars2test_ampl, quant_vars_ext,
+                                opt,
+                                indices= alpha_indices,
+                                correct_pvalues = T, correct_pvalues_indices = T,
+                                name = paste0(phname, "_AlphaDivAdjInd_RMOL"), w = 10, h = 4)
+}
+
 # Alpha inside depression
 outdir <- paste0(opt$out, "/AlphaDiversityInsideDepr/")
 if(!dir.exists(outdir)) dir.create(outdir)
 
 
 interestvar <- "Condition"
-quant_vars_onlydepr <-  c(escalas_quant, "PSS_estres", "DII", "IMC")
+quant_vars_onlydepr <-  c(escalas_quant, "PSS_estres", "DII", "BMI_log")
 qual_vars_onlydepr <- escalas_qual
 
 phseq_to_use <- c("rarefied_min", "remove_tanda2_rarefied_min", "rmbatch_tanda_raref")
@@ -72,17 +150,51 @@ phseq_to_use <- c("rarefied_min", "remove_tanda2_rarefied_min", "rmbatch_tanda_r
 for(phname in phseq_to_use){
   cat("Alpha diversity inside depression ", phname, "\n")
   phobj <- all_phyloseq[[phname]]
+  phobj <- updatePsWithLogs(phobj, c("Edad", "BMI"))
   samples <- sample_data(phobj)$sampleID[unlist(sample_data(phobj)[, interestvar]) == "Depression" ]
   phobj_filt <- phyloseq::prune_samples(samples, phobj)
   #alphadif <- testDiversityDifferences(divtab, alpha_indices, vars2test, outdir, "AlphaDiv_rawdata")
   # Ya se hace dentro de la siguiente funcion
-  divplots <- getAlphaDiversity(phobj_filt, interestvar, quant_vars_onlydepr,
+  divplots <- getAlphaDiversity(phobj_filt, c(interestvar, "IPAQ_act_fisica"), quant_vars_onlydepr,
                                 opt,
                                 indices= alpha_indices,
                                 correct_pvalues = T,
-                                name = paste0(phname, "_AlphaDivOnlyDepr"))
+                                name = paste0(phname, "_AlphaDivOnlyDepr"), w = 10, h = 4)
 }
 
+outliers <- c(108, 113) %>% as.character
+for(phname in phseq_to_use){
+  cat("Alpha diversity inside depression ", phname, "\n")
+  phobj <- all_phyloseq[[phname]]
+  phobj <- updatePsWithLogs(phobj, c("Edad", "BMI"))
+  samples <- sample_data(phobj)$sampleID[unlist(sample_data(phobj)[, interestvar]) == "Depression" ]
+  samples <- samples[! samples %in% outliers ]
+  phobj_filt <- phyloseq::prune_samples(samples, phobj)
+  #alphadif <- testDiversityDifferences(divtab, alpha_indices, vars2test, outdir, "AlphaDiv_rawdata")
+  # Ya se hace dentro de la siguiente funcion
+  divplots <- getAlphaDiversity(phobj_filt, c(interestvar, "IPAQ_act_fisica"), quant_vars_onlydepr,
+                                opt,
+                                indices= alpha_indices,
+                                correct_pvalues = T,
+                                name = paste0(phname, "_AlphaDivOnlyDepr_RMOUTLIERS"), w = 10, h = 4)
+}
+
+quant_vars_onlyctr <-  c("Escala_depresión_Beck", "PSS_estres", "DII", "BMI_log")
+qual_vars_onlyctr <- escalas_qual
+for(phname in phseq_to_use){
+  cat("Alpha diversity inside control ", phname, "\n")
+  phobj <- all_phyloseq[[phname]]
+  phobj <- updatePsWithLogs(phobj, c("Edad", "BMI"))
+  samples <- sample_data(phobj)$sampleID[unlist(sample_data(phobj)[, interestvar]) == "Control" ]
+  phobj_filt <- phyloseq::prune_samples(samples, phobj)
+  #alphadif <- testDiversityDifferences(divtab, alpha_indices, vars2test, outdir, "AlphaDiv_rawdata")
+  # Ya se hace dentro de la siguiente funcion
+  divplots <- getAlphaDiversity(phobj_filt, c(interestvar, "IPAQ_act_fisica"), quant_vars_onlyctr,
+                                opt,
+                                indices= alpha_indices,
+                                correct_pvalues = T,
+                                name = paste0(phname, "_AlphaDivOnlyCtrl"), w = 10, h = 4)
+}
 # Beta 4 each
 outdir <- paste0(opt$out, "/BetaDiversity/")
 if(!dir.exists(outdir)) dir.create(outdir)

@@ -142,7 +142,7 @@ make_randomForest_l1o <- function(datasc, levs, varnames){
     # Separar clases
     train_labels <- datasc$class[-i]
     test_labels <- datasc$class[i]
-    mod_tree1 <- randomForest(x=train_df, y=train_labels, mtry = 3)
+    mod_tree1 <- randomForest(x=train_df, y=train_labels)
     predict_tree1 <- c(predict_tree1, predict(mod_tree1, test_df))
     
   }

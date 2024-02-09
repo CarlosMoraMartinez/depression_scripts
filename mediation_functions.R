@@ -35,6 +35,7 @@ makeMediationSimple <- function(df, xname, yname, medname){
   
   effects<-c('a*b', 'cp+a*b') 
   nlsy.res<-bmem.sobel(df, iris.model, effects) 
+  #nlsy.res<-bmem.bs(df, iris.model, effects) 
   return(nlsy.res)
   
 }

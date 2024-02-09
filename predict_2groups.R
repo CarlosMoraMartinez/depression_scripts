@@ -2,7 +2,7 @@
 source(opt$predictive_functions)
 #opt$out <- "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_1/"
 vars2pca <- c("Condition", "Sexo", "Edad")
-#phseq_to_use <- c("remove_tanda2")
+phseq_to_use <- c("remove_tanda2")
                   
 opt$out <- paste0(opt$out, "PredictDAA")
 if(!dir.exists(opt$out)) dir.create(opt$out)

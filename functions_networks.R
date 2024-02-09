@@ -53,11 +53,22 @@ getGraphFromSamples <- function(phobj, samples, daataxa, vstdf,
     column_to_rownames("sample") %>% 
     dplyr::select_if(auxf)
 
-  netres <- minet(df2net, 
-                  method=net_method, 
-                  estimator=net_estimator, 
-                  disc="none", 
-                  nbins=sqrt(NROW(df2net)))
+   if(net_method == "COR"){
+     netres <- cor(df2net, method=net_estimator)
+     net_pvals <- map(df2net, \(x)
+                      map_vec(df2net, \(y)cor.test(x, y, method = net_estimator)$p.value)) %>% 
+       data.frame() %>% 
+       as.matrix
+   }else{
+    netres <- minet(df2net, 
+                   method=net_method, 
+                   estimator=net_estimator, 
+                   disc="none", 
+                   nbins=sqrt(NROW(df2net)))
+   }
+
+  
+  
   
   vert_cols <- ifelse(is.na(daatab$padj), C_NS,
                       ifelse(daatab$padj < opt$pval, 
@@ -77,9 +88,12 @@ getGraphFromSamples <- function(phobj, samples, daataxa, vstdf,
 
   print(table(vert_cols))
   
-  if(filt_quantile > 0){
+  if(filt_quantile > 0 && net_method != "COR"){
     filtthres <- quantile(netres, filt_quantile)
     netres <- ifelse(netres < filtthres, 0, 1)
+  }else if(filt_quantile > 0 && net_method == "COR"){
+    netres <- ifelse(net_pvals > 1-filt_quantile, 0, 1)
+    diag(netres) <- 0
   }
   if(filter_empty){
     keep <- apply(netres, MAR=1, \(x)any(x>0)) %>% which %>% names

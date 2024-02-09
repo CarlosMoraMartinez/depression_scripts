@@ -35,7 +35,7 @@ MODE = "LOCAL"
 if(MODE == "IATA"){
   opt <- list()
 }else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/mediation_analysis6/",
+  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/mediation_analysis7_bmem/",
               indir = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/",
               phyloseq_list = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/phyloseq/phyloseq_all_list.RData",
               phyloseq_name = "remove_tanda2",

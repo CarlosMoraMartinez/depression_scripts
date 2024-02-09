@@ -13,7 +13,7 @@ MODE = "LOCAL"
 if(MODE == "IATA"){
   opt <- list()
 }else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/networks_spearman5/",
+  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/networks_10/",
               indir = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/",
               phyloseq_list = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/phyloseq/phyloseq_all_list.RData",
               phyloseq_name = "remove_tanda2",
@@ -66,8 +66,9 @@ taxalist2 <- dea2contrasts$contrastlist2$Condition_corrBMI$resdf %>% dplyr::filt
 # Edge Degree
 # keystone taxa -> highest combination of all 3 measures and average abn > 1%
 
-net_estimator <- "spearman"
+net_estimator <- "pearson"
 net_method <- "mrnet"
+filt_quantile <- 0.95 #0.95
 
 outdir <- paste0(opt$out, "/nets_4groups/")
 if(!dir.exists(outdir)) dir.create(outdir)
@@ -91,7 +92,7 @@ nets <- map(names(metfilt), \(x){
                       daatab2 = NULL,
                       outdir=outdir,
                       filter_empty=FALSE, 
-                      filt_quantile=0.95, 
+                      filt_quantile=filt_quantile, 
                       name=paste0(gsub(":", "_", x), "_2cols"), 
                       w=12, h=12)
 })
@@ -109,7 +110,7 @@ nets2 <- map(names(metfilt), \(x){
                       daatab2 = daalist$BMI_adj_Depr,
                       outdir=outdir,
                       filter_empty=FALSE, 
-                      filt_quantile=0.95, 
+                      filt_quantile=filt_quantile, 
                       name=paste0(gsub(":", "_", x), "_4cols"), 
                       w=12, h=12)
 })
@@ -155,6 +156,88 @@ nodeprops_b <- nodeprops %>%
                                              "Depressed-overweight", 
                                              "NS")))
 makeTopTaxaPlot(nodeprops_b, 10, outdir, "DeprAndOb", w = 8, h = 10, manual_scale=names(list2recode)[-4])
+
+## Plot properties from correlation method
+
+nets_cor1 <- map(names(metfilt), \(x){
+  getGraphFromSamples(phobj, 
+                      samples = metfilt[[x]], 
+                      daataxa = taxalist, 
+                      vstdf = vstdf, 
+                      net_estimator = net_estimator, 
+                      net_method = "COR", 
+                      daatab = daalist$D_vs_C_adj_BMI,
+                      daatab2 = daalist$BMI_adj_Depr,
+                      outdir=outdir,
+                      filter_empty=FALSE, 
+                      filt_quantile=0.95, 
+                      name=paste0(gsub(":", "_", x), "_4colsCor05"), 
+                      w=12, h=12)
+})
+names(nets_cor1) <- names(metfilt)
+save(nets_cor1, file = paste0(outdir, "/networks_CORpearson05.RData"))
+
+nets_cor2 <- map(names(metfilt), \(x){
+  getGraphFromSamples(phobj, 
+                      samples = metfilt[[x]], 
+                      daataxa = taxalist, 
+                      vstdf = vstdf, 
+                      net_estimator = net_estimator, 
+                      net_method = "COR", 
+                      daatab = daalist$D_vs_C_adj_BMI,
+                      daatab2 = daalist$BMI_adj_Depr,
+                      outdir=outdir,
+                      filter_empty=FALSE, 
+                      filt_quantile=0.99, 
+                      name=paste0(gsub(":", "_", x), "_4colsCor01"), 
+                      w=12, h=12)
+})
+names(nets_cor2) <- names(metfilt)
+save(nets_cor2, file = paste0(outdir, "/networks_CORpearson01.RData"))
+
+nodeprops_cor <- map(names(nets_cor1), \(x){
+  df <- getGraphProps(nets_cor1[[x]])
+  df$class <- x
+  return(df)
+}) %>% bind_rows() %>% 
+  dplyr::mutate(
+    class=factor(class, levels=c(
+      "Control:normal", 
+      "Depression:normal", 
+      "Control:overweight", 
+      "Depression:overweight"
+    ))
+  )
+write_tsv(nodeprops_cor, file = paste0(outdir, "/node_properties_corPearson05.tsv"))
+bplot <- make_boxplot_nodeprops(nodeprops_cor, outdir, "4groups_corPearson05", w=12, h=6, correct_pvals = TRUE)
+##
+nodeprops_cor2 <- map(names(nets_cor2), \(x){
+  df <- getGraphProps(nets_cor2[[x]])
+  df$class <- x
+  return(df)
+}) %>% bind_rows() %>% 
+  dplyr::mutate(
+    class=factor(class, levels=c(
+      "Control:normal", 
+      "Depression:normal", 
+      "Control:overweight", 
+      "Depression:overweight"
+    ))
+  )
+write_tsv(nodeprops_cor2, file = paste0(outdir, "/node_properties_corPearson01.tsv"))
+bplot <- make_boxplot_nodeprops(nodeprops_cor2, outdir, "4groups_corPearson01", w=12, h=6, correct_pvals = TRUE)
+
+nodeprops_b_cor <- nodeprops_cor %>% 
+  dplyr::mutate(color=dplyr::recode(color, 
+                                    !!!{list2recode})
+  ) %>% 
+  dplyr::mutate(color=factor(color, levels=c("Control-normal", 
+                                             "Depressed-normal",
+                                             "Control-overweight",
+                                             "Depressed-overweight", 
+                                             "NS")))
+makeTopTaxaPlot(nodeprops_b_cor, 10, outdir, "DeprAndOb_Cor05", w = 8, h = 10, manual_scale=names(list2recode)[-4])
+
 
 ## Repeeat with 2 colors
 nodeprops <- map(names(nets), \(x){
@@ -215,7 +298,7 @@ nets_2g <- map(names(metfilt2), \(x){
                       daatab2 = NULL,
                       outdir=outdir,
                       filter_empty=FALSE, 
-                      filt_quantile=0.95, 
+                      filt_quantile=filt_quantile, 
                       name=paste0(gsub(":", "_", x), "_2groups"), 
                       w=12, h=12)
 })
