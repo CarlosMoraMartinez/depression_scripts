@@ -5,6 +5,7 @@
 ########################################
 # Generate Phyloseq basic
 ########################################
+
 path_phyloseq <- paste0(opt$out, "/phyloseq")
 if(! dir.exists(path_phyloseq)){dir.create(path_phyloseq)}
 
@@ -24,6 +25,8 @@ pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Order %in% filterPhyla) # 12 a nive
 pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Family %in% filterPhyla) # 7 a nivel Family
 pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Genus %in% filterPhyla)
 
+save(file=paste0(path_phyloseq, "/phyloseq_object_raw_filt_by_Phylum.RData"), pre_phyloseq1)
+
 all_phyloseq <- list(raw = pre_phyloseq1)
 
 ## Calculate prevalence
@@ -42,9 +45,16 @@ write_tsv(pre_prevalence, paste0(opt$out, "/raw_prevalence.tsv"))
 prevalenceThreshold = opt$minfreq * nsamples(all_phyloseq$raw)
 keepTaxa = rownames(pre_prevalence)[(pre_prevalence$Prevalence >= prevalenceThreshold)]
 (pre_phyloseq_filt = prune_taxa(keepTaxa, pre_phyloseq1))
-filtered_phyloseq_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt', as.character(100*opt$minfreq), '.RData')
+filtered_phyloseq_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt_by_prevalence', as.character(100*opt$minfreq), '.RData')
 save(pre_phyloseq_filt, file = filtered_phyloseq_filename)
 
+#Reads before rarefeact
+nreads <- otu_table(pre_phyloseq_filt) %>% colSums()
+metadata$nreads_filtPhylum <- nreads[rownames(metadata)]
+greads <- ggplot(metadata, aes(x=hospital, y = log10(nreads), fill=hospital))+geom_violin(alpha=0.6)+geom_boxplot(width=0.2, fill="lightgray")+ theme_bw()
+ggsave(filename = paste0(outdir, "/reads_per_hospital_filtPhylum.pdf"), greads, width = 7, height = 4)
+
+sample_data(pre_phyloseq_filt)$nreads_filtPhylum <- nreads[sample_data(pre_phyloseq_filt)$sampleID]
 ## Rarefaction min
 raref_min_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt', as.character(100*opt$minfreq), '_rarefMin.RData')
 if(!file.exists(raref_min_filename) | opt$rewrite){
@@ -55,7 +65,7 @@ if(!file.exists(raref_min_filename) | opt$rewrite){
 }
 
 ## Rarefaction 0.15
-min_depth <- otu_table(ps_bracken_species) %>% colSums() %>% quantile(opt$raref_quant)
+min_depth <- otu_table(pre_phyloseq_filt) %>% colSums() %>% quantile(opt$raref_quant)
 raref_quant_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt_raref_quant', as.character(100*opt$raref_quant), '.RData')
 if(!file.exists(raref_quant_filename) | opt$rewrite){
   pre_phyloseq_rarefied2 <-rarefy_even_depth(pre_phyloseq_filt, sample.size = min_depth, rngseed = SEED)
@@ -63,26 +73,25 @@ if(!file.exists(raref_quant_filename) | opt$rewrite){
 }else{
   load(raref_quant_filename)
 }
-muestras_eliminadas <- sample_names(pre_phyloseq_filt)[!sample_names(pre_phyloseq_filt) %in% sample_names(pre_phyloseq_rarefied2)]
-nreads <- otu_table(pre_phyloseq_filt) %>% colSums()
+muestras_eliminadas <- sample_names(pre_phyloseq_filt)[!sample_names(pre_phyloseq_filt) %in% sample_names(pre_phyloseq_rarefied2)] 
 
 eliminadas_df <- metadata %>% 
   dplyr::filter(sampleID %in% muestras_eliminadas) %>% 
-  dplyr::select(sampleID, PROCEDENCIA, Tanda, CP, Sexo, obesidad) %>% 
-  dplyr::mutate(reads = nreads[as.character(sampleID)]) %>% 
+  dplyr::select(sampleID, hospital) %>% 
+  dplyr::mutate(reads = nreads[ as.character(sampleID)]) %>% 
   dplyr::arrange(reads)
-eliminadas_df %>% write_tsv(file=paste0(opt$out, "/muestras_eliminadas_raref", as.character(opt$raref_quant), ".tsv"))
+eliminadas_df %>% write_tsv(file=paste0(path_phyloseq, "/muestras_eliminadas_raref", as.character(opt$raref_quant), ".tsv"))
 
 ## Eliminar tanda 2
-rmtanda2_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTanda2.RData')
-standa1 <- metadata %>% dplyr::filter(Tanda==1) %>% pull(sampleID) %>% as.character()
+rmtanda2_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTandaZaragoza.RData')
+standa1 <- metadata %>% dplyr::filter(hospital != "Zaragoza") %>% pull(sampleID) %>% as.character()
 if(!file.exists(rmtanda2_fname) | opt$rewrite){
   pre_phyloseq_removet2 <- phyloseq::prune_samples(standa1, pre_phyloseq_filt) 
   save(pre_phyloseq_removet2, file = rmtanda2_fname)
 }else{load(rmtanda2_fname)}
 
 ##  Eliminar tanda 2 - Rarefaction min
-raref_min_filename_not2 <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTanda2_rarefMin.RData')
+raref_min_filename_not2 <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTandaZaragoza_rarefMin.RData')
 if(!file.exists(raref_min_filename_not2) | opt$rewrite){
   pre_phyloseq_rarefied_not2 <-rarefy_even_depth(pre_phyloseq_removet2, rngseed = SEED)
   save(pre_phyloseq_rarefied_not2, file =raref_min_filename_not2)
@@ -90,15 +99,16 @@ if(!file.exists(raref_min_filename_not2) | opt$rewrite){
   load(raref_min_filename_not2)
 }
 
+
 ## Remove batch effect
 # https://github.com/zhangyuqing/ComBat-seq
 library(sva)
 count_matrix <- otu_table(pre_phyloseq_filt)
-data_matrix <- sample_data(pre_phyloseq_filt) %>% data.frame
+data_matrix <- sample_data(pre_phyloseq_filt) %>% data.frame %>% dplyr::mutate(status_c2 = ifelse(is.na(status_c2), "initially_overweight", status_c2))
 phseq_batch_tanda_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_Combat_Tanda2.RData')
 
 if(!file.exists(phseq_batch_tanda_fname) | opt$rewrite){
-  adjusted <- ComBat_seq(count_matrix, batch=data_matrix$Tanda, group=data_matrix$Condition)
+  adjusted <- ComBat_seq(count_matrix, batch=data_matrix$hospital, group=data_matrix$status_c2)
   phseq_batch_tanda <- phyloseq(sample_data(data_matrix),
                                 otu_table(adjusted, taxa_are_rows = TRUE),
                                 tax_table(as.matrix(classification)))
@@ -113,7 +123,7 @@ if(!file.exists(phseq_batch_tanda_fname) | opt$rewrite){
 phseq_batch_tanda_shrink_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_Combat_Tanda2_shrink.RData')
 
 if(!file.exists(phseq_batch_tanda_shrink_fname) | opt$rewrite){
-  adjusted_shrink <- ComBat_seq(count_matrix, batch=data_matrix$Tanda, group=data_matrix$Condition, shrink = T)
+  adjusted_shrink <- ComBat_seq(count_matrix, batch=data_matrix$hospital, group=data_matrix$status_c2, shrink = T)
   phseq_batch_tanda_shrink <- phyloseq(sample_data(data_matrix),
                                        otu_table(adjusted_shrink, taxa_are_rows = TRUE),
                                        tax_table(as.matrix(classification)))
@@ -142,13 +152,67 @@ if(!file.exists(phseq_batch_tanda_raref_fname) | opt$rewrite){
 # 
 # adjusted2 <- ComBat_seq(count_matrix2, batch=tanda2, group=data_matrix2)
 
-# Rm samples with co-morbidities
-rmdisease_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTanda2_noDisease.RData')
-standa1 <- metadata %>% dplyr::filter(Tanda==1 & is.na(COMORBILIDADES)) %>% pull(sampleID) %>% as.character()
-if(!file.exists(rmdisease_fname) | opt$rewrite){
-  pre_phyloseq_removet2_and_comor <- phyloseq::prune_samples(standa1, pre_phyloseq_filt) 
-  save(pre_phyloseq_removet2_and_comor, file = rmdisease_fname)
-}else{load(rmdisease_fname)}
+
+
+
+## initially normal only
+# https://github.com/zhangyuqing/ComBat-seq
+library(sva)
+count_matrix <- otu_table(pre_phyloseq_filt)
+data_matrix <- sample_data(pre_phyloseq_filt) %>% data.frame %>% filter(!is.na(status_c2))
+count_matrix <- count_matrix[, data_matrix$sampleID]
+phseq_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_onlyNormalT0.RData')
+
+if(!file.exists(phseq_fname) | opt$rewrite){
+  phseq_onlyNorT0 <- phyloseq(sample_data(data_matrix),
+                                          otu_table(count_matrix, taxa_are_rows = TRUE),
+                                          tax_table(as.matrix(classification)))
+  
+  
+  save(phseq_onlyNorT0, file =phseq_fname)
+}else{
+  load(phseq_onlyNorT0)
+}
+
+## Remove batch effect AND initially normal only
+phseq_batch_tanda_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_Combat_onlyNormalT0.RData')
+if(!file.exists(phseq_batch_tanda_fname) | opt$rewrite){
+  
+  adjusted_onlyNorT0 <- ComBat_seq(count_matrix, batch=data_matrix$hospital, group=data_matrix$status_c2)
+  phseq_batch_tanda_onlyNorT0 <- phyloseq(sample_data(data_matrix),
+                                otu_table(adjusted_onlyNorT0, taxa_are_rows = TRUE),
+                                tax_table(as.matrix(classification)))
+  
+  
+  save(phseq_batch_tanda_onlyNorT0, file =phseq_batch_tanda_fname)
+}else{
+  load(phseq_batch_tanda_fname)
+}
+
+## Remove batch effect, with shrinkage, initially normal only
+phseq_batch_tanda_shrink_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_Combat_onlyNormalT0_shrink.RData')
+
+if(!file.exists(phseq_batch_tanda_shrink_fname) | opt$rewrite){
+  adjusted_shrink_onlyNorT0 <- ComBat_seq(count_matrix, batch=data_matrix$hospital, group=data_matrix$status_c2, shrink = T)
+  phseq_batch_tanda_shrink_onlyNorT0 <- phyloseq(sample_data(data_matrix),
+                                       otu_table(adjusted_shrink_onlyNorT0, taxa_are_rows = TRUE),
+                                       tax_table(as.matrix(classification)))
+  save(phseq_batch_tanda_shrink_onlyNorT0, file = phseq_batch_tanda_shrink_fname)
+}else{
+  load(phseq_batch_tanda_shrink_fname)
+}
+
+## Remove batch effect, rarefy, initially normal only
+phseq_batch_tanda_raref_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_Combat_onlyNormalT0_raref.RData')
+if(!file.exists(phseq_batch_tanda_raref_fname) | opt$rewrite){
+  phseq_batch_tanda_raref_onlyNorT0 <-rarefy_even_depth(phseq_batch_tanda_onlyNorT0, rngseed = SEED)
+  save(phseq_batch_tanda_raref_onlyNorT0, file=phseq_batch_tanda_raref_fname)
+}else{
+  load(phseq_batch_tanda_raref_fname)
+}
+
+###############################################3
+## Phyloseq list
 
 
 allphyloseqlist_fname <- paste0(path_phyloseq, "/phyloseq_all_list.RData")
@@ -159,10 +223,13 @@ if(!file.exists(allphyloseqlist_fname) | opt$rewrite){
     rarefied_quant = pre_phyloseq_rarefied2, 
     remove_tanda2 = pre_phyloseq_removet2, 
     remove_tanda2_rarefied_min = pre_phyloseq_rarefied_not2,
-    remove_t2_and_comorb = pre_phyloseq_removet2_and_comor,
     rmbatch_tanda =phseq_batch_tanda,
     rmbatch_tanda_shrink = phseq_batch_tanda_shrink,
-    rmbatch_tanda_raref =phseq_batch_tanda_raref
+    rmbatch_tanda_raref =phseq_batch_tanda_raref,
+    
+    rmbatch_onlyNorm0 =phseq_batch_tanda_onlyNorT0,
+    rmbatch_onlyNorm0_shrink = phseq_batch_tanda_shrink_onlyNorT0,
+    rmbatch_onlyNorm0_raref =phseq_batch_tanda_raref_onlyNorT0
     
   )
   save(all_phyloseq, file=allphyloseqlist_fname)

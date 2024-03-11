@@ -18,47 +18,33 @@ library(janitor)
 library(plyr)
 
 SEED <- 123
-MODE = "LOCAL"
+MODE = "IATA"
 
 if(MODE == "IATA"){
-  opt <- list(out ="/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_v2_3/",
-            indir = "/home/ccarlos/Documentos/202309_DEPRESION/results_cluster/mg09_combinempa/" ,
-            r_functions="/home/ccarlos/repos/depression_analysis/metagenomics_core_functions.R",
-            predictive_functions="/home/ccarlos/repos/depression_analysis/predictive_functions.R",
-            metadata = "/home/ccarlos/Documentos/202309_DEPRESION/metadatos_MC_AL 12042023_CMcopy.xlsx",
-            rewrite=TRUE,
-            minfreq = 0.05,
-            mincountspersample = 0,
-            mincount= 1,
-            minsampleswithcount = 0,
-            raref_quant = 0.15,
-            fc=1, 
-            pval=0.05, 
-            ptype="adjusted", 
-            fctype="shrunk",
-            num_genes_default=5
-            )
-}else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/",
-              indir = "/home/carmoma/Desktop/202311_DEPRESION/mg09_combinempa/" ,
-              r_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/metagenomics_core_functions.R",
-              predictive_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/predictive_functions.R",
-              read_metadata_script = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/read_metadata.R",
-              create_phyloseq_script = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/generate_phyloseq_objects.R",
-              read_otutable_script = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/read_otu_table.R",
-              alpha_beta_script = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/alpha_beta_abund.R",
-              daa_main_condition = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_main_condition.R",
-              make_permanova_script = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/make_permanova.R",
-              daa_include_single_covariate = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_include_single_covariate.R",
-              daa_only_covariates = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_include_only_covariate.R",
-              daa_many_covariates = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_include_several_covariates.R",
-              metadata = "/home/carmoma/Desktop/202311_DEPRESION/metadatos_MC_AL12042023_CM_corrected.xlsx",
-              predict_2groups = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/predict_2groups.R",
-              daa_sep_by_group = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_sep_by_group.R",
-              daa_with_scales = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_with_scales.R",
-              daa_integrate_with_and_without_correction = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_integrate_with_and_without_correction.R",
-              daa_integrate_all_contrasts = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_integrate_all_contrasts.R",
-              predict_4groups = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/predict_4groups",
+  opt <- list(out ="/home/ccarlos/Documentos/CLIMBOUT_CORALS/results_rstudio/240307_results1/",
+              indir = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/results_cluster3_Allsamples2_conf05rl100/mg09_combinempa/" ,
+              r_functions="/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/metagenomics_core_functions.R",
+              predictive_functions="/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predictive_functions.R",
+              read_metadata_script = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/read_metadata.R",
+              create_phyloseq_script = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/generate_phyloseq_objects.R",
+              read_otutable_script = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/read_otu_table.R",
+              alpha_beta_script = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/alpha_beta_abund.R",
+              daa_main_condition = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_main_condition.R",
+              make_permanova_script = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/make_permanova.R",
+              daa_include_single_covariate = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_include_single_covariate.R",
+              daa_only_covariates = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_include_only_covariate.R",
+              daa_many_covariates = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_include_several_covariates.R",
+              metadata = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/METADATA/CORALS_metagenomica_26.10.2022_metadataTeresa1.xlsx",
+              metadata_class = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/corals_scripts/classified_kids_CM.csv",
+              metadata_riga_45 = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/preprocess_data/muestras_Zaragoza_send.csv",
+              metadata_with_origin = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/climbout_sergio/ClimbOut/DataAnalysis/CORALS_metagenomica_26.10.2022.xlsx",
+              oms_data = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/corals_scripts/Referencia OMS/",
+              predict_2groups = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predict_2groups.R",
+              daa_sep_by_group = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_sep_by_group.R",
+              daa_with_scales = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_with_scales.R",
+              daa_integrate_with_and_without_correction = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_integrate_with_and_without_correction.R",
+              daa_integrate_all_contrasts = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_integrate_all_contrasts.R",
+              predict_4groups = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predict_4groups.R",
               rewrite=FALSE,
               minfreq = 0.05,
               mincountspersample = 0,
@@ -71,8 +57,13 @@ if(MODE == "IATA"){
               fctype="shrunk",
               num_genes_default=5
   )
+}else{
+  opt <- list(
+  )
 }
 if(! dir.exists(opt$out)){dir.create(opt$out)}
+outdir <- paste0(opt$out, "inputdata")
+if(! dir.exists(outdir)){dir.create(outdir)}
 
 source(opt$r_functions)
 

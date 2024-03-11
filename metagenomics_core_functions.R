@@ -2719,6 +2719,7 @@ makeLinearModelsSingleVariable <- function(divtab,
                                            alphaindices =c("Observed", "Chao1", "Shannon", "InvSimpson"), 
                                            combos=1:3,
                                            outdir = "", name = "linearmodels" ){
+  divtab <- divtab %>% dplyr::filter(!is.na(!!sym(interestvar)))
   if(length(unique(divtab[, interestvar])) < 2) return(list()) #Error: only 1 level, not possible to fit model
   extravars <-  map_vec(divtab[, extravars], \(x)length(unique(x[!is.na(x)]))) %>% 
     base::subset(. > 1) %>% names # remove variables without 2 or more levels

@@ -1,8 +1,11 @@
 ########################################
 # Read OTU table
 ########################################
+riga_tandas45  <- read_tsv(opt$metadata_riga_45)
+
 
 s_abund <- read_tsv(paste0(opt$indir, "species.mpa.combined.clean2.txt"))
+
 s_tax_tab <- s_abund %>%
   dplyr::rename("taxonomy" = "#Classification") %>%
   dplyr::select(taxonomy) %>%
@@ -26,5 +29,13 @@ s_otu_tab <- s_abund %>%
   dplyr::mutate(taxonomy = sub('.*\\|', '', taxonomy),
                 taxonomy = gsub("s__", "", taxonomy)) %>%
   tibble::column_to_rownames(var = "taxonomy")
-names(s_otu_tab) <- sapply(names(s_otu_tab), FUN=function(x) strsplit(x, '_')[[1]][1]) %>% 
-  gsub("G4M", "", .) %>% gsub("^0", "", .)
+
+s_otu_tab_full <- s_otu_tab
+otus_newnames <- ifelse(colnames(s_otu_tab) %in% riga_tandas45$RigaID, paste("C", riga_tandas45$codk2[match(colnames(s_otu_tab), riga_tandas45$RigaID)], sep=""), colnames(s_otu_tab))
+xx =  data.frame(newnames = otus_newnames, oldnames = colnames(s_otu_tab)) # Check assignment
+
+#s_otu_tab <- s_otu_tab[, !grepl("CBZ", colnames(s_otu_tab))]
+names(s_otu_tab) <- otus_newnames
+
+write_tsv(s_otu_tab, file = paste0(outdir, "otu_tab_names_recoded.tsv"))
+write_tsv(s_otu_tab_full, file = paste0(outdir, "otu_tab_original.tsv"))
