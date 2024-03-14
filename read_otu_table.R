@@ -1,9 +1,8 @@
 ########################################
 # Read OTU table
 ########################################
+
 riga_tandas45  <- read_tsv(opt$metadata_riga_45)
-
-
 s_abund <- read_tsv(paste0(opt$indir, "species.mpa.combined.clean2.txt"))
 
 s_tax_tab <- s_abund %>%
@@ -22,7 +21,7 @@ classification <- plyr::ldply(classification, rbind)
 colnames(classification) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species", "Strain")
 rownames(classification) <- s_tax_tab$Species
 #rownames(classification) <- rownames(s_tax_tab)
-
+write_tsv(classification, file = paste0(outdir, "classification.tsv"))
 ## otu table
 s_otu_tab <- s_abund %>%
   dplyr::rename("taxonomy" = "#Classification") %>%
@@ -37,5 +36,5 @@ xx =  data.frame(newnames = otus_newnames, oldnames = colnames(s_otu_tab)) # Che
 #s_otu_tab <- s_otu_tab[, !grepl("CBZ", colnames(s_otu_tab))]
 names(s_otu_tab) <- otus_newnames
 
-write_tsv(s_otu_tab, file = paste0(outdir, "otu_tab_names_recoded.tsv"))
-write_tsv(s_otu_tab_full, file = paste0(outdir, "otu_tab_original.tsv"))
+write_tsv(s_otu_tab %>% rownames_to_column("taxon") %>% select(taxon, everything()), file = paste0(outdir, "otu_tab_names_recoded.tsv"))
+write_tsv(s_otu_tab_full %>% rownames_to_column("taxon") %>% select(taxon, everything()), file = paste0(outdir, "otu_tab_original.tsv"))

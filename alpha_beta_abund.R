@@ -4,7 +4,7 @@
 ## Cualitativas
 
 alpha_indices <- c("Observed", "Chao1", "Shannon", "InvSimpson")
-vars2test <- c("status_c2", "Sex", "hospital", "tanda")
+vars2test <- c("status_c2", "Sex", "Category_T0", "hospital", "tanda")
 
 quant_vars <- c("age_months_t0", "imc_00", "imc_01", "nreads_filtPhylum", "bmi_t1_2")
 vars2log <- c( "age_months_t0", "imc_00", "imc_01")
@@ -66,18 +66,7 @@ outdir <- paste0(opt$out, "/BetaDiversity/")
 if(!dir.exists(outdir)) dir.create(outdir)
 
 dists <- c("bray", "jaccard")
-vars2pcoa <- c(quant_vars_ext, vars2test_ampl)
-#Repeat some plots changing size
-vars2pcoa_long_plots <- c("ob_o_sobrepeso", 
-                          "Educacion", 
-                          "defecaciones_semana",
-                          "bristol_scale_cualitativo",
-                          "IPAQ_act_fisica", 
-                          "Mediterranean_diet_adherence", 
-                          "ob_o_sobrepeso", 
-                          "DMSV_puntuacion_total", 
-                          escalas_qual)
-
+vars2pcoa <- c(vars2test, quant_vars_ext)
 ccaplots <- list()
 for(phname in phseq_to_use){
   for(method in c("PCoA", "NMDS")){
@@ -85,10 +74,6 @@ for(phname in phseq_to_use){
       name <- paste0(phname, "_", dist, "_", method)
       cat("Beta diversity for ", name, "\n")
       
-      if(phname %in% c("remove_tanda2", "remove_tanda2_rarefied_min")){
-        reserva1 <- vars2pcoa
-        vars2pcoa <- vars2pcoa[vars2pcoa != "Tanda"]
-      }
       ccaplots[[name]] <- makeAllPCoAs(all_phyloseq[[phname]], outdir,
                                        method = method,
                                        name = name, 
@@ -96,19 +81,7 @@ for(phname in phseq_to_use){
                                        dist_name = dist,
                                        vars2plot = vars2pcoa, 
                                        extradims = 2:3, 
-                                       create_pdfs = T)
-      #Just repeat a few plots with adapted sizes
-      xx <- makeAllPCoAs(all_phyloseq[[phname]], outdir,
-                                       method = method,
-                                       name = paste0(name, "_size2"), 
-                                       dist_type = dist, 
-                                       dist_name = dist,
-                                       vars2plot = vars2pcoa_long_plots, 
-                                       extradims = 2:3, 
                                        create_pdfs = T, w=16)
-      if(phname %in% c("remove_tanda2", "remove_tanda2_rarefied_min")){
-        vars2pcoa <- reserva1
-      }
     }}}
 
 # Composition 4 each
@@ -116,8 +89,7 @@ for(phname in phseq_to_use){
 outdir <- paste0(opt$out, "/DescriptiveAbundances/")
 if(!dir.exists(outdir)) dir.create(outdir)
 tops <- c(5, 10)
-n_species <- 20
-interestvar <- "Condition"
+interestvar <- "status_c2"
 
 for(phname in phseq_to_use){
   cat("Doing Abundance Plots for: ", phname, "\n")

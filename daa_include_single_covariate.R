@@ -1,20 +1,8 @@
 # DAA correcting by covariates
-phseq_to_correct <- names(all_phyloseq)[4]
-interestvar <- "Condition"
-vars2test <- c("Tanda", "Edad_log", "Sexo", "ob_o_sobrepeso","obesidad", "BMI_log",
-               "ob_o_sobrepeso",
-               "Estado.civil2", 
-               "Educacion", "reads_log10", "Fumador", 
-               "TG", "TG_mayor_200",  "Colesterol", "Colesterol_mayor_200", 
-               "PSS_estres", "Diabetes", "bristol_scale", "bristol_scale_cualitativo",
-               "defecaciones_semana", "Euroqol", "IPAQ_act_fisica", "Mediterranean_diet_adherence",
-               "tratamiento_ansioliticos", "tratamiento_anticonvulsivos",
-               "tratamiento_ISRNs", "tratamiento_antidiabeticos", "tratamiento_coagul_betabloq_etc", 
-               "DII"
-)
-vars2test <- c("BMI_log", "ob_o_sobrepeso", "Edad_log",
-               "Mediterranean_diet_adherence2", "Mediterranean_diet_adherence",
-               "IPAQ_act_fisica")
+phseq_to_correct <- names(all_phyloseq)
+interestvar <- "status_c2"
+vars2test <- c("hospital", "Sex", "age_months_t0")
+opt <- restaurar(opt)
 opt$reserva_0 <- opt$out
 opt$out <- paste0(opt$out, "DESeq2_ControlVars/")
 if(!dir.exists(opt$out)) dir.create(opt$out)
@@ -22,11 +10,11 @@ daa_all_corrected <- list()
 for(phname in phseq_to_correct){
   cat("Doing DESeq2 Analysys with correction for: ", phname, "\n")
   phobj <- all_phyloseq[[phname]]
-  phobj <- updatePsWithLogs(phobj, c("Edad", "BMI"))
+  phobj <- updatePsWithLogs(phobj, c("age_months_t0"))
   daa_all_corrected[[phname]] <- list()
   for(var in vars2test){
     cat("Doing DESeq2 Analysys with correction for: ", phname, '-', var, "\n")
-    samples <- sample_data(phobj)$sampleID[! is.na(sample_data(phobj)[, var])]
+    samples <- sample_data(phobj)$sampleID[! is.na(sample_data(phobj)[, var]) & ! is.na(sample_data(phobj)[, interestvar]) ]
     phobj_filt <- phyloseq::prune_samples(samples, phobj)
     cases <- sample_data(phobj_filt)[, var] %>% unlist %>%  table
     if(length(which(cases > 0)) < 2 ){cat("Only one level, skipping this variable");next}

@@ -1814,7 +1814,7 @@ plotPCA <- function(counts, design, genes, plotvar="Condition"){
   mat <- counts %>%  
     dplyr::filter(gene %in% genes) %>% 
     column_to_rownames("gene") %>% 
-    dplyr::select(design$sampleID) %>% 
+    dplyr::select(all_of(design$sampleID)) %>% 
     as.matrix %>% 
     t %>% scale
   
@@ -1879,7 +1879,7 @@ getNullPlot <- function(opt, name="var", error=FALSE){
 
 makeAllPCAs <- function(phobj, counts_df, genes, vars2pca, opt, name = "PCAs"){
   design <- sample_data(phobj)
-  design<- data.frame(design)
+  design<- data.frame(design) %>% dplyr::filter(sampleID %in% names(counts_df))
   nreads <- otu_table(phobj) %>% colSums()
 
   design <- design %>% 
@@ -2716,7 +2716,7 @@ makeCorrelationHeatmapByGroup <- function(mat1, mat2, metadata,var2plot="Psorias
 makeLinearModelsSingleVariable <- function(divtab, 
                                            interestvar, 
                                            extravars, 
-                                           alphaindices =c("Observed", "Chao1", "Shannon", "InvSimpson"), 
+                                           alpha_indices =c("Observed", "Chao1", "Shannon", "InvSimpson"), 
                                            combos=1:3,
                                            outdir = "", name = "linearmodels" ){
   divtab <- divtab %>% dplyr::filter(!is.na(!!sym(interestvar)))

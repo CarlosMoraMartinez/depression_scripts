@@ -51,7 +51,10 @@ save(pre_phyloseq_filt, file = filtered_phyloseq_filename)
 #Reads before rarefeact
 nreads <- otu_table(pre_phyloseq_filt) %>% colSums()
 metadata$nreads_filtPhylum <- nreads[rownames(metadata)]
-greads <- ggplot(metadata, aes(x=hospital, y = log10(nreads), fill=hospital))+geom_violin(alpha=0.6)+geom_boxplot(width=0.2, fill="lightgray")+ theme_bw()
+greads <- ggplot(metadata, aes(x=hospital, y = log10(nreads), fill=hospital))+
+  geom_violin(alpha=0.6)+
+  geom_boxplot(width=0.2, fill="lightgray")+
+  theme_bw()
 ggsave(filename = paste0(outdir, "/reads_per_hospital_filtPhylum.pdf"), greads, width = 7, height = 4)
 
 sample_data(pre_phyloseq_filt)$nreads_filtPhylum <- nreads[sample_data(pre_phyloseq_filt)$sampleID]
@@ -171,7 +174,7 @@ if(!file.exists(phseq_fname) | opt$rewrite){
   
   save(phseq_onlyNorT0, file =phseq_fname)
 }else{
-  load(phseq_onlyNorT0)
+  load(phseq_fname)
 }
 
 ## Remove batch effect AND initially normal only

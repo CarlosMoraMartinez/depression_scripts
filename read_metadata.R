@@ -66,6 +66,6 @@ ggsave(filename = paste0(outdir, "/reads_per_hospital.pdf"), greads, width = 7, 
 
 
 all(names(s_otu_tab) == rownames(metadata))
-write_tsv(s_otu_tab, file = paste0(outdir, "otu_tab_names_presentInMetadata.tsv"))
+write_tsv(s_otu_tab %>% rownames_to_column("taxon") %>% select(taxon, everything()), file = paste0(outdir, "otu_tab_names_presentInMetadata.tsv"))
 write_tsv(metadata, file = paste0(outdir, "metadata_presentInOtus.tsv"))
 s_meta <- metadata

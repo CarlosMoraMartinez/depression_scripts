@@ -21,7 +21,7 @@ SEED <- 123
 MODE = "IATA"
 
 if(MODE == "IATA"){
-  opt <- list(out ="/home/ccarlos/Documentos/CLIMBOUT_CORALS/results_rstudio/240307_results1/",
+  opt <- list(out ="/home/ccarlos/Documentos/CLIMBOUT_CORALS/results_rstudio/240307_results2_prev20mincount10/",
               indir = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/results_cluster3_Allsamples2_conf05rl100/mg09_combinempa/" ,
               r_functions="/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/metagenomics_core_functions.R",
               predictive_functions="/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predictive_functions.R",
@@ -46,9 +46,9 @@ if(MODE == "IATA"){
               daa_integrate_all_contrasts = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_integrate_all_contrasts.R",
               predict_4groups = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predict_4groups.R",
               rewrite=FALSE,
-              minfreq = 0.05,
+              minfreq = 0.2,
               mincountspersample = 0,
-              mincount= 1,
+              mincount= 10,
               minsampleswithcount = 0,
               raref_quant = 0.15,
               fc=1, 
@@ -62,7 +62,7 @@ if(MODE == "IATA"){
   )
 }
 if(! dir.exists(opt$out)){dir.create(opt$out)}
-outdir <- paste0(opt$out, "inputdata")
+outdir <- paste0(opt$out, "inputdata/")
 if(! dir.exists(outdir)){dir.create(outdir)}
 
 source(opt$r_functions)
@@ -82,6 +82,9 @@ source(opt$alpha_beta_script)
 source(opt$daa_main_condition)
 #load(paste0(opt$out, "DeSEQ2/DESEQ2_all.RData"))
 
+# Include only covariates
+source(opt$daa_only_covariates)
+
 #  Predict
 source(opt$predict_2groups)
 
@@ -94,8 +97,7 @@ source(opt$daa_include_single_covariate)
 ## DAA correcting for several variables at the same time
 source(opt$daa_many_covariates)
 
-# Include only covariates
-source(opt$daa_only_covariates)
+
 
 ##Integrate with and without correction
 source(opt$daa_integrate_with_and_without_correction)

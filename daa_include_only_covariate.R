@@ -1,15 +1,8 @@
 ## DAA only with covariates, without depression condition
-phseq_to_correct <- names(all_phyloseq)[4]
-interestvar <- "Condition"
-vars2test <- c("Tanda", "Edad_log", "Sexo", "ob_o_sobrepeso","obesidad", "BMI_log", "Estado.civil2", 
-               "Educacion", "reads_log10", "Fumador", "DII",
-               "TG", "TG_mayor_200",  "Colesterol", "Colesterol_mayor_200", 
-               "PSS_estres", "Diabetes", "bristol_scale", "bristol_scale_cualitativo",
-               "defecaciones_semana", "Euroqol", "IPAQ_act_fisica", "Mediterranean_diet_adherence",
-               "tratamiento_ansioliticos", "tratamiento_anticonvulsivos",
-               "tratamiento_ISRNs", "tratamiento_antidiabeticos", "tratamiento_coagul_betabloq_etc" 
+phseq_to_correct <- names(all_phyloseq)
+interestvar <- "status_c2"
+vars2test <- c("status_c2", "Category_T0", "age_months_t0", "Sex"
 )
-vars2test <- c("BMI_log", "ob_o_sobrepeso", "Edad_log", "IPAQ_act_fisica", "Mediterranean_diet_adherence")
 opt$reserva_0 <- opt$out
 opt$out <- paste0(opt$out, "DESeq2_ControlVarsAlone/")
 if(!dir.exists(opt$out)) dir.create(opt$out)
@@ -17,7 +10,7 @@ daa_all_corrected_only <- list()
 for(phname in phseq_to_correct){
   cat("Doing DESeq2 Analysys with correction for: ", phname, "\n")
   phobj <- all_phyloseq[[phname]]
-  phobj <- updatePsWithLogs(phobj, c("Edad", "BMI"))
+  phobj <- updatePsWithLogs(phobj, c("age_months_t0"))
   daa_all_corrected_only[[phname]] <- list()
   for(var in vars2test){
     cat("Doing DESeq2 Analysys with correction for: ", phname, '-', var, "\n")
@@ -32,3 +25,7 @@ for(phname in phseq_to_correct){
 opt$out <- opt$reserva_0
 save(daa_all_corrected_only, file=paste0(opt$out, "DESeq2_ControlVarsAlone/DESEQ2_controlVarsAlone_all.RData"))
 #load(paste0(opt$out, "DESeq2_ControlVarsAlone/DESEQ2_controlVarsAlone_all.RData"))
+
+#daa_all = map(daa_all_corrected_only, \(x)x[["status_c2"]])
+#save(daa_all, file=paste0(opt$out, "DESeq2_ControlVarsAlone/DESEQ2_all_mainCondition.RData"))
+#load(paste0(opt$out, "DESeq2_ControlVarsAlone/DESEQ2_all_mainCondition.RData"))
