@@ -2712,6 +2712,7 @@ makeCorrelationHeatmapByGroup <- function(mat1, mat2, metadata,var2plot="Psorias
   #return(list(hm=hm, hm_allonly=hmall, hmbygroup=hmlevs))
 }
 
+
 #### depression extra
 makeLinearModelsSingleVariable <- function(divtab, 
                                            interestvar, 
@@ -2737,12 +2738,14 @@ makeLinearModelsSingleVariable <- function(divtab,
       formula <- as.formula(formula_ch)
       models[[formula_ch]] <-  lm(formula = formula, data = divtab )
       auxanova <- anova(models[[formula_ch]]) %>% as.data.frame
+      m1sum <- summary(models[[formula_ch]])$coefficients
+      m2sum <- summary(models[[formulanull_ch]])$coefficients
       aux <- cbind(data.frame(nvars = 0,
                               Index=aind, 
                               model=formula_ch, 
-                              reduced_model = formulanull_ch
-                              #mod1=list(models[[formula_ch]]),
-                              #mod2=list(models[[formulared_ch]])
+                              reduced_model = formulanull_ch,
+                              mod1= paste(rownames(m1sum), "=", round(m1sum[, "Estimate"], 2), "(p=", round(m1sum[, "Pr(>|t|)"], 4), ")", sep="", collapse="|"),
+                              mod2=paste(rownames(m2sum), "=", round(m2sum[, "Estimate"], 2), "(p=", round(m2sum[, "Pr(>|t|)"], 4), ")", sep="", collapse="|")
       ),
       auxanova[1, ])
       anovas_singlevar <- rbind(anovas_singlevar, aux)
@@ -2760,18 +2763,37 @@ makeLinearModelsSingleVariable <- function(divtab,
         
         auxanova <- anova(models[[formula_ch]], 
                           models[[formulared_ch]]) %>% as.data.frame
+        m1sum <- summary(models[[formula_ch]])$coefficients
+        m2sum <- summary(models[[formulared_ch]])$coefficients
         aux <- cbind(data.frame(nvars = n_comb,
                                 Index=aind, 
                                 model=formula_ch, 
-                                reduced_model = formulared_ch
-                                #mod1=list(models[[formula_ch]]),
-                                #mod2=list(models[[formulared_ch]])
+                                reduced_model = formulared_ch,
+                                mod1= paste(rownames(m1sum), "=", round(m1sum[, "Estimate"], 2), "(p=", round(m1sum[, "Pr(>|t|)"], 4), ")", sep="", collapse="|"),
+                                mod2=paste(rownames(m2sum), "=", round(m2sum[, "Estimate"], 2), "(p=", round(m2sum[, "Pr(>|t|)"], 4), ")", sep="", collapse="|")
         ),
         auxanova[2, ])
         anovas <- rbind(anovas, aux)
       }#combos
     }#combo length
   }#alpha dif measures
+  anovas <- anovas %>% dplyr::mutate(
+    padj_all = p.adjust(`Pr(>F)`, method="BH"),
+    varsonly = sapply(strsplit(model, "~ "), \(x)x[2])
+  ) %>% group_by(varsonly) %>% 
+    dplyr::mutate(padj_bymodel = p.adjust(`Pr(>F)`, method="BH")) %>% 
+    ungroup() %>% 
+    select(-varsonly)
+  
+  anovas_singlevar <- anovas_singlevar %>% dplyr::mutate(
+    padj_all = p.adjust(`Pr(>F)`, method="BH"),
+    varsonly = sapply(strsplit(model, "~ "), \(x)x[2])
+  ) %>% 
+    group_by(varsonly) %>% 
+    dplyr::mutate(padj_bymodel = p.adjust(`Pr(>F)`, method="BH")) %>% 
+    ungroup() %>% 
+    select(-varsonly)
+  
   results <- list(single_anovas =anovas_singlevar, anovas=anovas,models=models)
   save(results, file=paste0(outdir, "/", name, "linearmodels.RData"))
   write_tsv(anovas_singlevar, file=paste0(outdir, "/", name, "linearmodels_anovas_singlevar.tsv"))
@@ -3259,7 +3281,7 @@ make_IPAQ_Boxplot <- function(divtab, var = "IPAQ_act_fisica",
                               w=10, h=4,
                               correct_pvalues=TRUE){
   divtab2 <- divtab %>% dplyr::filter(!is.na(IPAQ_act_fisica)) %>% 
-    dplyr::select(sampleID, Condition, all_of(c(ipaq_var, alpha_indices))) %>% 
+    dplyr::select(sampleID, Condition, all_of(c(var, alpha_indices))) %>% 
     dplyr::mutate(IPAQ_act_fisica=factor(IPAQ_act_fisica, levels=c("Low", "Mid", "High"))) %>% 
     gather("index", "value", all_of(alpha_indices)) %>% 
     dplyr::mutate(index = factor(index, levels=alpha_indices))
@@ -3271,10 +3293,10 @@ make_IPAQ_Boxplot <- function(divtab, var = "IPAQ_act_fisica",
   }else{
     signif_levels_bonferroni <- signif_levels
   }
-  g1 <- ggplot(divtab2, aes(x=!!sym(ipaq_var), y=value, fill=!!sym(ipaq_var), col=!!sym(ipaq_var))) +
+  g1 <- ggplot(divtab2, aes(x=!!sym(var), y=value, fill=!!sym(var), col=!!sym(var))) +
     facet_wrap(. ~ index, scales = "free", nrow = 1) +
     geom_boxplot(alpha = 0.7) +
-    labs(title = ipaq_var, x = '') +
+    labs(title = var, x = '') +
     theme_pubclean() +
     mytheme +
     ggsignif::stat_signif(test=test2show, na.rm=T, comparisons = comp, 
@@ -3288,10 +3310,10 @@ make_IPAQ_Boxplot <- function(divtab, var = "IPAQ_act_fisica",
     theme(axis.text.x = element_blank()) 
   ggsave(filename = paste0(outdir, "/alphadiv_IPAQ_", name, ".pdf"), g1, height = h, width = w )
   
-  g2 <- ggplot(divtab2, aes(x=!!sym(ipaq_var), y=value, fill=!!sym(ipaq_var), col=!!sym(ipaq_var))) +
+  g2 <- ggplot(divtab2, aes(x=!!sym(var), y=value, fill=!!sym(var), col=!!sym(var))) +
     facet_wrap(Condition ~ index, scales = "free", nrow = 2) +
     geom_boxplot(alpha = 0.7) +
-    labs(title = ipaq_var, x = '') +
+    labs(title = var, x = '') +
     theme_pubclean() +
     mytheme +
     ggsignif::stat_signif(test=test2show, na.rm=T, comparisons = comp, 

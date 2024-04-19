@@ -39,7 +39,7 @@ if(MODE == "IATA"){
             num_genes_default=5
             )
 }else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/",
+  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_10/",
               indir = "/home/carmoma/Desktop/202311_DEPRESION/mg09_combinempa/" ,
               r_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/metagenomics_core_functions.R",
               predictive_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/predictive_functions.R",

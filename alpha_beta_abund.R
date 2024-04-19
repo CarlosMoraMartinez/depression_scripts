@@ -4,14 +4,21 @@
 ## Cualitativas
 
 alpha_indices <- c("Observed", "Chao1", "Shannon", "InvSimpson")
-vars2test <- c("Condition", "Sexo", "PROCEDENCIA", "Estado.civil2", "Educacion", 
+vars2test <- c("Condition", "Sexo", "PROCEDENCIA", 
+               "Estado.civil2", "Educacion", 
                "Fumador", "Colesterol_mayor_200",
                "Mediterranean_diet_adherence",
-               "obesidad", "ob_o_sobrepeso", "defecaciones_semana",  "bristol_scale_cualitativo",
-               "sexocaso", "Tanda", "tandacaso", "procedenciacaso", "IPAQ_act_fisica")
+               "obesidad", "ob_o_sobrepeso", 
+               "defecaciones_semana", 
+               "bristol_scale_cualitativo",
+               "sexocaso", 
+               "Tanda",
+               "tandacaso", 
+               "procedenciacaso", 
+               "IPAQ_act_fisica")
 vars2test_ampl <- c(vars2test, escalas_qual)
 
-quant_vars <- c("Edad", "BMI","BMI_log",  "TG", "Colesterol", "Glucosa.ayunas", "DII", "PSS_estres")
+quant_vars <- c("Edad", "Edad_log", "BMI","BMI_log",  "TG", "Colesterol", "Glucosa.ayunas", "DII", "PSS_estres")
 quant_vars_ext <- c(quant_vars, escalas_quant)
 interestvar <- "Condition"
 extravars <- c(quant_vars, vars2test)
@@ -24,7 +31,9 @@ if(!dir.exists(outdir)) dir.create(outdir)
 interestvar <- "Condition"
 extravars <- c(quant_vars, vars2test)
 extravars <- extravars[extravars != interestvar]
-extravars2 <- c("Sexo", "Edad_log", "BMI_log", "PSS_estres")
+extravars2 <- c("Sexo", "Edad_log", "BMI_log", "PSS_estres", "IPAQ_act_fisica", 
+                "Mediterranean_diet_adherence", "bristol_scale_cualitativo", 
+                "defecaciones_semana")
 
 phseq_to_use <- c("remove_tanda2_rarefied_min")
 #load(allphyloseqlist_fname)
@@ -52,11 +61,25 @@ for(phname in phseq_to_use){
                                              alpha_indices, 
                                              combos=1,
                                              outdir = outdir, name = paste0(phname, "_AlphaDiv_linModPSS") )
+   
    models4 <- makeLinearModelsSingleVariable(divtab %>% dplyr::filter(!is.na(IPAQ_act_fisica)),"IPAQ_act_fisica", 
                                              c(interestvar, "BMI_log"), 
                                              alpha_indices, 
                                              combos=1,
                                              outdir = outdir, name = paste0(phname, "_AlphaDiv_linModIPAQ") )
+   
+   models5 <- makeLinearModelsSingleVariable(divtab %>% dplyr::filter(!is.na(BMI_log)),"BMI_log", 
+                                             c(interestvar, "IPAQ_act_fisica", "Mediterranean_diet_adherence"), 
+                                             alpha_indices, 
+                                             combos=1,
+                                             outdir = outdir, name = paste0(phname, "_AlphaDiv_linModBMI") )
+   
+   models6 <- makeLinearModelsSingleVariable(divtab %>% dplyr::filter(!is.na(Mediterranean_diet_adherence)),"Mediterranean_diet_adherence", 
+                                             c(interestvar, "BMI_log", "IPAQ_act_fisica"), 
+                                             alpha_indices, 
+                                             combos=1,
+                                             outdir = outdir, name = paste0(phname, "_AlphaDiv_linMEDDIET") )
+   
    
   alphadif <- testDiversityDifferences(divtab, alpha_indices, vars2test, outdir, "AlphaDiv_rawdata")
   # Ya se hace dentro de la siguiente funcion
@@ -86,7 +109,7 @@ for(phname in phseq_to_use){
   cat("Alpha diversity in ", phname, "\n")
   phobj <- all_phyloseq[[phname]]
   phobj <- updatePsWithLogs(phobj, c("Edad", "BMI"))
-  samples <- sample_data(phobj)
+  samples <- sample_data(phobj) %>% data.frame %>% pull(sampleID)
   samples <- samples[! samples %in% outliers ]
   phobj_filt <- phyloseq::prune_samples(samples, phobj)
   sample_data(phobj_filt)$IPAQ_act_fisica <- factor(sample_data(phobj_filt)$IPAQ_act_fisica, levels=c("Low", "Mid", "High"))
