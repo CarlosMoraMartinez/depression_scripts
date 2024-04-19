@@ -116,7 +116,7 @@ if(exists("input")){
             fctype="shrunk", 
             mincount= 1,
             minsampleswithcount= 6,
-            out= "/home/carmoma/Desktop/202311_DEPRESION/funcional2_filtT2_v2test/", #"/home/carmoma/projects/Psoriasis_20231005/results2/",  
+            out= "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/funcional", #"/home/carmoma/projects/Psoriasis_20231005/results2/",  
             input=  "/home/carmoma/Desktop/202311_DEPRESION/mg09_combinempa",
             modules_path=  "/home/carmoma/Desktop/202311_DEPRESION/funcional1/kegg_modules/",
             cazy="/home/carmoma/Desktop/202311_DEPRESION/cazy/",#"/home/carmoma/projects/Psoriasis_20231005/Psoriasis/results/04_phyloseq/",

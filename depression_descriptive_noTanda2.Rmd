@@ -24,7 +24,7 @@ library(knitr)
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, 
                       comment = NA, prompt = TRUE, tidy = FALSE, 
                       fig.width = 7, fig.height = 7, fig_caption = TRUE,
-                      cache=TRUE)
+                      cache=FALSE)
 Sys.setlocale("LC_TIME", "C")
 ```
 
@@ -51,6 +51,7 @@ suppressPackageStartupMessages({
   library(CoDaSeq)
   library(rstatix)
   library(janitor)
+  #library(Hmisc)
 })
 
 ```
@@ -75,8 +76,8 @@ if(MODE == "IATA"){
             )
 }else{
   opt <- list(out = "/home/carmoma/Desktop/202311_DEPRESION/descriptive_v3/",
-            phobj_raw ="/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_v2_5/phyloseq/phyloseq_object_analysis1.RData",
-            phobj_filt ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_5/phyloseq/pre_phyloseq_filt_noTanda2.RData",
+            phobj_raw ="/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_9/phyloseq/phyloseq_object_analysis1.RData",
+            phobj_filt ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/phyloseq/pre_phyloseq_filt_noTanda2.RData",
             #phobj_rare = "", 
             #DEA = "/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_3/DESEQ2_all_results_filtNoRaref.R",
             fooddata = "/home/carmoma/Desktop/202311_DEPRESION/Dieta_actualizada_09112023_CM.xlsx",
@@ -121,7 +122,8 @@ sampleID  Condition        VitD
 Los pongo como NAs
 
 ```{r , echo=FALSE, include=FALSE, fig.align='center', fig.width=12, fig.height=5, results='asis'}
-metad <- sample_data(phobj) %>% data.frame()
+metad <- sample_data(phobj) %>% data.frame() %>% 
+  dplyr::mutate(dislipemia = !is.na(TG) & TG > 200 & ! is.na(Colesterol) & Colesterol> 200)
 names(metad) <- gsub("Vit..", "Vit", names(metad)) %>% 
             sapply(function(x)strsplit(x, "\\.\\.")[[1]][1]) %>% 
             gsub("ajuste.residuos", "", .) %>% 
@@ -215,19 +217,22 @@ metad3 %>% dplyr::filter(Condition=="Depression") %>%
 #### All samples 
 
 ```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
-metad2 %>% dplyr::select(all_of(factors_all)) %>% mutate_all(as.factor) %>% summary
+metad2 %>% dplyr::select(all_of(factors_all)) %>% 
+  mutate_all(as.factor) %>% gtsummary::tbl_summary() # Hmisc::describe()
 ```
 
 #### Control only
 
 ```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
-metad2 %>% dplyr::filter(Condition=="Control") %>% dplyr::select(all_of(factors_ctrl)) %>% mutate_all(as.factor) %>% summary
+metad2 %>% dplyr::filter(Condition=="Control") %>% dplyr::select(all_of(factors_ctrl)) %>% 
+  mutate_all(as.factor) %>% gtsummary::tbl_summary() # Hmisc::describe()
 ```
 
 #### Depression only
 
 ```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=6}
-metad2 %>% dplyr::filter(Condition=="Depression") %>% dplyr::select(all_of(factors_dep)) %>% mutate_all(as.factor) %>% summary
+metad2 %>% dplyr::filter(Condition=="Depression") %>% dplyr::select(all_of(factors_dep)) %>% 
+  mutate_all(as.factor) %>% gtsummary::tbl_summary() # Hmisc::describe()
 ```
 
 <!-- ```{r makeAllPCAs_RareMin2, echo=FALSE, fig.width=12, fig.height=8} -->
