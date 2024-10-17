@@ -1,271 +1,346 @@
 # Alpha 4 each
-
+library(rstatix)
 
 ## Cualitativas
 
-alpha_indices <- c("Observed", "Chao1", "Shannon", "InvSimpson")
-vars2test <- c("Condition", "Sexo", "PROCEDENCIA", 
-               "Estado.civil2", "Educacion", 
-               "Fumador", "Colesterol_mayor_200",
-               "Mediterranean_diet_adherence",
-               "obesidad", "ob_o_sobrepeso", 
-               "defecaciones_semana", 
-               "bristol_scale_cualitativo",
-               "sexocaso", 
-               "Tanda",
-               "tandacaso", 
-               "procedenciacaso", 
-               "IPAQ_act_fisica")
-vars2test_ampl <- c(vars2test, escalas_qual)
+signif_levels=c("***"=0.001, "**"=0.01, "*"=0.05, "ns"=1.1)
 
-quant_vars <- c("Edad", "Edad_log", "BMI","BMI_log",  "TG", "Colesterol", "Glucosa.ayunas", "DII", "PSS_estres")
-quant_vars_ext <- c(quant_vars, escalas_quant)
-interestvar <- "Condition"
+alpha_indices <- c("Observed", "Chao1", "Shannon", "InvSimpson")
+vars2test <- c("Treatment", "Region_sequenced", "Stress", "Treatment_full", "flowcell", "Treatment_region") #"Category_T0"
+
+quant_vars <- c("nreads_filt", "num_reads")
+vars2log <- c( "nreads_filt", "num_reads")
+
+quant_vars_ext <- c(quant_vars, paste(vars2log, "_log", sep=""))
+interestvar <- "Treatment"
 extravars <- c(quant_vars, vars2test)
 extravars <- extravars[extravars != interestvar]
 
 outdir <- paste0(opt$out, "/AlphaDiversity/")
 if(!dir.exists(outdir)) dir.create(outdir)
 
+extravars2 <- extravars
 
-interestvar <- "Condition"
-extravars <- c(quant_vars, vars2test)
-extravars <- extravars[extravars != interestvar]
-extravars2 <- c("Sexo", "Edad_log", "BMI_log", "PSS_estres", "IPAQ_act_fisica", 
-                "Mediterranean_diet_adherence", "bristol_scale_cualitativo", 
-                "defecaciones_semana")
 
-phseq_to_use <- c("remove_tanda2_rarefied_min")
+phseq_to_use <- names(all_phyloseq)
 #load(allphyloseqlist_fname)
 
-for(phname in phseq_to_use){
+for(phname in phseq_to_use[1:2]){
   cat("Alpha diversity in ", phname, "\n")
   phobj <- all_phyloseq[[phname]]
-  phobj <- updatePsWithLogs(phobj, c("Edad", "BMI"))
-  sample_data(phobj)$IPAQ_act_fisica <- factor(sample_data(phobj)$IPAQ_act_fisica, levels=c("Low", "Mid", "High"))
+  phobj <- updatePsWithLogs(phobj, vars2log)
+  
+
   divtab <- calculateAlphaDiversityTable(phobj, outdir, alpha_indices, paste0(phname, "_AlphaDiv") )
-  divtab$IPAQ_act_fisica <- factor(divtab$IPAQ_act_fisica, levels=c("Low", "Mid", "High"))
-  models1 <- makeLinearModelsSingleVariable(divtab, interestvar, 
-                                            extravars, 
-                                            alpha_indices, 
-                                            combos=1,
-                                            outdir = outdir, name = paste0(phname, "_AlphaDiv_linMod1var") )
+  divtab <- divtab %>% mutate(
+    is_transfer = ifelse(Treatment == "TRANSFER", TRUE, FALSE),
+    Treatment = ifelse(Treatment == "TRANSFER", "NO ABS", Treatment)
+    
+  )
+  ## Statistics
   
-  models2 <- makeLinearModelsSingleVariable(divtab, interestvar, 
-                                            extravars2, 
-                                            alpha_indices, 
-                                            combos=1:3,
-                                            outdir = outdir, name = paste0(phname, "_AlphaDiv_linModManyVars") )
-   models3 <- makeLinearModelsSingleVariable(divtab %>% dplyr::filter(!is.na(PSS_estres)),"PSS_estres", 
-                                             c(interestvar, "BMI_log"), 
-                                             alpha_indices, 
-                                             combos=1,
-                                             outdir = outdir, name = paste0(phname, "_AlphaDiv_linModPSS") )
-   
-   models4 <- makeLinearModelsSingleVariable(divtab %>% dplyr::filter(!is.na(IPAQ_act_fisica)),"IPAQ_act_fisica", 
-                                             c(interestvar, "BMI_log"), 
-                                             alpha_indices, 
-                                             combos=1,
-                                             outdir = outdir, name = paste0(phname, "_AlphaDiv_linModIPAQ") )
-   
-   models5 <- makeLinearModelsSingleVariable(divtab %>% dplyr::filter(!is.na(BMI_log)),"BMI_log", 
-                                             c(interestvar, "IPAQ_act_fisica", "Mediterranean_diet_adherence"), 
-                                             alpha_indices, 
-                                             combos=1,
-                                             outdir = outdir, name = paste0(phname, "_AlphaDiv_linModBMI") )
-   
-   models6 <- makeLinearModelsSingleVariable(divtab %>% dplyr::filter(!is.na(Mediterranean_diet_adherence)),"Mediterranean_diet_adherence", 
-                                             c(interestvar, "BMI_log", "IPAQ_act_fisica"), 
-                                             alpha_indices, 
-                                             combos=1,
-                                             outdir = outdir, name = paste0(phname, "_AlphaDiv_linMEDDIET") )
-   
-   
-  alphadif <- testDiversityDifferences(divtab, alpha_indices, vars2test, outdir, "AlphaDiv_rawdata")
-  # Ya se hace dentro de la siguiente funcion
-  gipaq <- make_IPAQ_Boxplot(divtab, "IPAQ_act_fisica", test2show = "wilcox.test", 
-                             alpha_indices = alpha_indices, outdir = outdir, 
-                             name=phname,correct_pvalues = TRUE)
-  gipaq <- make_IPAQ_Boxplot(divtab, "IPAQ_act_fisica", test2show = "wilcox.test", 
-                             alpha_indices = alpha_indices, outdir = outdir, 
-                             name=paste0(phname, "_unadj"),correct_pvalues = FALSE)
+  means_bygroups = divtab %>% 
+    group_by(Treatment, Region_sequenced, Stress) %>% 
+    summarise(across(all_of(alpha_indices), 
+                     list(mean=mean, median=median, sd=sd, var=var, max=max, min=min)))
   
-  divplots <- getAlphaDiversity(phobj, vars2test_ampl, quant_vars_ext,
+ 
+  
+  means_bygroups = divtab %>% 
+    group_by(Treatment, Region_sequenced, Stress) %>% 
+    summarise(across(all_of(alpha_indices), 
+                     list(mean=mean, median=median, sd=sd, var=var, max=max, min=min)))
+  
+  write_tsv(means_bygroups, paste0(outdir, "/", phname, "_AlphaDiv_meansByGroup.tsv"))
+  
+  ## Differences between stress and non-stress
+  test_stress <- divtab %>% 
+    filter(Treatment != "TRANSFER") %>% 
+    group_by(Treatment, Region_sequenced) %>% 
+    group_split() %>% 
+    map(\(x){
+      data.frame(
+        alpha_ind = alpha_indices, 
+      ttest = sapply(alpha_indices, \(ai) t.test( as.formula(paste0(ai,  "~ Stress")), x)$p.value),
+      wilcox = sapply(alpha_indices, \(ai) wilcox.test( as.formula(paste0(ai,  "~ Stress")), x)$p.value),
+      anova=summary(aov( as.formula(paste0(ai,  "~ Stress")), x))[[1]][1, "Pr(>F)"],
+      shapiro = sapply(alpha_indices, \(ai) shapiro.test( unlist(x[, ai]))$p.value),
+      bartlett = sapply(alpha_indices, \(ai) bartlett.test( unlist(x[, ai]), x$Stress)$p.value)
+      ) %>% gather(key="test", value="pval", ttest:bartlett) %>% 
+        unite("tmp", alpha_ind, test, sep="_") %>% 
+        spread(tmp, pval) %>% 
+        mutate(Treatment = unique(x$Treatment),
+               Region_sequenced = unique(x$Region_sequenced),
+               Comparison = "Stress:Control_vs_SD") %>% 
+        select(Treatment, Region_sequenced, Comparison, everything())
+    }) %>% 
+    bind_rows() %>% 
+    mutate_if(is.numeric, list("Adj" =\(x)p.adjust(x, method="BH"))) %>% 
+    select(order(colnames(.))) %>% 
+    select(Treatment, Region_sequenced, Comparison, everything())
+  
+  write_tsv(test_stress, paste0(outdir, "/", phname, "_AlphaDiv_testStress_long.tsv"))
+  
+  test_stress <- map(alpha_indices, \(ai){
+    divtab %>% 
+      filter(Treatment != "TRANSFER") %>% 
+      group_by(Treatment, Region_sequenced) %>% 
+      pairwise_t_test(as.formula(paste0(ai, " ~ Stress")), 
+                      paired=FALSE,
+                      p.adjust.method	= "BH"
+      )}) %>% bind_rows()
+  
+  names(test_stress)[3] <- "alpha_index"
+  write_tsv(test_stress, paste0(outdir, "/", phname, "_AlphaDiv_testStress.tsv"))
+  
+  ## Differences by region sequenced
+  ## From https://www.datanovia.com/en/lessons/repeated-measures-anova-in-r/
+  test_regionseq <- map(alpha_indices, \(ai){
+    divtab %>% 
+    filter(Treatment != "TRANSFER") %>% 
+    group_by(Treatment, Stress) %>% 
+    pairwise_t_test(as.formula(paste0(ai, " ~ Region_sequenced")), 
+                    paired=FALSE,
+                    p.adjust.method	= "BH"
+    )}) %>% bind_rows()
+  
+  names(test_regionseq)[3] <- "alpha_index"
+  write_tsv(test_regionseq, paste0(outdir, "/", phname, "_AlphaDiv_testRegionSequenced.tsv"))
+  
+  test_regionseq_paired <-  map(alpha_indices, \(ai){
+    divtab %>% 
+      filter(Treatment != "TRANSFER") %>% 
+      group_by(Treatment, Stress) %>% 
+      pairwise_t_test(as.formula(paste0(ai, " ~ Region_sequenced")), 
+                      paired=TRUE,
+                      p.adjust.method	= "BH"
+      )}) %>% bind_rows()
+  
+  names(test_regionseq_paired)[3] <- "alpha_index"
+  write_tsv(test_regionseq_paired, paste0(outdir, "/", phname, "_AlphaDiv_testRegionSequenced_paired.tsv"))
+  
+  ## test treatments
+  test_treatments <- map(alpha_indices, \(ai){
+    divtab %>% 
+      filter(Region_sequenced != "TRANSFER") %>% 
+      group_by(Region_sequenced, Stress) %>% 
+      pairwise_t_test(as.formula(paste0(ai, " ~ Treatment")), 
+                      paired=FALSE,
+                      p.adjust.method	= "BH"
+      )}) %>% bind_rows()
+  
+  names(test_treatments)[3] <- "alpha_index"
+  write_tsv(test_treatments, paste0(outdir, "/", phname, "_AlphaDiv_testTreatment.tsv"))
+  
+  alphaplots_compRegions <- list()
+  alphaplots_compTreatments <- list()
+  alphaplots_compStress <- list()
+  for(ind in alpha_indices){
+    auxsig <- divtab %>% 
+      filter(Treatment != "TRANSFER") %>% 
+      group_by(Treatment, Stress) %>% 
+      pairwise_t_test(as.formula(paste0(ind, " ~ Region_sequenced")), 
+                      paired=FALSE,
+                      p.adjust.method	= "BH"
+      ) %>% 
+      add_xy_position() 
+    
+    alphaplots_compRegions[[ind]] <- ggplot(divtab, aes(x=Region_sequenced ,
+                                                        y = !!sym(ind), 
+                                                        fill=Treatment,
+                                                        col=Treatment))+
+      facet_grid(Stress ~ Treatment) +
+      #geom_violin(alpha=0.6)+
+      geom_boxplot(width=0.7, fill="white")+
+      geom_point() +
+      scale_color_npg() +
+      ggtitle(ind) +
+      theme_bw() +
+      xlab("Region Sequenced") +
+      #scale_fill_npg() +
+      theme(axis.text.x = element_text(vjust=1,hjust=1, angle = 45)) +
+      theme(plot.title = element_text(hjust = 0.5)) +
+      stat_pvalue_manual(auxsig, tip.length = 0.0, hide.ns = TRUE, vjust=0.6, bracket.nudge.y=0) +
+      labs(
+        caption = get_pwc_label(auxsig)
+      )
+    
+    auxsig <- divtab %>% 
+      filter(Treatment != "TRANSFER") %>% 
+      group_by(Treatment, Region_sequenced) %>% 
+      pairwise_t_test(as.formula(paste0(ind, " ~ Stress")), 
+                      paired=FALSE,
+                      p.adjust.method	= "BH"
+      ) %>% 
+      add_xy_position() 
+    
+    alphaplots_compStress[[ind]] <- ggplot(divtab %>% filter(Treatment != "TRANSFER"), aes(x=Stress,
+                                                                                           y = !!sym(ind), 
+                                                                                           fill=Treatment,
+                                                                                           col=Treatment))+
+      facet_grid(Region_sequenced ~  Treatment) +
+      #geom_violin(alpha=0.6)+
+      geom_boxplot(width=0.7, fill="white")+
+      geom_point() +
+      scale_color_npg() +
+      ggtitle(ind) +
+      theme_bw() +
+      xlab("Stress") +
+      theme(axis.text.x = element_text(vjust=1,hjust=1, angle = 45)) +
+      theme(plot.title = element_text(hjust = 0.5))+
+      stat_pvalue_manual(auxsig, tip.length = 0.0, hide.ns = TRUE, vjust=0.6, bracket.nudge.y=0) +
+      labs(
+        caption = get_pwc_label(auxsig)
+      )
+    
+    auxsig <- divtab %>% 
+      filter(Treatment != "TRANSFER") %>% 
+      group_by(Stress, Region_sequenced) %>% 
+      pairwise_t_test(as.formula(paste0(ind, " ~ Treatment")), 
+                      paired=FALSE,
+                      p.adjust.method	= "BH"
+      ) %>% 
+      add_xy_position() 
+    
+    alphaplots_compTreatments[[ind]] <- ggplot(divtab %>% filter(Treatment != "TRANSFER"), 
+                                               aes(x=Treatment,
+                                               y = !!sym(ind), 
+                                               #fill=Treatment,
+                                               col=Treatment))+
+      facet_grid(Stress ~ Region_sequenced) +
+      #geom_violin(alpha=0.6)+
+      geom_boxplot(width=0.7, fill="white")+
+      geom_point() +
+      scale_color_npg() +
+      ggtitle(ind) +
+      theme_bw() +
+      xlab("Treatment") +
+      #scale_fill_npg() +
+      theme(axis.text.x = element_text(vjust=1,hjust=1, angle = 45)) +
+      theme(plot.title = element_text(hjust = 0.5))+
+      stat_pvalue_manual(auxsig, tip.length = 0.00, hide.ns = TRUE, vjust=0.6) +
+      labs(
+        caption = get_pwc_label(auxsig)
+      )
+    
+    
+    ggsave(filename = paste0(outdir, "/", phname, "_", ind, "_AlphaDiv_byRegion.pdf"), alphaplots_compRegions[[ind]], width = 7, height = 4)
+    ggsave(filename = paste0(outdir, "/", phname, "_", ind, "_AlphaDiv_byTreatment.pdf"), alphaplots_compTreatments[[ind]], width = 7, height = 4)
+    ggsave(filename = paste0(outdir, "/", phname, "_", ind, "_AlphaDiv_byStress.pdf"), alphaplots_compStress[[ind]], width = 7, height = 6)
+  }
+  pdf( paste0(outdir, "/", phname, "_allIndices_AlphaDiv_byRegion.pdf"), width=14, height = 8)
+  print(cowplot::plot_grid(plotlist = alphaplots_compRegions))
+  dev.off()
+  
+  pdf( paste0(outdir, "/", phname, "_allIndices_AlphaDiv_byTreatment.pdf"), width=14, height = 8)
+  print(cowplot::plot_grid(plotlist = alphaplots_compTreatments))
+  dev.off()
+  
+  pdf( paste0(outdir, "/", phname, "_allIndices_AlphaDiv_byStress.pdf"), width=12, height = 9)
+  print(cowplot::plot_grid(plotlist = alphaplots_compStress))
+  dev.off()
+  
+  
+  # Typical plots
+  divplots <- getAlphaDiversity(phobj, vars2test, quant_vars_ext,
                                 opt,
                                 indices= alpha_indices,
                                 correct_pvalues = T, correct_pvalues_indices = F,
-                                name = paste0(phname, "_AlphaDiv"), w = 10, h = 4)
-  divplots <- getAlphaDiversity(phobj, vars2test_ampl, quant_vars_ext,
+                                name = paste0(phname, "_AlphaDiv"), w = 12, h = 4)
+  divplots <- getAlphaDiversity(phobj, vars2test, quant_vars_ext,
                                 opt,
                                 indices= alpha_indices,
                                 correct_pvalues = T, correct_pvalues_indices = T,
-                                name = paste0(phname, "_AlphaDivAdjInd"), w = 10, h = 4)
+                                name = paste0(phname, "_AlphaDivAdjInd"), w = 12, h = 4)
 }
 
-## REMOVING OUTLIERS
-outliers <- c(108, 113) %>% as.character
-
-for(phname in phseq_to_use){
-  cat("Alpha diversity in ", phname, "\n")
-  phobj <- all_phyloseq[[phname]]
-  phobj <- updatePsWithLogs(phobj, c("Edad", "BMI"))
-  samples <- sample_data(phobj) %>% data.frame %>% pull(sampleID)
-  samples <- samples[! samples %in% outliers ]
-  phobj_filt <- phyloseq::prune_samples(samples, phobj)
-  sample_data(phobj_filt)$IPAQ_act_fisica <- factor(sample_data(phobj_filt)$IPAQ_act_fisica, levels=c("Low", "Mid", "High"))
-  divtab <- calculateAlphaDiversityTable(phobj_filt, outdir, alpha_indices, paste0(phname, "_AlphaDiv_RMOL") )
-  divtab$IPAQ_act_fisica <- factor(divtab$IPAQ_act_fisica, levels=c("Low", "Mid", "High"))
-  models1 <- makeLinearModelsSingleVariable(divtab, interestvar, 
-                                            extravars, 
-                                            alpha_indices, 
-                                            combos=1,
-                                            outdir = outdir, name = paste0(phname, "_AlphaDiv_linMod1var_RMOL") )
-  
-  models2 <- makeLinearModelsSingleVariable(divtab, interestvar, 
-                                            extravars2, 
-                                            alpha_indices, 
-                                            combos=1:3,
-                                            outdir = outdir, name = paste0(phname, "_AlphaDiv_linModManyVars_RMOL") )
-  models3 <- makeLinearModelsSingleVariable(divtab %>% dplyr::filter(!is.na(PSS_estres)),"PSS_estres", 
-                                            c(interestvar, "BMI_log"), 
-                                            alpha_indices, 
-                                            combos=1,
-                                            outdir = outdir, name = paste0(phname, "_AlphaDiv_linModPSS_RMOL") )
-  models4 <- makeLinearModelsSingleVariable(divtab %>% dplyr::filter(!is.na(IPAQ_act_fisica)),"IPAQ_act_fisica", 
-                                            c(interestvar, "BMI_log"), 
-                                            alpha_indices, 
-                                            combos=1,
-                                            outdir = outdir, name = paste0(phname, "_AlphaDiv_linModIPAQ_RMOL") )
-  
-  alphadif <- testDiversityDifferences(divtab, alpha_indices, vars2test, outdir, "AlphaDiv_rawdata_RMOL")
-  # Ya se hace dentro de la siguiente funcion
-  gipaq <- make_IPAQ_Boxplot(divtab, "IPAQ_act_fisica", test2show = "wilcox.test", 
-                             alpha_indices = alpha_indices, outdir = outdir, 
-                             name=paste0(phname, "_RMOL"),correct_pvalues = TRUE)
-  gipaq <- make_IPAQ_Boxplot(divtab, "IPAQ_act_fisica", test2show = "wilcox.test", 
-                             alpha_indices = alpha_indices, outdir = outdir, 
-                             name=paste0(phname, "_unadj_RMOL"),correct_pvalues = FALSE)
-  
-  divplots <- getAlphaDiversity(phobj_filt, vars2test_ampl, quant_vars_ext,
-                                opt,
-                                indices= alpha_indices,
-                                correct_pvalues = T, correct_pvalues_indices = F,
-                                name = paste0(phname, "_AlphaDiv_RMOL"), w = 10, h = 4)
-  divplots <- getAlphaDiversity(phobj_filt, vars2test_ampl, quant_vars_ext,
-                                opt,
-                                indices= alpha_indices,
-                                correct_pvalues = T, correct_pvalues_indices = T,
-                                name = paste0(phname, "_AlphaDivAdjInd_RMOL"), w = 10, h = 4)
-}
-
-# Alpha inside depression
-outdir <- paste0(opt$out, "/AlphaDiversityInsideDepr/")
-if(!dir.exists(outdir)) dir.create(outdir)
 
 
-interestvar <- "Condition"
-quant_vars_onlydepr <-  c(escalas_quant, "PSS_estres", "DII", "BMI_log")
-qual_vars_onlydepr <- escalas_qual
-
-phseq_to_use <- c("rarefied_min", "remove_tanda2_rarefied_min", "rmbatch_tanda_raref")
-#load(allphyloseqlist_fname)
-
-for(phname in phseq_to_use){
-  cat("Alpha diversity inside depression ", phname, "\n")
-  phobj <- all_phyloseq[[phname]]
-  phobj <- updatePsWithLogs(phobj, c("Edad", "BMI"))
-  samples <- sample_data(phobj)$sampleID[unlist(sample_data(phobj)[, interestvar]) == "Depression" ]
-  phobj_filt <- phyloseq::prune_samples(samples, phobj)
-  #alphadif <- testDiversityDifferences(divtab, alpha_indices, vars2test, outdir, "AlphaDiv_rawdata")
-  # Ya se hace dentro de la siguiente funcion
-  divplots <- getAlphaDiversity(phobj_filt, c(interestvar, "IPAQ_act_fisica"), quant_vars_onlydepr,
-                                opt,
-                                indices= alpha_indices,
-                                correct_pvalues = T,
-                                name = paste0(phname, "_AlphaDivOnlyDepr"), w = 10, h = 4)
-}
-
-outliers <- c(108, 113) %>% as.character
-for(phname in phseq_to_use){
-  cat("Alpha diversity inside depression ", phname, "\n")
-  phobj <- all_phyloseq[[phname]]
-  phobj <- updatePsWithLogs(phobj, c("Edad", "BMI"))
-  samples <- sample_data(phobj)$sampleID[unlist(sample_data(phobj)[, interestvar]) == "Depression" ]
-  samples <- samples[! samples %in% outliers ]
-  phobj_filt <- phyloseq::prune_samples(samples, phobj)
-  #alphadif <- testDiversityDifferences(divtab, alpha_indices, vars2test, outdir, "AlphaDiv_rawdata")
-  # Ya se hace dentro de la siguiente funcion
-  divplots <- getAlphaDiversity(phobj_filt, c(interestvar, "IPAQ_act_fisica"), quant_vars_onlydepr,
-                                opt,
-                                indices= alpha_indices,
-                                correct_pvalues = T,
-                                name = paste0(phname, "_AlphaDivOnlyDepr_RMOUTLIERS"), w = 10, h = 4)
-}
-
-quant_vars_onlyctr <-  c("Escala_depresión_Beck", "PSS_estres", "DII", "BMI_log")
-qual_vars_onlyctr <- escalas_qual
-for(phname in phseq_to_use){
-  cat("Alpha diversity inside control ", phname, "\n")
-  phobj <- all_phyloseq[[phname]]
-  phobj <- updatePsWithLogs(phobj, c("Edad", "BMI"))
-  samples <- sample_data(phobj)$sampleID[unlist(sample_data(phobj)[, interestvar]) == "Control" ]
-  phobj_filt <- phyloseq::prune_samples(samples, phobj)
-  #alphadif <- testDiversityDifferences(divtab, alpha_indices, vars2test, outdir, "AlphaDiv_rawdata")
-  # Ya se hace dentro de la siguiente funcion
-  divplots <- getAlphaDiversity(phobj_filt, c(interestvar, "IPAQ_act_fisica"), quant_vars_onlyctr,
-                                opt,
-                                indices= alpha_indices,
-                                correct_pvalues = T,
-                                name = paste0(phname, "_AlphaDivOnlyCtrl"), w = 10, h = 4)
-}
 # Beta 4 each
 outdir <- paste0(opt$out, "/BetaDiversity/")
 if(!dir.exists(outdir)) dir.create(outdir)
 
 dists <- c("bray", "jaccard")
-vars2pcoa <- c(quant_vars_ext, vars2test_ampl)
-#Repeat some plots changing size
-vars2pcoa_long_plots <- c("ob_o_sobrepeso", 
-                          "Educacion", 
-                          "defecaciones_semana",
-                          "bristol_scale_cualitativo",
-                          "IPAQ_act_fisica", 
-                          "Mediterranean_diet_adherence", 
-                          "ob_o_sobrepeso", 
-                          "DMSV_puntuacion_total", 
-                          escalas_qual)
-
+vars2pcoa <- c(vars2test, quant_vars_ext)
+var2shape = "Stress"
 ccaplots <- list()
 for(phname in phseq_to_use){
   for(method in c("PCoA", "NMDS")){
     for(dist in dists){
-      name <- paste0(phname, "_", dist, "_", method)
+      name <- paste0(phname, "_", dist, "_", method, "_5dims")
       cat("Beta diversity for ", name, "\n")
       
-      if(phname %in% c("remove_tanda2", "remove_tanda2_rarefied_min")){
-        reserva1 <- vars2pcoa
-        vars2pcoa <- vars2pcoa[vars2pcoa != "Tanda"]
-      }
       ccaplots[[name]] <- makeAllPCoAs(all_phyloseq[[phname]], outdir,
                                        method = method,
                                        name = name, 
                                        dist_type = dist, 
                                        dist_name = dist,
                                        vars2plot = vars2pcoa, 
-                                       extradims = 2:3, 
-                                       create_pdfs = T)
-      #Just repeat a few plots with adapted sizes
-      xx <- makeAllPCoAs(all_phyloseq[[phname]], outdir,
+                                       var2shape = var2shape,
+                                       extradims = 2:5, 
+                                       create_pdfs = T, w=8, h = 8)
+      
+      
+      name <- paste0(phname, "_", dist, "_", method)
+      ccaplots[[name]] <- makeAllPCoAs(all_phyloseq[[phname]], outdir,
                                        method = method,
-                                       name = paste0(name, "_size2"), 
-                                       dist_type = dist, 
+                                       name = name,
+                                       dist_type = dist,
                                        dist_name = dist,
-                                       vars2plot = vars2pcoa_long_plots, 
-                                       extradims = 2:3, 
-                                       create_pdfs = T, w=16)
-      if(phname %in% c("remove_tanda2", "remove_tanda2_rarefied_min")){
-        vars2pcoa <- reserva1
-      }
+                                       vars2plot = vars2pcoa,
+                                       var2shape = var2shape,
+                                       extradims = 2:3,
+                                       create_pdfs = T, w=8)
+
+      ## Make better PCoA
+
+      pcoa.bray <- ordinate(phobj, method = method, distance = dist)
+      evals <- pcoa.bray$values$Eigenvalues
+
+      df2plot <- pcoa.bray$points %>% data.frame %>%
+        rownames_to_column()
+
+      gg <- plot_ordination(phobj, pcoa.bray,
+                            color = "Region_sequenced",
+                            shape = "Treatment",
+                            title = name, axes=c(1, 2)) +
+        #coord_fixed(sqrt(evals[2] / evals[1])) +
+        #scale_color_manual(values=palette2)+
+        stat_ellipse(level=0.95, linetype=2, alpha = 0.8, na.rm = TRUE) +
+        geom_point(size = 1.5) +
+        #geom_point(size = 1, aes(col=Stress)) +
+        #geom_text_repel(aes_string(label = labelsamples)) +
+        theme_bw() +
+        theme(axis.text.x = element_text(size = 14))+
+        theme(strip.text.x = element_text(size = 14))+
+        theme(axis.title.y = element_text(size = 14))+
+        theme(axis.title.x = element_text(size = 14))+
+        theme(axis.text.y = element_text( size = 14)) +
+        scale_color_npg() +
+        facet_grid( ~ Stress)
+      ggsave(paste0(outdir, name, "_extra1.pdf"), gg, width = 8, height = 4)
+      gg2 <- plot_ordination(phobj, pcoa.bray,
+                            color = "Treatment",
+                            #shape = "Stress",
+                            title = name, axes=c(1, 2)) +
+        #coord_fixed(sqrt(evals[2] / evals[1])) +
+        #scale_color_manual(values=palette2)+
+        stat_ellipse(level=0.95, linetype=2, alpha = 0.8, na.rm = TRUE) +
+        geom_point(size = 1) +
+        #geom_point(size = 1, aes(col=Stress)) +
+        #geom_text_repel(aes_string(label = labelsamples)) +
+        theme_bw() +
+        theme(axis.text.x = element_text(size = 14))+
+        theme(strip.text.x = element_text(size = 14))+
+        theme(strip.text.y = element_text(size = 14))+
+        theme(axis.title.y = element_text(size = 14))+
+        theme(axis.title.x = element_text(size = 14))+
+        theme(axis.text.y = element_text( size = 14)) +
+        scale_color_npg() +
+        facet_grid(Stress ~ Region_sequenced)
+      ggsave(paste0(outdir, name, "_extra2.pdf"), gg2, width = 8, height = 5)
+      
+      
     }}}
 
 # Composition 4 each
@@ -273,10 +348,20 @@ for(phname in phseq_to_use){
 outdir <- paste0(opt$out, "/DescriptiveAbundances/")
 if(!dir.exists(outdir)) dir.create(outdir)
 tops <- c(5, 10)
-n_species <- 20
-interestvar <- "Condition"
 
+
+library(plyr)
 for(phname in phseq_to_use){
-  cat("Doing Abundance Plots for: ", phname, "\n")
-  abund_plots <- plotAbundanceFullPipeline(all_phyloseq[[phname]], interestvar, outdir, phname, c("Control", "Depression"), tops)
-}
+  phobj <- all_phyloseq[[phname]]
+  # for(interestvar in vars2test){
+  # cat("Doing Abundance Plots for: ", phname, ", ", interestvar, "\n")
+  # #abund_plots <- plotAbundanceFullPipeline(all_phyloseq[[phname]], interestvar, outdir, phname, unique(meta3 %>% pull(!!sym(interestvar))), tops)
+  #   
+  #   
+  #   oname <- paste0(outdir, "/relAbund_bySpecies_ColByGenus_", phname, "_", interestvar, "_", as.character(15), ".pdf")
+  #   plotRelativeAbnBars_Fantaxtic(phobj, interestvar, topn = 15, tax_level="Genus", outname = oname)
+  # }
+  oname <- paste0(outdir, "/relAbund_bySpecies_ColByGenus_", phname, "_", "GRID", "_", as.character(15), ".pdf")
+  plotRelativeAbnBars_Fantaxtic_grid(phobj, c("Treatment", "Region_sequenced","Stress" ), topn = 15, tax_level="Genus", outname = oname,
+                                     height = 10, width = 10)
+  }
