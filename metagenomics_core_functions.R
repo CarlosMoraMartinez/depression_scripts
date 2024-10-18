@@ -1889,7 +1889,8 @@ makeHeatmap <- function(resdf, dds, df2plot,
     mat <- log(mat + 1)
   }
   
-  fontsize_row = 10 - nrow(mat) / 15
+  fontsize_row = 10 - nrow(mat) / 13
+  fontsize_col = 10 - ncol(mat) / 13
   
   mat_trim <- mat
   if(trim_values){
@@ -1904,18 +1905,19 @@ makeHeatmap <- function(resdf, dds, df2plot,
     }) %>% as.expression()
   }
   if(! all(rownames(mat_trim) %in% colnames(mat_trim))){
-    hm <- pheatmap(mat_trim, cluster_rows=T, 
+    hm <- pheatmap(mat_trim, 
                  show_rownames=nrow(mat) < 120,
                  annotation_col = annot,
+                 fontsize_col = fontsize_col,
                  fontsize_row = fontsize_row,
                  border_color = NA,
                  labels_row = labels_row,
                  cluster_cols=T, 
-                 annotcluster_rowsation_col=annot
+                 cluster_rows=T
                  )
   }else{
     # Correlation heatmap
-    hm <- pheatmap(mat_trim, cluster_rows=T, 
+    hm <- pheatmap(mat_trim, 
                    show_rownames=nrow(mat) < 120,
                    annotation_col = annot,
                    annotation_row = annot,
@@ -1924,11 +1926,11 @@ makeHeatmap <- function(resdf, dds, df2plot,
                    border_color = NA,
                    labels_row = labels_row,
                    cluster_cols=T, 
-                   annotcluster_rowsation_col=annot
+                   cluster_rows=T
     )
   }
-  w <- w+0.05*ncol(mat)
-  h <- h+0.05*nrow(mat)
+  w <- if(ncol(mat)>10) w+0.05*ncol(mat) else 7
+  h <- if(nrow(mat)>10) h+0.05*nrow(mat) else 7
   pdf(outname, width = w, height = h)
   print(hm)
   tmp <- dev.off()
@@ -2955,21 +2957,41 @@ makeLinearModelsSingleVariable <- function(divtab,
   return(results)
 }
 
-make_all_maplots <- function(dearesults){
-  for(singleres in dearesults){
+make_all_maplots <- function(all_contrasts, opt){
+  for(singleres in all_contrasts){
     
-    tryCatch(make_maplot(singleres$res, opt, paste0(singleres$nested_dir,singleres$name, "_MAPlot-rawFC.pdf")),  error=\(x)cat("Error make_maplot"))
-    tryCatch(make_maplot(singleres$resLFC, opt,  paste0(singleres$nested_dir, singleres$name, "_MAPlot-rawFC.pdf")),  error=\(x)cat("Error make_maplot"))
-    tryCatch(make_maplot(singleres$resLFC_ape, opt,  paste0(singleres$nested_dir,singleres$name, "_MAPlot-rawFC-ape.pdf")),  error=\(x)cat("Error make_maplot"))
-    tryCatch(make_maplot(singleres$resLFC_ashr, opt,  paste0(singleres$nested_dir,singleres$name, "_MAPlot-rawFC-ashr.pdf")),  error=\(x)cat("Error make_maplot"))
-    tryCatch({
-      pdf( paste0(opt$out, singleres$nested_dir,singleres$name, "_DESVlot.pdf")); 
-      print(plotDispEsts(dds, CV=T , ylim = c(1e-6, 1e1))); 
-      dev.off()},  
-             error=\(x)cat("Error plotDispEsts")) 
+    tryCatch(make_maplot(singleres$res, opt, paste0(singleres$nested_dir,singleres$name, "_MAPlot-rawFC.pdf")),  
+             error=\(x)cat("Error make_maplot rawFC\n"))
+    tryCatch(make_maplot(singleres$resLFC, opt,  paste0(singleres$nested_dir, singleres$name, "_MAPlot-rawFC-normal.pdf")),  
+             error=\(x)cat("Error make_maplot rawFC-normal\n"))
+    tryCatch(make_maplot(singleres$resLFC_ape, opt,  paste0(singleres$nested_dir,singleres$name, "_MAPlot-rawFC-ape.pdf")),  
+             error=\(x)cat("Error make_maplot rawFC-apet\n"))
+    tryCatch(make_maplot(singleres$resLFC_ashr, opt,  paste0(singleres$nested_dir,singleres$name, "_MAPlot-rawFC-ashr.pdf")),  
+             error=\(x)cat("Error make_maplot rawFC-ashr\n"))
+
     rtabs <- getSummaryTablesDeseq(singleres$res, opt, singleres$nested_dir)
-    tryCatch(make_volcano(singleres$resLFC, opt, paste0(singleres$nested_dir,singleres$name, "volcano_rawfc_rawpval.pdf"), "pvalue"), error=\(x)cat("Error make_volcano"))
-    tryCatch(make_volcano(singleres$res, opt, paste0(singleres$nested_dir,singleres$name, "volcano_rawfc_adjpval.pdf"), "padj"),  error=\(x)cat("Error make_volcano"))
+    
+    tryCatch(make_volcano(singleres$res, opt, paste0(singleres$nested_dir,singleres$name, "volcano_rawfc_rawpval.pdf"), "pvalue"), 
+             error=\(x)cat("Error make_volcano raw FC, raw p-val\n"))
+    tryCatch(make_volcano(singleres$res, opt, paste0(singleres$nested_dir,singleres$name, "volcano_rawfc_adjpval.pdf"), "padj"),  
+             error=\(x)cat("Error make_volcano  raw FC, adj p-val\n"))
+    
+    tryCatch(make_volcano(singleres$resLFC, opt, paste0(singleres$nested_dir,singleres$name, "volcano_shnormfc_rawpval.pdf"), "pvalue"), 
+             error=\(x)cat("Error make_volcano Shrink normal, raw p-val\n"))
+    tryCatch(make_volcano(singleres$resLFC, opt, paste0(singleres$nested_dir,singleres$name, "volcano_shnormfc_adjpval.pdf"), "padj"),  
+             error=\(x)cat("Error make_volcanoShrink normal, adj p-val \n"))
+    
+    tryCatch(make_volcano(singleres$resLFC_ape, opt, paste0(singleres$nested_dir,singleres$name, "volcano_shapefc_rawpval.pdf"), "pvalue"), 
+             error=\(x)cat("Error make_volcano Shrink ape, raw p-val\n"))
+    tryCatch(make_volcano(singleres$resLFC_ape, opt, paste0(singleres$nested_dir,singleres$name, "volcano_shapefc_adjpval.pdf"), "padj"),  
+             error=\(x)cat("Error make_volcano Shrink ape, adj p-val\n"))
+    
+    tryCatch(make_volcano(singleres$resLFC_ashr, opt, paste0(singleres$nested_dir,singleres$name, "volcano_shashfc_rawpval.pdf"), "pvalue"), 
+             error=\(x)cat("Error make_volcano Shrink ashr, raw p-val\n"))
+    tryCatch(make_volcano(singleres$resLFC_ashr, opt, paste0(singleres$nested_dir,singleres$name, "volcano_shashfc_adjpval.pdf"), "padj"),  
+             error=\(x)cat("Error make_volcano Shrink ashr, adj p-val\n"))
+    
+    while(dev.cur() != 1) dev.off()
   }
 }
 
@@ -2990,11 +3012,28 @@ make_all_heatmaps<- function(dearesults, df2plot, metadata, vars2heatmap, dds, o
                          opt, name = paste0(singleres$nested_dir, singleres$name, "diff_ab_heatmap_adjpval.pdf"), 
                          logscale = F, ptype="padj", trim_values = TRUE, taxalist=taxalist_padj), 
              error=\(x) cat("Error makeHeatmap padj"))
+    
+    while(dev.cur() != 1) dev.off()
   }
-
+ 
 }
+
+make_heatmap_subset<- function(dearesult, df2plot, taxa, samples, vars2heatmap, dds, name, opt){
+  
+    df2plot2 <- df2plot %>% select(gene, all_of(samples))
+    
+    tryCatch(makeHeatmap(dearesult$resdf, dds, df2plot2, vars2heatmap,
+                         opt, name = paste0(name, "_condHeatmap.pdf"), 
+                         logscale = F, ptype="pvalue", trim_values = TRUE, taxalist=taxa, check_taxa = FALSE), 
+             error=\(x) cat("Error makeHeatmap condHeatmap: ", name))
+    
+    while(dev.cur() != 1) dev.off()
+  
+}
+
+
 deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE,  doPoscounts=FALSE, 
-                                all_combins = NULL, plot_all = TRUE, deseqname = "DeSEQ2/", vars2heatmap=c()){
+                                all_combins = list(), plot_all = TRUE, deseqname = "DeSEQ2/", vars2heatmap=c()){
   opt <- restaurar(opt)
   if(!dir.exists(paste0(opt$out, deseqname))) dir.create(paste0(opt$out, deseqname))
   outdir <- paste0(opt$out, deseqname, name, "/")
@@ -3007,11 +3046,17 @@ deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE,  d
   }
   dearesults <- getDeseqResults(phobj, opt, name, variables = vars2deseq, interact = interact, 
                                 doPoscounts=doPoscounts, all_combins=all_combins)
-  save(dearesults, file = paste0(opt$out, name, "_DEAresults.RData"))
+  
+  cat("Length of contrasts is: ", length(dearesults$all_contrasts), "; length of wanted contrasts was ", length(all_combins))
+  tmp_names <- sapply(all_combins, \(x) paste(x[1], x[3], "vs", x[2], sep="_"))
+  contrasts_not_made <- names(dearesults$all_contrasts)[! (names(dearesults$all_contrasts) %in% tmp_names )]
+  write_tsv(data.frame(contrast = contrasts_not_made), file = paste0(opt$out, "contrasts_not_made.tsv"))
+  cat("CONTRASTS NOT MADE: ", contrasts_not_made)
+  #save(dearesults, file = paste0(opt$out, name, "_DEAresults.RData"))
   if(plot_all){
-    make_all_maplots(dearesults$all_contrasts)
+    make_all_maplots(dearesults$all_contrasts, opt)
   }else{
-    make_all_maplots(list(dearesults$all_contrasts[[1]]))
+    make_all_maplots(list(dearesults$all_contrasts[[1]]), opt)
   }
   #list2env(dearesults, envir = environment())
   
@@ -3019,20 +3064,25 @@ deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE,  d
   #   kable(caption="Differentially abundant ASVs at adjusted p-value < 0.05")
 
   # make heatmaps for each contrast
-  df2plot <- if(! nrow(vst_counts_df)){norm_counts_df}else{vst_counts_df}
+  df2plot <- if(! nrow(dearesults$vst_counts_df)){dearesults$norm_counts_df}else{dearesults$vst_counts_df}
   if(plot_all){
     make_all_heatmaps(dearesults$all_contrasts, df2plot, 
                       sample_data(phobj) %>% data.frame, 
-                      vars2heatmap, dds, opt)
+                      vars2heatmap, dearesults$dds, opt)
   }
+  tryCatch({
+    pdf( paste0(opt$out,singleres$name, "_DESVlot.pdf")); 
+    print(plotDispEsts(dearesults$dds, CV=T , ylim = c(1e-6, 1e1))); 
+    dev.off()},  
+    error=\(x)cat("Error plotDispEsts")) 
   
   # make global heatmaps
-  if(all_combos_done & length(all_contrasts) > 1){
+  if(dearesults$all_combos_done & length(dearesults$all_contrasts) > 1){
     cat("All contrasts TRUE, intersecting Taxon list")
-    taxalist_praw <- map(all_contrasts, \(x){
+    taxalist_praw <- map(dearesults$all_contrasts, \(x){
       x$resdf %>% dplyr::filter(pvalue < opt$pval) %>% pull(taxon)
     }) %>% unlist %>% unique
-    taxalist_padj <- map(all_contrasts, \(x){
+    taxalist_padj <- map(dearesults$all_contrasts, \(x){
       x$resdf %>% dplyr::filter(padj < opt$pval) %>% pull(taxon)
     }) %>% unlist %>% unique
   }else{
@@ -3041,11 +3091,11 @@ deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE,  d
   
   if(length(vars2heatmap) == 0) vars2heatmap <- vars2deseq
   
-  tryCatch(makeHeatmap(dearesults$resdf, dds, df2plot, vars2heatmap,
+  tryCatch(makeHeatmap(dearesults$resdf, dearesults$dds, df2plot, vars2heatmap,
               opt, name = paste0(name, "diff_ab_heatmap_rawpval.pdf"), 
               logscale = F, ptype="pvalue", trim_values = TRUE, taxalist=taxalist_praw), 
            error=\(x) cat("Error makeHeatmap praw"))
-  tryCatch(makeHeatmap(dearesults$resdf, dds, df2plot, vars2heatmap,
+  tryCatch(makeHeatmap(dearesults$resdf, dearesults$dds, df2plot, vars2heatmap,
               opt, name = paste0(name, "diff_ab_heatmap_adjpval.pdf"), 
               logscale = F, ptype="padj", trim_values = TRUE, taxalist=taxalist_padj), 
               error=\(x) cat("Error makeHeatmap padj"))
@@ -3053,12 +3103,12 @@ deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE,  d
   dfcorr <- df2plot %>% column_to_rownames("gene") %>% 
     as.matrix %>% cor %>% 
     as.data.frame %>% rownames_to_column("gene")
-  tryCatch(makeHeatmap(dearesults$resdf, dds, dfcorr, vars2heatmap,
+  tryCatch(makeHeatmap(dearesults$resdf, dearesults$dds, dfcorr, vars2heatmap,
                        opt, name = paste0(name, "corr_heatmap_rawpval.pdf"), 
                        logscale = F, ptype="pvalue", trim_values = TRUE, taxalist=dfcorr$gene,
                        italics_rownames = FALSE, check_taxa = FALSE), 
            error=\(x) cat("Error makeHeatmap praw"))
-  tryCatch(makeHeatmap(dearesults$resdf, dds, dfcorr, vars2heatmap,
+  tryCatch(makeHeatmap(dearesults$resdf, dearesults$dds, dfcorr, vars2heatmap,
                        opt, name = paste0(name, "corr_heatmap_adjpval.pdf"), 
                        logscale = F, ptype="padj", trim_values = TRUE, taxalist=dfcorr$gene,
                        italics_rownames = FALSE, check_taxa = FALSE), 

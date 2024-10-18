@@ -48,13 +48,13 @@ if(MODE == "IATA"){
               flowcelldata =  paste0(BASEDIR, "/Metadata/flowcell.txt"),
 
               rewrite=FALSE,
-              minfreq = 0.05,
+              minfreq = 0.1,
               mincountspersample = 0,
-              mincount= 1,
+              mincount= 20,
               minsampleswithcount = 0,
               raref_quant = 0.15,
               fc=1, 
-              pval=0.05, 
+              pval=0.01, 
               ptype="adjusted", 
               fctype="shrunk",
               num_genes_default=5
