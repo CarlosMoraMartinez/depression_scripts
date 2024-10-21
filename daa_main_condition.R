@@ -49,7 +49,7 @@ vars2heatmap <- c("Treatment", "Region_sequenced", "Stress", "flowcell")
 opt$mincount <- 10
 opt$minsampleswithcount <- 3
 phseq_to_use <- names(all_phyloseq)[1:2]
-deseqname = "DeSEQ2_v7/"
+deseqname = "DeSEQ2_v8/"
 
 for(phname in phseq_to_use){
   # cat("Doing DESeq2 Analysys for: ", phname, "\n")
@@ -72,11 +72,12 @@ for(phname in phseq_to_use){
   
 }
 opt <- restaurar(opt)
-save(daa_all, file = paste0(opt$out, deseqname, "DESEQ2_all.RData"))
+#save(daa_all, file = paste0(opt$out, deseqname, "DESEQ2_all.RData"))
+#load(paste0(opt$out, deseqname, "DESEQ2_all.RData"))
 
 combs_cp <- ALL_COMBINS
 names(combs_cp) <- sapply(combs_cp, \(x) paste(x[1], x[3], "vs", x[2], sep="_"))
-
+vars2heatmap2 <- vars2heatmap[1:2]
 
 for(phname in phseq_to_use){
   phobj <- all_phyloseq[[phname]] 
@@ -90,6 +91,7 @@ for(phname in phseq_to_use){
   sample_data(phobj)$Treatment_region <- gsub("TRANSFER", "NO ABS", sdata$Treatment_region)
   sample_data(phobj)$Treatment_region <- gsub(" |:", ".", sample_data(phobj)$Treatment_region, perl=TRUE)
   sdata <- sample_data(phobj) %>% data.frame
+  sdata_simp <- sdata %>% select(Treatment_region, Treatment, Region_sequenced, Stress) %>% distinct
   
   deseq_results <- daa_all[[phname]]$all_contrasts
   
@@ -120,11 +122,12 @@ for(phname in phseq_to_use){
   opt$out <- paste0(opt$out, deseqname, phname, "/HeatmapsRegion/")
   if(!dir.exists(opt$out)) dir.create(opt$out)
   
-  cond_df <- deseq_df %>% 
+  cond_df_reg <- deseq_df %>% 
     dplyr::filter(Treatment_group1 == Treatment_group2) %>% 
     dplyr::filter(Stress_group1 == Stress_group2) %>%
     dplyr::filter(Region_sequenced_group1 != Region_sequenced_group2) %>% 
-    group_by(Treatment_group1, Stress_group1) %>% 
+    group_by(Treatment_group1, Stress_group1)
+  cond_df_reg %>% 
     group_walk(~{
       hmname <- paste0(phname, "_Region_in_", unique(.x$Treatment_group2 %>% unlist), "_", unique(.x$Stress_group2 %>% unlist))
       print(hmname)
@@ -156,11 +159,12 @@ for(phname in phseq_to_use){
     opt$out <- paste0(opt$out, deseqname, phname, "/HeatmapsTreatment/")
     if(!dir.exists(opt$out)) dir.create(opt$out)
     
-    cond_df <- deseq_df %>% 
+    cond_df_treat <- deseq_df %>% 
       dplyr::filter(Region_sequenced_group1 == Region_sequenced_group2) %>% 
       dplyr::filter(Stress_group1 == Stress_group2) %>%
       dplyr::filter(Treatment_group1 != Treatment_group2) %>% 
-      group_by(Region_sequenced_group1, Stress_group1) %>% 
+      group_by(Region_sequenced_group1, Stress_group1)
+    cond_df_treat %>% 
       group_walk(~{
         hmname <- paste0(phname, "_Treatment_in_", unique(.x$Region_sequenced_group2 %>% unlist), "_", unique(.x$Stress_group2 %>% unlist))
         print(hmname)
@@ -185,5 +189,143 @@ for(phname in phseq_to_use){
                             opt)
       })
     
+    
+    ## Bigger heatmaps
+    opt <- restaurar(opt)
+    opt$out <- paste0(opt$out, deseqname, phname, "/HeatmapsRegion/")
+    sdata2 <- sdata %>% dplyr::mutate(
+      Treatment = factor(Treatment, levels = c("ABS", "NO ABS", "REG1", "REG2", "REG3")),
+      Region_sequenced = factor(Region_sequenced, levels = c("REG1", "REG2", "REG3")), 
+      Stress = factor(Stress, levels = c("Control", "SD"))
+    ) %>% arrange(Treatment, Region_sequenced, Stress) %>% 
+      mutate(sampleID = factor(sampleID, levels=sampleID)) %>% 
+      group_by(Stress) %>% 
+      group_split()
+    
+    df2plot_list <- sdata2 %>% 
+      map( \(x) df2plot %>% dplyr::select(gene, all_of(x$sampleID)) %>% 
+          column_to_rownames("gene") %>% 
+          as.matrix
+      )
+    names(df2plot_list) <- sapply(sdata2, \(x)unique(x$Stress) %>% as.character) 
+    
+    df2plot_list %>% map2(sdata2, \(mat, sdata_parcial){
+      
+      taxalist <- deseq_df %>% 
+        dplyr::filter(Stress_group1 == Stress_group2) %>% 
+        dplyr::filter(Stress_group1 == unique(sdata_parcial$Stress)) %>% 
+        pull(diff_p01) %>% unlist %>% unique
+      name <- paste0("/heatmap_allRegions_", unique(sdata_parcial$Stress), "_p01.pdf")
+      make_full_region_heatmap(mat, sdata_parcial, 
+                               variables=vars2heatmap2, 
+                               opt, name,
+                               taxalist=taxalist,
+                               logscale=FALSE, 
+                               w=9, h=2,
+                               trim_values=FALSE,
+                               italics_rownames=TRUE)
+      name <- paste0("/heatmap_allRegions_", unique(sdata_parcial$Stress), "_p01_trim02.pdf")
+      make_full_region_heatmap(mat, sdata_parcial, 
+                               variables=vars2heatmap2, 
+                               opt, name,
+                               taxalist=taxalist,
+                               logscale=FALSE, 
+                               w=9, h=2,
+                               trim_values=TRUE,
+                               italics_rownames=TRUE, trimquantile=0.02)
+      name <- paste0("/heatmap_allRegions_", unique(sdata_parcial$Stress), "noABS_p01.pdf")
+      sdata_parcial3 <- sdata_parcial %>% filter(Treatment != "ABS")
+      mat <- mat[, sdata_parcial3$sampleID %>% as.character]
+      make_full_region_heatmap(mat, 
+                               sdata_parcial3, 
+                               variables=vars2heatmap2, 
+                               opt, name,
+                               taxalist=taxalist,
+                               logscale=FALSE, 
+                               w=9, h=2,
+                               trim_values=FALSE,
+                               italics_rownames=TRUE)
+      name <- paste0("/heatmap_allRegions_", unique(sdata_parcial$Stress), "noABS_p01_trim02.pdf")
+      make_full_region_heatmap(mat, 
+                               sdata_parcial3, 
+                               variables=vars2heatmap2, 
+                               opt, name,
+                               taxalist=taxalist,
+                               logscale=FALSE, 
+                               w=9, h=2,
+                               trim_values=TRUE,
+                               italics_rownames=TRUE, trimquantile=0.02)
+      
+      })
+      
+    opt <- restaurar(opt)
+    opt$out <- paste0(opt$out, deseqname, phname, "/HeatmapsLFC/")
+    if(! dir.exists(opt$out)) dir.create(opt$out)
+    
+    deseq_longdf <- deseq_df %>% dplyr::mutate(
+      taxon = map(contrast_list, \(x) x$resdf$taxon),
+      LFCshrink = map(contrast_list, \(x) x$resdf$log2FoldChangeShrink),
+      padj = map(contrast_list, \(x) x$resdf$padj),
+    ) %>% select(-contrast_list, -diff_p01, -diff_p05, -samples_used) %>% 
+      unnest(cols = c(taxon, LFCshrink, padj))
+    
+    deseq2comp <- deseq_longdf %>% 
+      filter(group1 == gsub(":", ".", base_cond)) %>% 
+      filter(Treatment_group2 != "ABS")
+    
+    no_ab <- deseq2comp %>% dplyr::filter(Treatment_group2 == "NO ABS") %>% 
+      dplyr::rename(NO_ABS_LFC = LFCshrink, NO_ABS_padj = padj) %>% 
+      dplyr::select(-group2, -Treatment_group2, -cond_name)
+    si_ab <-  deseq2comp %>% dplyr::filter(Treatment_group2 != "NO ABS")
+    
+    prep2plot <- merge(si_ab, no_ab)
+    # test <- merge(deseq2comp, no_ab) %>% dplyr::filter(Treatment_group2 == "NO ABS")
+    # plot(test$LFCshrink, test$NO_ABS_LFC)
+    
+    gx<-ggplot(prep2plot, aes(x=NO_ABS_LFC, y=LFCshrink, col=Treatment_group2)) +
+      facet_grid(Stress_group2 ~ Region_sequenced_group2) +
+      geom_smooth(method="lm") +
+      geom_point(alpha=0.5)+
+      scale_color_npg()+
+      xlab("LFC in the NO ABS condition") +
+      ylab("LFC in the ABS + region condition") +
+      theme(axis.text.x = element_text(size = 14))+
+      theme(strip.text.x = element_text(size = 14))+
+      theme(axis.title.y = element_text(size = 14))+
+      theme(axis.title.x = element_text(size = 14))+
+      theme(axis.text.y = element_text( size = 14)) +
+      theme_classic()
+    ggsave(paste0(opt$out, "/plot_vs_noABS_1.pdf"), gx, width = 8, height = 4)
+    gx<-ggplot(prep2plot, aes(x=NO_ABS_LFC, y=LFCshrink, col=Treatment_group2)) +
+      facet_grid(Stress_group2+Treatment_group2 ~ Region_sequenced_group2) +
+      geom_smooth(method="lm") +
+      geom_point(alpha=0.5)+
+      scale_color_npg()+
+      xlab("LFC in the NO ABS condition") +
+      ylab("LFC in the ABS + region condition") +
+      theme(axis.text.x = element_text(size = 14))+
+      theme(strip.text.x = element_text(size = 14))+
+      theme(axis.title.y = element_text(size = 14))+
+      theme(axis.title.x = element_text(size = 14))+
+      theme(axis.text.y = element_text( size = 14)) +
+      theme_classic()
+    ggsave(paste0(opt$out, "/plot_vs_noABS_2.pdf"), gx, width = 8, height = 7)
+    
+    gx<-ggplot(prep2plot, aes(x=NO_ABS_LFC, y=LFCshrink, col=Region_sequenced_group2, fill=Region_sequenced_group2)) +
+      facet_grid(Stress_group2 ~ Treatment_group2 ) +
+      geom_smooth(method="lm") +
+      geom_point(alpha=0.5)+
+      scale_color_npg()+
+      scale_fill_npg()+
+      xlab("LFC in the NO ABS condition") +
+      ylab("LFC in the ABS + region condition") +
+      theme(axis.text.x = element_text(size = 14))+
+      theme(strip.text.x = element_text(size = 14))+
+      theme(axis.title.y = element_text(size = 14))+
+      theme(axis.title.x = element_text(size = 14))+
+      theme(axis.text.y = element_text( size = 14)) +
+      theme_classic()
+    ggsave(paste0(opt$out, "/plot_vs_noABS_3.pdf"), gx, width = 8, height = 7)
+     
     opt <- restaurar(opt)
 }

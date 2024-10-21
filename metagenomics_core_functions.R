@@ -1842,6 +1842,74 @@ defWriteMatAsDF <- function(mat, opt, name){
   return(df)
 }
 
+make_full_region_heatmap <- function(mat, sdata_parcial,
+                                         variables = "condition",
+                                         opt, 
+                                         name = "heatmap.pdf", 
+                                         taxalist=c(),
+                                         logscale=FALSE, 
+                                         w=5, h=2, 
+                                         trim_values=FALSE,
+                                         italics_rownames=TRUE, 
+                                         trimquantile = 0.01){
+  outname <- paste(opt$out, name, sep="/", collapse="/")
+  annot <- sdata_parcial %>%
+    column_to_rownames("sampleID") %>% 
+    dplyr::select(all_of(variables)) 
+  
+  mat <- mat[taxalist, ] %>% 
+    t %>% scale %>% t
+  if(logscale){
+    mat <- log(mat + 1)
+  }
+  
+  fontsize_row = 10 - nrow(mat) / 13
+  fontsize_col = 10 - ncol(mat) / 13
+  
+  mat_trim <- mat
+  if(trim_values){
+    mat_trim[mat> quantile(mat, 1-trimquantile)] <- quantile(mat, 1-trimquantile)
+    mat_trim[mat < quantile(mat, trimquantile)] <- quantile(mat, trimquantile)
+  }
+  
+  labels_row <- gsub("_", " ", rownames(mat_trim))
+  if(italics_rownames){
+    labels_row <- lapply(labels_row, \(x){
+      bquote(italic(.(x)))
+    }) %>% as.expression()
+  }
+  gaps_col <- annot[colnames(mat), ] %>% unite("temp", all_of(variables), sep=":") %>% 
+    group_by(temp) %>% 
+    dplyr::summarise(n = n()) %>% 
+    dplyr::mutate(n = cumsum(n)) %>% 
+    pull(n)
+  
+  numcols <- max(sapply(annot, \(x)length(unique(x))))
+  cc <- ggsci::pal_d3(palette = "category10")(numcols)
+  user.colfn=colorRampPalette(cc)
+  newcc <- user.colfn(numcols) # in case there are too many colors
+  
+  color_list_cols <- lapply(annot, \(x) {y <-newcc[1:length(unique(x))]; names(y)<- unique(x); y})
+  
+    hm <- pheatmap(mat_trim, 
+                   show_rownames=nrow(mat) < 120,
+                   annotation_col = annot,
+                   fontsize_col = fontsize_col,
+                   fontsize_row = fontsize_row,
+                   border_color = NA,
+                   labels_row = labels_row,
+                   annotation_colors = color_list_cols,
+                   cluster_cols=F, 
+                   cluster_rows=T,
+                   gaps_col = gaps_col
+    )
+ 
+  w <- if(ncol(mat)>10) w+0.05*ncol(mat) else 7
+  h <- if(nrow(mat)>10) h+0.05*nrow(mat) else 7
+  pdf(outname, width = w, height = h)
+  print(hm)
+  tmp <- dev.off()
+}
 makeHeatmap <- function(resdf, dds, df2plot, 
                         variable = "condition",
                         opt, 
@@ -1904,10 +1972,19 @@ makeHeatmap <- function(resdf, dds, df2plot,
       bquote(italic(.(x)))
     }) %>% as.expression()
   }
+  
+  numcols <- max(sapply(annot, \(x)length(unique(x))))
+  cc <- ggsci::pal_d3(palette = "category10")(numcols)
+  user.colfn=colorRampPalette(cc)
+  newcc <- user.colfn(numcols) # in case there are too many colors
+  
+  color_list_cols <- lapply(annot, \(x) {y <-newcc[1:length(unique(x))]; names(y)<- unique(x); y})
+  
   if(! all(rownames(mat_trim) %in% colnames(mat_trim))){
     hm <- pheatmap(mat_trim, 
                  show_rownames=nrow(mat) < 120,
                  annotation_col = annot,
+                 annotation_colors = color_list_cols,
                  fontsize_col = fontsize_col,
                  fontsize_row = fontsize_row,
                  border_color = NA,
