@@ -1,4 +1,4 @@
-
+library(ggpmisc)
 ###########################
 # Make combinations:
 treatment_order <- c("REG3", "REG2", "REG1", "NO ABS", "ABS") %>% rev
@@ -259,7 +259,7 @@ for(phname in phseq_to_use){
       })
       
     opt <- restaurar(opt)
-    opt$out <- paste0(opt$out, deseqname, phname, "/HeatmapsLFC/")
+    opt$out <- paste0(opt$out, deseqname, phname, "/CompareLFC/")
     if(! dir.exists(opt$out)) dir.create(opt$out)
     
     deseq_longdf <- deseq_df %>% dplyr::mutate(
@@ -284,8 +284,12 @@ for(phname in phseq_to_use){
     
     gx<-ggplot(prep2plot, aes(x=NO_ABS_LFC, y=LFCshrink, col=Treatment_group2)) +
       facet_grid(Stress_group2 ~ Region_sequenced_group2) +
-      geom_smooth(method="lm") +
-      geom_point(alpha=0.5)+
+      geom_smooth(method="lm", alpha=0) +
+      geom_point(alpha=0.5, size=0.5)+
+      ggpmisc::stat_poly_eq(use_label(c("R2", "p","eq")), #c("eq", "R2", "f", "p", "n")
+                            method="lm", small.p=T, small.r=F, 
+                            label.x = c("left","left", "left", "left"),
+                            label.y=c(0.99, 0.93, 0.87, 0.81))+
       scale_color_npg()+
       xlab("LFC in the NO ABS condition") +
       ylab("LFC in the ABS + region condition") +
@@ -295,11 +299,17 @@ for(phname in phseq_to_use){
       theme(axis.title.x = element_text(size = 14))+
       theme(axis.text.y = element_text( size = 14)) +
       theme_classic()
+    
     ggsave(paste0(opt$out, "/plot_vs_noABS_1.pdf"), gx, width = 8, height = 4)
+    #This one works fine:
     gx<-ggplot(prep2plot, aes(x=NO_ABS_LFC, y=LFCshrink, col=Treatment_group2)) +
       facet_grid(Stress_group2+Treatment_group2 ~ Region_sequenced_group2) +
-      geom_smooth(method="lm") +
+      geom_smooth(method="lm", alpha=0.5) +
       geom_point(alpha=0.5)+
+      ggpmisc::stat_poly_eq(use_label(c("R2", "p","eq")), #c("eq", "R2", "f", "p", "n")
+                            method="lm", small.p=T, small.r=F, 
+                            label.x = c("left","left", "left", "left"),
+                            label.y=c(0.99, 0.93, 0.87, 0.81))+
       scale_color_npg()+
       xlab("LFC in the NO ABS condition") +
       ylab("LFC in the ABS + region condition") +
@@ -313,8 +323,12 @@ for(phname in phseq_to_use){
     
     gx<-ggplot(prep2plot, aes(x=NO_ABS_LFC, y=LFCshrink, col=Region_sequenced_group2, fill=Region_sequenced_group2)) +
       facet_grid(Stress_group2 ~ Treatment_group2 ) +
-      geom_smooth(method="lm") +
-      geom_point(alpha=0.5)+
+      geom_smooth(method="lm", alpha=0) +
+      geom_point(alpha=0.5, size=0.5)+
+      ggpmisc::stat_poly_eq(use_label(c("R2", "p","eq")), #c("eq", "R2", "f", "p", "n")
+                            method="lm", small.p=T, small.r=F, 
+                            label.x = c("left","left", "left", "left"),
+                            label.y=c(0.99, 0.93, 0.87, 0.81))+
       scale_color_npg()+
       scale_fill_npg()+
       xlab("LFC in the NO ABS condition") +
@@ -325,7 +339,300 @@ for(phname in phseq_to_use){
       theme(axis.title.x = element_text(size = 14))+
       theme(axis.text.y = element_text( size = 14)) +
       theme_classic()
-    ggsave(paste0(opt$out, "/plot_vs_noABS_3.pdf"), gx, width = 8, height = 7)
+    ggsave(paste0(opt$out, "/plot_vs_noABS_3.pdf"), gx, width = 8, height = 4)
+    
+    abnlong_mean <- df2plot %>% gather("sampleID","abundance", 2:ncol(.)) %>% 
+      inner_join(sdata) %>% 
+      group_by(Treatment, Region_sequenced, Stress, gene) %>% 
+      summarise(mean_abundance = mean(abundance))
+    abn_noabs <- abnlong_mean %>% filter(Treatment == "NO ABS")%>% 
+      dplyr::rename(Treatment_NoABS = Treatment, 
+             mean_abundance_NoABS = mean_abundance)
+    abn_other <- abnlong_mean %>% dplyr::filter(Treatment != "NO ABS") %>% 
+      left_join(abn_noabs)
      
+    gx<-ggplot(abn_other, aes(x=mean_abundance_NoABS, 
+                              y=mean_abundance, 
+                              col=Treatment, 
+                              fill=Treatment, 
+                              group = Treatment)) +
+      facet_grid(Stress ~ Region_sequenced ) +
+      geom_abline(intercept = 0, slope = 1, linetype=2, col="gray") +
+      geom_smooth(method="lm", alpha=0) +
+      geom_point(alpha=0.5, size=0.5)+
+      ggpmisc::stat_poly_eq(use_label(c("R2", "p")), #c("eq", "R2", "f", "p", "n")
+                   method="lm", small.p=T, small.r=F, 
+                   label.x = c("left","left", "right", "right"),
+                   label.y=c(0.99, 0.93, 0.99, 0.93))+
+      scale_color_npg()+
+      scale_fill_npg()+
+      xlab("Abundance in the NO ABS condition") +
+      ylab("Abundance in the ABS + region condition") +
+      theme(axis.text.x = element_text(size = 14))+
+      theme(strip.text.x = element_text(size = 16))+
+      theme(strip.text.y = element_text(size = 16))+
+      theme(axis.title.y = element_text(size = 16))+
+      theme(axis.title.x = element_text(size = 16))+
+      theme(axis.text.y = element_text( size = 14)) +
+      theme_classic()
+    ggsave(paste0(opt$out, "/plot_Abundance_vs_noABS_3.pdf"), gx, width = 11.5, height = 6)
+    gx<-ggplot(abn_other, aes(x=mean_abundance_NoABS, 
+                              y=mean_abundance, 
+                              col=Treatment, 
+                              fill=Treatment, 
+                              group = Treatment)) +
+      facet_grid(Stress ~ Region_sequenced ) +
+      geom_abline(intercept = 0, slope = 1, linetype=2, col="gray") +
+      geom_smooth(method="lm", alpha=0) +
+      geom_point(alpha=0.5, size=0.5)+
+      ggpmisc::stat_poly_eq(use_label(c("R2", "p","eq")), #c("eq", "R2", "f", "p", "n")
+                            method="lm", small.p=T, small.r=F, 
+                            label.x = c("left","left", "left", "left"),
+                            label.y=c(0.99, 0.93, 0.87, 0.81))+
+      scale_color_npg()+
+      scale_fill_npg()+
+      xlab("Abundance in the NO ABS condition") +
+      ylab("Abundance in the ABS + region condition") +
+      theme(axis.text.x = element_text(size = 14))+
+      theme(strip.text.x = element_text(size = 16))+
+      theme(strip.text.y = element_text(size = 16))+
+      theme(axis.title.y = element_text(size = 16))+
+      theme(axis.title.x = element_text(size = 16))+
+      theme(axis.text.y = element_text( size = 14)) +
+      theme_classic()
+    ggsave(paste0(opt$out, "/plot_Abundance_vs_noABS_3b.pdf"), gx, width = 11.5, height = 6)
+    #opt <- restaurar(opt)
+    
+    ## Models 
+    allmodels <- prep2plot %>% group_by(Stress_group2, Treatment_group2, Region_sequenced_group2) %>% 
+      group_modify(~ broom::tidy(lm(NO_ABS_LFC ~ LFCshrink, .x))) %>% 
+      dplyr::mutate(term=gsub("[\\(\\)]", "", term, perl=TRUE)) %>% 
+      select(-std.error, -statistic) %>% 
+      gather("param", "value", estimate, p.value) %>% 
+      unite("temp", param, term, sep="_") %>% 
+      spread(temp, value)
+    
+    allmodels2 <- prep2plot %>% group_by(Stress_group2, Treatment_group2, Region_sequenced_group2) %>% 
+      group_modify(~ broom::glance(lm(NO_ABS_LFC ~ LFCshrink, .x))) %>% 
+      left_join(allmodels)
+    write_tsv(allmodels2, file = paste0(opt$out, "models_LFC_against_baseline.tsv"))
+    
+    gbeta <- ggplot(allmodels2, aes(x = Region_sequenced_group2, y = adj.r.squared, 
+                           col=Treatment_group2, 
+                           fill=Treatment_group2, 
+                           group=Treatment_group2))+
+      geom_col(position="dodge")+
+      facet_grid( ~ Stress_group2 ) +
+      theme(axis.text.x = element_text(size = 14))+
+      theme(strip.text.x = element_text(size = 16))+
+      theme(strip.text.y = element_text(size = 16))+
+      theme(axis.title.y = element_text(size = 16))+
+      theme(axis.title.x = element_text(size = 16))+
+      theme(axis.text.y = element_text( size = 14)) +
+      ylab("Adjusted R2") + 
+      xlab("Region Sequenced") +
+      scale_fill_aaas()+
+      scale_color_aaas() +
+      theme_classic()
+    ggsave(paste0(opt$out, "/plot_ModelsLFC_AdjRsquared.pdf"), gbeta, width = 8, height = 2.7) 
+    
+    gbeta <- ggplot(allmodels2, aes(x = Region_sequenced_group2, y = estimate_LFCshrink, 
+                                    col=Treatment_group2, 
+                                    fill=Treatment_group2, 
+                                    group=Treatment_group2))+
+      geom_col(position="dodge")+
+      facet_grid( ~ Stress_group2 ) +
+      theme(axis.text.x = element_text(size = 14))+
+      theme(strip.text.x = element_text(size = 16))+
+      theme(strip.text.y = element_text(size = 16))+
+      theme(axis.title.y = element_text(size = 16))+
+      theme(axis.title.x = element_text(size = 16))+
+      theme(axis.text.y = element_text( size = 14)) +
+      ylab("Slope of LFC shrink") + 
+      xlab("Region Sequenced") +
+      scale_fill_aaas()+
+      scale_color_aaas() +
+      theme_classic()
+    ggsave(paste0(opt$out, "/plot_ModelsLFC_Slope.pdf"), gbeta, width = 8, height = 2.7) 
+    
+    ## BARPLOTS
+    deseq2comp2 <- deseq_longdf %>% 
+      dplyr::mutate(signif_05 = ifelse(is.na(padj) | padj>0.05, "NS", ifelse(LFCshrink<0, "Down", "UP")), 
+                    signif_01 = ifelse(is.na(padj) | padj>0.01, "NS", ifelse(LFCshrink<0, "Down", "UP"))
+      )
+    
+    aux <- deseq2comp2 %>% 
+      dplyr::filter(Treatment_group1 == Treatment_group2) %>% 
+      dplyr::filter( Treatment_group1 != "ABS") %>% 
+      dplyr::filter(Stress_group1 == Stress_group2) %>% 
+      dplyr::filter(Region_sequenced_group1 != Region_sequenced_group2) %>% 
+      dplyr::mutate(taxon = gsub("_", " ", taxon) %>% gsub("[\\[\\]]", "", ., perl=TRUE))
+    
+    taxa2plot <- aux %>% 
+      dplyr::filter(!is.na(padj)) %>% 
+      group_by(taxon) %>% 
+      summarise(minp = min(padj)) %>% 
+      filter(minp < 0.01) %>% 
+      pull(taxon)
+    
+    aux <- aux %>% dplyr::filter(taxon %in% taxa2plot) %>% 
+      dplyr::mutate(comp_region = paste(Region_sequenced_group2, "vs", Region_sequenced_group1)) %>% 
+      dplyr::mutate(comp_region = gsub("REG", "R", comp_region))
+    
+    tab2order <- aux %>% 
+      dplyr::filter(taxon %in% taxa2plot) %>% 
+      dplyr::filter(Stress_group1 == "Control") %>% 
+      dplyr::filter(Treatment_group1 == "NO ABS") %>% 
+      dplyr::filter(Region_sequenced_group2 == "REG3")%>% 
+      dplyr::filter(Region_sequenced_group1 == "REG1") %>% 
+      arrange(LFCshrink)
+    
+    aux <-  aux %>% 
+      group_by(Stress_group1) %>% 
+      group_split()
+    
+    auxplots <- aux %>% 
+      map(\(aux2){
+        
+        stressmain = unique(aux2$Stress_group1)
+        aux2 <- aux2 %>% dplyr::mutate(taxon = factor(taxon, levels=tab2order$taxon))
+        
+        gg <- ggplot(aux2, aes(x=taxon, y=LFCshrink, 
+                               col=signif_05, fill=signif_05, group=signif_05))+
+          facet_grid(~ Treatment_group1 + comp_region) +
+          geom_col() +
+          #thin_barplot_lines +
+          #geom_hline(yintercept = 0, col="gray", linetype=2)+
+          #geom_vline(xintercept = 0, col="gray", linetype=2)+
+          scale_color_manual(values = c("steelblue2", "gray", "tomato")) +
+          scale_fill_manual(values = c("steelblue2", "gray", "tomato")) +
+          coord_flip() +
+          theme_minimal() +
+          theme(axis.text.x = element_text(size = 12))+
+          theme(strip.text.x = element_text(size = 10))+
+          theme(strip.text.y = element_text(size = 8))+
+          theme(axis.title.y = element_text(size = 12))+
+          theme(axis.title.x = element_text(size = 12))+
+          theme(axis.text.y = element_text( size = 12, face = "italic")) +
+          ggtitle(stressmain) +
+          theme(plot.title = element_text(hjust = 0.5, vjust=0.5))
+        h = 1.31 + 0.16*length(taxa2plot)
+        ggsave(paste0(opt$out, paste0(stressmain, "_CompareRegionSeq_barplot_LFCShrink_p01_col05.pdf")), gg, width = 16.9, height = h)
+          
+        return(gg)
+      })
+    
+    ### By Stress
+    aux <- deseq2comp2 %>% 
+      dplyr::filter(Treatment_group1 == Treatment_group2) %>% 
+      dplyr::filter( Treatment_group1 != "ABS") %>% 
+      dplyr::filter(Stress_group1 != Stress_group2) %>% 
+      dplyr::filter(Region_sequenced_group1 == Region_sequenced_group2) %>% 
+      dplyr::mutate(taxon = gsub("_", " ", taxon) %>% gsub("[\\[\\]]", "", ., perl=TRUE))
+    
+    aux <-  aux %>% 
+      group_by(Region_sequenced_group1) %>% 
+      group_split()
+    
+    auxplots <- aux %>% 
+      map(\(aux2){
+        
+        regmain = unique(aux2$Region_sequenced_group1)
+        
+        taxa2plot <- aux2 %>% 
+          dplyr::filter(!is.na(padj)) %>% 
+          group_by(taxon) %>% 
+          summarise(minp = min(padj)) %>% 
+          dplyr::filter(minp < 0.01) %>% 
+          pull(taxon)
+        
+        aux2 <- aux2 %>% dplyr::filter(taxon %in% taxa2plot)
+        
+        tab2order <- aux2 %>% 
+          dplyr::filter(taxon %in% taxa2plot) %>% 
+          dplyr::filter(Treatment_group1 == "NO ABS") %>% 
+          arrange(LFCshrink)
+        
+        
+        aux2 <- aux2 %>% dplyr::mutate(taxon = factor(taxon, levels=tab2order$taxon))
+        
+        gg <- ggplot(aux2, aes(x=taxon, y=LFCshrink, 
+                               col=signif_05, fill=signif_05, group=signif_05))+
+          facet_grid(~ Treatment_group1) +
+          geom_col() +
+          #thin_barplot_lines +
+          #geom_hline(yintercept = 0, col="gray", linetype=2)+
+          #geom_vline(xintercept = 0, col="gray", linetype=2)+
+          scale_color_manual(values = c("steelblue2", "gray", "tomato")) +
+          scale_fill_manual(values = c("steelblue2", "gray", "tomato")) +
+          coord_flip() +
+          theme_minimal() +
+          theme(axis.text.x = element_text(size = 12))+
+          theme(strip.text.x = element_text(size = 10))+
+          theme(strip.text.y = element_text(size = 8))+
+          theme(axis.title.y = element_text(size = 12))+
+          theme(axis.title.x = element_text(size = 12))+
+          theme(axis.text.y = element_text( size = 12, face = "italic")) +
+          ggtitle(regmain) +
+          theme(plot.title = element_text(hjust = 0.5, vjust=0.5))
+        h = 1.31 + 0.16*length(taxa2plot)
+        ggsave(paste0(opt$out, paste0(regmain, "_CompareStress_barplot_LFCShrink_p01_col05.pdf")), gg, width = 10, height = h)
+        
+        return(gg)
+      })
+    
+    ## Models from abundances
+
+    allmodels <- abn_other %>% group_by(Stress, Treatment, Region_sequenced) %>% 
+      group_modify(~ broom::tidy(lm(mean_abundance_NoABS ~ mean_abundance, .x))) %>% 
+      dplyr::mutate(term=gsub("[\\(\\)]", "", term, perl=TRUE)) %>% 
+      select(-std.error, -statistic) %>% 
+      gather("param", "value", estimate, p.value) %>% 
+      unite("temp", param, term, sep="_") %>% 
+      spread(temp, value)
+    
+    allmodels2 <- abn_other %>% group_by(Stress, Treatment, Region_sequenced) %>% 
+      group_modify(~ broom::glance(lm(mean_abundance_NoABS ~ mean_abundance, .x))) %>% 
+      left_join(allmodels)
+    write_tsv(allmodels2, file = paste0(opt$out, "models_VSTAbundances_sameRegionNoAbs.tsv"))
+    
+    gbeta <- ggplot(allmodels2, aes(x = Region_sequenced, y = adj.r.squared, 
+                                    col=Treatment, 
+                                    fill=Treatment, 
+                                    group=Treatment))+
+      geom_col(position="dodge")+
+      facet_grid( ~ Stress ) +
+      theme(axis.text.x = element_text(size = 14))+
+      theme(strip.text.x = element_text(size = 16))+
+      theme(strip.text.y = element_text(size = 16))+
+      theme(axis.title.y = element_text(size = 16))+
+      theme(axis.title.x = element_text(size = 16))+
+      theme(axis.text.y = element_text( size = 14)) +
+      ylab("Adjusted R2") + 
+      xlab("Region Sequenced") +
+      scale_fill_npg()+
+      scale_color_npg() +
+      theme_classic()
+    ggsave(paste0(opt$out, "/plot_ModelsVSTAbundances_AdjRsquared.pdf"), gbeta, width = 8, height = 2.7) 
+    
+    gbeta <- ggplot(allmodels2, aes(x = Region_sequenced, y = estimate_mean_abundance, 
+                                    col=Treatment, 
+                                    fill=Treatment, 
+                                    group=Treatment))+
+      geom_col(position="dodge")+
+      facet_grid( ~ Stress ) +
+      theme(axis.text.x = element_text(size = 14))+
+      theme(strip.text.x = element_text(size = 16))+
+      theme(strip.text.y = element_text(size = 16))+
+      theme(axis.title.y = element_text(size = 16))+
+      theme(axis.title.x = element_text(size = 16))+
+      theme(axis.text.y = element_text( size = 14)) +
+      ylab("Slope of mean abundance predictor") + 
+      xlab("Region Sequenced") +
+      scale_fill_npg()+
+      scale_color_npg() +
+      theme_classic()
+    ggsave(paste0(opt$out, "/plot_ModelsVSTAbundances_Slope.pdf"), gbeta, width = 8, height = 2.7) 
     opt <- restaurar(opt)
+      
 }
