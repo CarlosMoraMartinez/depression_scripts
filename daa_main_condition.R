@@ -522,6 +522,170 @@ for(phname in phseq_to_use){
         return(gg)
       })
     
+    auxpoints <- aux %>% 
+      map(\(aux2){
+        
+        stressmain = unique(aux2$Stress_group1)
+        aux2 <- aux2 %>% dplyr::mutate(taxon = factor(taxon, levels=rev(tab2order$taxon)),
+                                       comp_region = factor(comp_region, 
+                                                            levels = c("R3 vs R1", "R3 vs R2", "R2 vs R1")))
+        
+        gg <- ggplot(aux2, aes(x=taxon, y=LFCshrink, 
+                               col=Treatment_group1, 
+                               fill=Treatment_group1, 
+                               group=Treatment_group1))+
+          facet_grid(comp_region~ .) +
+          geom_hline(yintercept = 0, linetype=2, color="gray") +
+          geom_point() +
+          geom_line() +
+          #thin_barplot_lines +
+          #geom_hline(yintercept = 0, col="gray", linetype=2)+
+          #geom_vline(xintercept = 0, col="gray", linetype=2)+
+          #scale_color_manual(values = c("steelblue2", "gray", "tomato")) +
+          #scale_fill_manual(values = c("steelblue2", "gray", "tomato")) +
+          scale_color_npg() + 
+          scale_fill_npg() +
+          #coord_flip() +
+          theme_classic() +
+          theme(axis.text.x = element_text(size = 12, angle=45, vjust=1, hjust=1, face="italic"))+
+          theme(strip.text.x = element_text(size = 14))+
+          theme(strip.text.y = element_text(size = 14))+
+          theme(axis.title.y = element_text(size = 12))+
+          theme(axis.title.x = element_text(size = 12))+
+          theme(axis.text.y = element_text( size = 12)) +
+          ggtitle(stressmain) +
+          theme(plot.title = element_text(hjust = 0.5, vjust=0.5)) +
+          theme(plot.margin = unit(c(0,1,0,3), "cm"))
+        w = 3.81 + 0.191*length(taxa2plot)
+        ggsave(paste0(opt$out, paste0(stressmain, "_CompareRegionSeq_points_LFCShrink_p01.pdf")), gg, width = w, height = 6.1)
+        
+        return(gg)
+      })
+    pdf(paste0(opt$out, paste0("BothStress", "_CompareRegionSeq_points_LFCShrink_p01.pdf")), 
+        height = 12.3, width = 3.81 + 0.191*length(taxa2plot))
+    print(cowplot::plot_grid(plotlist = auxpoints, ncol=1))
+    dev.off()
+    
+    ## Repeat line plot but now with ABS group
+    aux <- deseq2comp2 %>% 
+      dplyr::filter(Treatment_group1 == Treatment_group2) %>% 
+      #dplyr::filter( Treatment_group1 != "ABS") %>% 
+      dplyr::filter(Stress_group1 == Stress_group2) %>% 
+      dplyr::filter(Region_sequenced_group1 != Region_sequenced_group2) %>% 
+      dplyr::mutate(taxon = gsub("_", " ", taxon) %>% gsub("[\\[\\]]", "", ., perl=TRUE))
+    
+    taxa2plot <- aux %>% 
+      dplyr::filter(!is.na(padj)) %>% 
+      dplyr::filter(Treatment_group1 != "ABS") %>% 
+      group_by(taxon) %>% 
+      summarise(minp = min(padj)) %>% 
+      filter(minp < 0.01) %>% 
+      pull(taxon)
+    
+    aux <- aux %>% dplyr::filter(taxon %in% taxa2plot) %>% 
+      dplyr::mutate(comp_region = paste(Region_sequenced_group2, "vs", Region_sequenced_group1)) %>% 
+      dplyr::mutate(comp_region = gsub("REG", "R", comp_region))
+    
+    aux2cor <- aux %>% unite("full_cond", Stress_group1, Treatment_group1, comp_region, sep=":", remove = F) %>% 
+      dplyr::select(full_cond, taxon, LFCshrink, Stress_group1, Treatment_group1, comp_region) 
+    
+    annrow <- aux2cor %>% dplyr::select(full_cond,Stress_group1, Treatment_group1, comp_region ) %>% 
+      distinct() %>% 
+      column_to_rownames("full_cond")
+    
+    aux2cor <- aux2cor %>% 
+      dplyr::select(full_cond, taxon, LFCshrink) %>% 
+      spread(full_cond, LFCshrink) %>% 
+      column_to_rownames("taxon") %>% 
+      as.matrix()
+    
+    numcols <- max(sapply(annrow, \(x)length(unique(x))))
+    cc <- ggsci::pal_d3(palette = "category10")(numcols)
+    user.colfn=colorRampPalette(cc)
+    newcc <- user.colfn(numcols) # in case there are too many colors
+    
+    color_list_cols <- lapply(annrow, \(x) {y <-newcc[1:length(unique(x))]; names(y)<- unique(x); y})
+    
+    mat <- cor(aux2cor)  
+    
+    pheatmap(mat, annotation_col = annrow, annotation_row=annrow, annotation_colors = color_list_cols, 
+             filename = paste0(opt$out, paste0("BothStress", "_CompareRegionSeq_heatmap_LFCShrink_p01_withABS.pdf")),
+             width = 12, height = 8
+    )
+    annrowx <- annrow %>% rownames_to_column("cond") %>% group_by(Stress_group1) %>% group_split() %>% map(\(annrowx){
+      stressmain <- annrowx$Stress_group1 %>% unlist %>% unique
+      
+      matx <- mat[annrowx$cond, annrowx$cond]
+      rownames(matx) <- gsub(paste0(stressmain, ":"), "", rownames(matx))
+      colnames(matx) <- gsub(paste0(stressmain, ":"), "", colnames(matx))
+      annrowx <- annrowx %>% dplyr::select(-Stress_group1) %>% 
+        dplyr::mutate(cond = gsub(paste0(stressmain, ":"), "", cond)) %>% 
+        column_to_rownames("cond")
+      pheatmap(matx, annotation_col = annrowx, annotation_row=annrowx, annotation_colors = color_list_cols[names(annrowx)], 
+               filename = paste0(opt$out, paste0(stressmain, "_CompareRegionSeq_heatmap_LFCShrink_p01_withABS.pdf")),
+               width = 9, height = 6
+      )
+      
+    })
+    
+    tab2order <- aux %>% 
+      dplyr::filter(taxon %in% taxa2plot) %>% 
+      dplyr::filter(Stress_group1 == "Control") %>% 
+      dplyr::filter(Treatment_group1 == "NO ABS") %>% 
+      dplyr::filter(Region_sequenced_group2 == "REG3")%>% 
+      dplyr::filter(Region_sequenced_group1 == "REG1") %>% 
+      arrange(LFCshrink)
+    
+    aux <-  aux %>% 
+      group_by(Stress_group1) %>% 
+      group_split()
+    auxpoints <- aux %>% 
+      map(\(aux2){
+        
+        stressmain = unique(aux2$Stress_group1)
+        aux2 <- aux2 %>% dplyr::mutate(taxon = factor(taxon, levels=rev(tab2order$taxon)),
+                                       comp_region = factor(comp_region, 
+                                                            levels = c("R3 vs R1", "R3 vs R2", "R2 vs R1")),
+                                       Treatment_group1 = factor(Treatment_group1, 
+                                                                 levels=c("NO ABS", "REG1", "REG2", "REG3", "ABS")))
+        
+        gg <- ggplot(aux2, aes(x=taxon, y=LFCshrink, 
+                               col=Treatment_group1, 
+                               fill=Treatment_group1, 
+                               group=Treatment_group1))+
+          facet_grid(comp_region~ .) +
+          geom_hline(yintercept = 0, linetype=2, color="gray") +
+          geom_point() +
+          geom_line() +
+          #thin_barplot_lines +
+          #geom_hline(yintercept = 0, col="gray", linetype=2)+
+          #geom_vline(xintercept = 0, col="gray", linetype=2)+
+          #scale_color_manual(values = c("steelblue2", "gray", "tomato")) +
+          #scale_fill_manual(values = c("steelblue2", "gray", "tomato")) +
+          scale_color_npg() + 
+          scale_fill_npg() +
+          #coord_flip() +
+          theme_classic() +
+          theme(axis.text.x = element_text(size = 12, angle=45, vjust=1, hjust=1, face="italic"))+
+          theme(strip.text.x = element_text(size = 14))+
+          theme(strip.text.y = element_text(size = 14))+
+          theme(axis.title.y = element_text(size = 12))+
+          theme(axis.title.x = element_text(size = 12))+
+          theme(axis.text.y = element_text( size = 12)) +
+          ggtitle(stressmain) +
+          theme(plot.title = element_text(hjust = 0.5, vjust=0.5)) +
+          theme(plot.margin = unit(c(0,1,0,3), "cm"))
+        w = 3.81 + 0.191*length(taxa2plot)
+        ggsave(paste0(opt$out, paste0(stressmain, "_CompareRegionSeq_points_LFCShrink_p01_withABS.pdf")), gg, width = w, height = 6.1)
+        
+        return(gg)
+      })
+    pdf(paste0(opt$out, paste0("BothStress", "_CompareRegionSeq_points_LFCShrink_p01_withABS.pdf")), 
+        height = 12.3, width = 3.81 + 0.191*length(taxa2plot))
+    print(cowplot::plot_grid(plotlist = auxpoints, ncol=1))
+    dev.off()
+    
+    
     ### By Stress
     aux <- deseq2comp2 %>% 
       dplyr::filter(Treatment_group1 == Treatment_group2) %>% 
@@ -580,6 +744,134 @@ for(phname in phseq_to_use){
         
         return(gg)
       })
+    
+    auxpoints <- aux %>% 
+      map(\(aux2){
+        
+        regmain = unique(aux2$Region_sequenced_group1)
+        
+        taxa2plot <- aux2 %>% 
+          dplyr::filter(!is.na(padj)) %>% 
+          group_by(taxon) %>% 
+          summarise(minp = min(padj)) %>% 
+          dplyr::filter(minp < 0.01) %>% 
+          pull(taxon)
+        
+        aux2 <- aux2 %>% dplyr::filter(taxon %in% taxa2plot)
+        
+        tab2order <- aux2 %>% 
+          dplyr::filter(taxon %in% taxa2plot) %>% 
+          dplyr::filter(Treatment_group1 == "NO ABS") %>% 
+          arrange(LFCshrink)
+        
+        
+        aux2 <- aux2 %>% dplyr::mutate(taxon = factor(taxon, levels=rev(tab2order$taxon)))
+        
+        gg <- ggplot(aux2, aes(x=taxon, y=LFCshrink, 
+                               col=Treatment_group1, fill=Treatment_group1, group=Treatment_group1))+
+          #facet_grid(~ Treatment_group1) +
+          #geom_col() +
+          geom_hline(yintercept = 0, linetype=2, color="gray") +
+          geom_point() +
+          geom_line() +
+          #thin_barplot_lines +
+          #geom_hline(yintercept = 0, col="gray", linetype=2)+
+          #geom_vline(xintercept = 0, col="gray", linetype=2)+
+          scale_color_npg() + 
+          scale_fill_npg() +
+          #coord_flip() +
+          theme_classic() +
+          theme(axis.text.x = element_text(size = 12, angle=45, vjust=1, hjust=1, face="italic"))+
+          theme(strip.text.x = element_text(size = 14))+
+          theme(strip.text.y = element_text(size = 14))+
+          theme(axis.title.y = element_text(size = 12))+
+          theme(axis.title.x = element_text(size = 12))+
+          theme(axis.text.y = element_text( size = 12)) +
+          ggtitle(regmain) +
+          theme(plot.title = element_text(hjust = 0.5, vjust=0.5))+
+          theme(plot.margin = unit(c(0,1,0,3), "cm"))
+        w = 3.81 + 0.191*length(taxa2plot)
+        ggsave(paste0(opt$out, paste0(regmain, "_CompareStress_points_LFCShrink_p01.pdf")), gg, width = w, height = 5)
+        
+        return(gg)
+      })
+    
+    pdf(paste0(opt$out, paste0("AllRegions", "_CompareStress_points_LFCShrink_p01.pdf")), 
+        height = 5*length(auxpoints), width = 3.81 + 0.191*length(taxa2plot))
+    print(cowplot::plot_grid(plotlist = auxpoints, ncol=1))
+    dev.off()
+    
+    ## Again Stress, same thing but with ABS 
+    
+    aux <- deseq2comp2 %>% 
+      dplyr::filter(Treatment_group1 == Treatment_group2) %>% 
+      #dplyr::filter( Treatment_group1 != "ABS") %>% 
+      dplyr::filter(Stress_group1 != Stress_group2) %>% 
+      dplyr::filter(Region_sequenced_group1 == Region_sequenced_group2) %>% 
+      dplyr::mutate(taxon = gsub("_", " ", taxon) %>% gsub("[\\[\\]]", "", ., perl=TRUE))
+    
+    aux <-  aux %>% 
+      group_by(Region_sequenced_group1) %>% 
+      group_split()
+    
+    auxpoints <- aux %>% 
+      map(\(aux2){
+        
+        regmain = unique(aux2$Region_sequenced_group1)
+        
+        taxa2plot <- aux2 %>% 
+          dplyr::filter(!is.na(padj)) %>% 
+          dplyr::filter(Treatment_group1 != "ABS") %>% 
+          group_by(taxon) %>% 
+          summarise(minp = min(padj)) %>% 
+          dplyr::filter(minp < 0.01) %>% 
+          pull(taxon)
+        
+        aux2 <- aux2 %>% dplyr::filter(taxon %in% taxa2plot)
+        
+        tab2order <- aux2 %>% 
+          dplyr::filter(taxon %in% taxa2plot) %>% 
+          dplyr::filter(Treatment_group1 == "NO ABS") %>% 
+          arrange(LFCshrink)
+        
+        
+        aux2 <- aux2 %>% dplyr::mutate(taxon = factor(taxon, levels=rev(tab2order$taxon)),
+                                       Treatment_group1 = factor(Treatment_group1, 
+                                                                 levels=c("NO ABS", "REG1", "REG2", "REG3", "ABS")))
+        
+        gg <- ggplot(aux2, aes(x=taxon, y=LFCshrink, 
+                               col=Treatment_group1, fill=Treatment_group1, group=Treatment_group1))+
+          #facet_grid(~ Treatment_group1) +
+          #geom_col() +
+          geom_hline(yintercept = 0, linetype=2, color="gray") +
+          geom_point() +
+          geom_line() +
+          #thin_barplot_lines +
+          #geom_hline(yintercept = 0, col="gray", linetype=2)+
+          #geom_vline(xintercept = 0, col="gray", linetype=2)+
+          scale_color_npg() + 
+          scale_fill_npg() +
+          #coord_flip() +
+          theme_classic() +
+          theme(axis.text.x = element_text(size = 12, angle=45, vjust=1, hjust=1, face="italic"))+
+          theme(strip.text.x = element_text(size = 14))+
+          theme(strip.text.y = element_text(size = 14))+
+          theme(axis.title.y = element_text(size = 12))+
+          theme(axis.title.x = element_text(size = 12))+
+          theme(axis.text.y = element_text( size = 12)) +
+          ggtitle(regmain) +
+          theme(plot.title = element_text(hjust = 0.5, vjust=0.5))+
+          theme(plot.margin = unit(c(0,1,0,3), "cm"))
+        w = 3.81 + 0.191*length(taxa2plot)
+        ggsave(paste0(opt$out, paste0(regmain, "_CompareStress_points_LFCShrink_p01_withABS.pdf")), gg, width = w, height = 5)
+        
+        return(gg)
+      })
+    
+    pdf(paste0(opt$out, paste0("AllRegions", "_CompareStress_points_LFCShrink_p01_withABS.pdf")), 
+        height = 5*length(auxpoints), width = 3.81 + 0.191*length(taxa2plot))
+    print(cowplot::plot_grid(plotlist = auxpoints, ncol=1))
+    dev.off()
     
     ## Models from abundances
 

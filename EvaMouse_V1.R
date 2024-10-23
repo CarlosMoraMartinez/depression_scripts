@@ -33,6 +33,8 @@ if(MODE == "IATA"){
               read_otutable_script = paste0(BASEDIR, "/code/depression_scripts/read_otu_table.R"),
               alpha_beta_script = paste0(BASEDIR, "/code/depression_scripts/alpha_beta_abund.R"),
               daa_main_condition = paste0(BASEDIR, "/code/depression_scripts/daa_main_condition.R"),
+              plot_reads_script = paste0(BASEDIR, "/code/depression_scripts/plot_reads.R"),
+              
               make_permanova_script = paste0(BASEDIR, "/code/depression_scripts/make_permanova.R"),
               daa_include_single_covariate = paste0(BASEDIR, "/code/depression_scripts/daa_include_single_covariate.R"),
               daa_only_covariates = paste0(BASEDIR, "/code/depression_scripts/daa_include_only_covariate.R"),
@@ -45,7 +47,9 @@ if(MODE == "IATA"){
               predict_4groups = paste0(BASEDIR, "/code/depression_scripts/predict_4groups"),
                                                                  
               metadata = paste0(BASEDIR, "/Metadata/metadata_CM.xlsx"),
+              multiqcsummary = paste0(BASEDIR, "/Metadata/data_from_multiQC.tsv"),
               flowcelldata =  paste0(BASEDIR, "/Metadata/flowcell.txt"),
+              original_numreads = paste0(BASEDIR, "/Metadata/fastqc_number_original_reads_R1.tsv"),
 
               rewrite=FALSE,
               minfreq = 0.1,
@@ -73,6 +77,9 @@ source(opt$read_metadata_script)
 
 # Create phyloseq objects
 source(opt$create_phyloseq_script)
+
+# Plot reads
+source(opt$plot_reads_script)
 
 # Alpha and Beta diversity. Descriptive 
 source(opt$alpha_beta_script)
