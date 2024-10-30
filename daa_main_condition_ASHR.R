@@ -49,7 +49,7 @@ vars2heatmap <- c("Treatment", "Region_sequenced", "Stress", "flowcell")
 opt$mincount <- 10
 opt$minsampleswithcount <- 3
 phseq_to_use <- names(all_phyloseq)[1:2]
-deseqname = "DeSEQ2_v8/"
+deseqname = "DeSEQ2_v8_ASHR/"
 
 for(phname in phseq_to_use){
   # cat("Doing DESeq2 Analysys for: ", phname, "\n")
@@ -74,6 +74,12 @@ for(phname in phseq_to_use){
 opt <- restaurar(opt)
 #save(daa_all, file = paste0(opt$out, deseqname, "DESEQ2_all.RData"))
 #load(paste0(opt$out, deseqname, "DESEQ2_all.RData"))
+
+###### MAKE DIRS ###########
+auxd <- paste0(opt$out, deseqname)
+if(! dir.exists(auxd)) dir.create(auxd)
+for(phname in phseq_to_use){auxd2 <- paste0(auxd, phname); if(! dir.exists(auxd2)) dir.create(auxd2)}
+####################
 
 combs_cp <- ALL_COMBINS
 names(combs_cp) <- sapply(combs_cp, \(x) paste(x[1], x[3], "vs", x[2], sep="_"))
@@ -263,9 +269,9 @@ for(phname in phseq_to_use){
     if(! dir.exists(opt$out)) dir.create(opt$out)
     
     deseq_longdf <- deseq_df %>% dplyr::mutate(
-      taxon = map(contrast_list, \(x) x$resdf$taxon),
-      LFCshrink = map(contrast_list, \(x) x$resdf$log2FoldChangeShrink),
-      padj = map(contrast_list, \(x) x$resdf$padj),
+      taxon = map(contrast_list, \(x) x$resdf_shr$taxon),
+      LFCshrink = map(contrast_list, \(x) x$resdf_shr$log2FoldChangeShrink),
+      padj = map(contrast_list, \(x) x$resdf_shr$padj),
     ) %>% select(-contrast_list, -diff_p01, -diff_p05, -samples_used) %>% 
       unnest(cols = c(taxon, LFCshrink, padj))
     
@@ -872,58 +878,6 @@ for(phname in phseq_to_use){
         height = 5*length(auxpoints), width = 3.81 + 0.191*length(taxa2plot))
     print(cowplot::plot_grid(plotlist = auxpoints, ncol=1))
     dev.off()
-    
-    ## Correlation with C vs Stress LFC
-    
-    aux <- deseq2comp2 %>% 
-      dplyr::filter(Treatment_group1 == Treatment_group2) %>% 
-      #dplyr::filter( Treatment_group1 != "ABS") %>% 
-      dplyr::filter( Stress_group1 != "Control") %>% 
-      dplyr::filter(Stress_group1 != Stress_group2) %>% 
-      dplyr::filter(Region_sequenced_group1 == Region_sequenced_group2) %>% 
-      dplyr::mutate(taxon = gsub("_", " ", taxon) %>% gsub("[\\[\\]]", "", ., perl=TRUE))
-    
-    taxa2plot <- aux %>% 
-      dplyr::filter(!is.na(padj)) %>% 
-      #dplyr::filter(Treatment_group1 != "ABS") %>% 
-      group_by(taxon) %>% 
-      summarise(minp = min(padj)) %>% 
-      dplyr::filter(minp < 0.01) %>% 
-      pull(taxon)
-    
-    tab2order <- aux %>% 
-      dplyr::filter(taxon %in% taxa2plot) %>% 
-      dplyr::filter(Treatment_group1 == "NO ABS") %>% 
-      arrange(LFCshrink)
-    
-    aux2cor <- aux %>% unite("full_cond", Treatment_group1, Region_sequenced_group1, sep=":", remove = F) %>% 
-      dplyr::select(full_cond, taxon, LFCshrink, Treatment_group1, Region_sequenced_group1) 
-    
-    annrow <- aux2cor %>% dplyr::select(full_cond, Treatment_group1, Region_sequenced_group1 ) %>% 
-      distinct() %>% 
-      column_to_rownames("full_cond")
-    
-    aux2cor <- aux2cor %>% 
-      dplyr::select(full_cond, taxon, LFCshrink) %>% 
-      spread(full_cond, LFCshrink) %>% 
-      column_to_rownames("taxon") %>% 
-      as.matrix()
-    
-    numcols <- max(sapply(annrow, \(x)length(unique(x))))
-    cc <- ggsci::pal_d3(palette = "category10")(numcols)
-    user.colfn=colorRampPalette(cc)
-    newcc <- user.colfn(numcols) # in case there are too many colors
-    
-    color_list_cols <- lapply(annrow, \(x) {y <-newcc[1:length(unique(x))]; names(y)<- unique(x); y})
-    
-    mat <- cor(aux2cor)  
-    
-    pheatmap(mat, annotation_col = annrow, annotation_row=annrow, annotation_colors = color_list_cols, 
-             filename = paste0(opt$out, paste0("AllRegs", "_CompareStress_heatmap_LFCShrink_p01_withABS.pdf")),
-             width = 12, height = 8
-    )
-    
-    
     
     ## Models from abundances
 
