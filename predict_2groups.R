@@ -2,7 +2,7 @@
 source(opt$predictive_functions)
 #opt$out <- "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_1/"
 var2predict <- "status_c2"
-vars2pca <- c("status_c2", "hospital", "Sex", "age_months_t0")
+vars2pca <- c("status_c2", "Category_T0", "hospital", "Sex", "age_months_t0")
 phseq_to_use <- names(daa_all)[c(1,3,4,6,9,10)]
 opt <- restaurar(opt)                  
 opt$out <- paste0(opt$out, "PredictDAA_onlyGain")
@@ -58,6 +58,7 @@ for(i in phseq_to_use){
   opt <- restaurar(opt)
 }
 opt <- restaurar(opt)
+
 save(all_model_results, file=paste0(opt$out, "PredictDAA_onlyGain/all_model_results.RData"))
 #load(file=paste0(opt$out, "PredictDAA/all_model_results.RData"))
 
@@ -70,11 +71,11 @@ walk(names(all_model_results), makeLinePlotComparingSamePhobjModels,
      all_model_results, opt)
 
 ## Plot boxplot PCs
-pcBoxplots <- map(names(all_model_results), makePCsBoxplot, all_model_results, opt)
+pcBoxplots <- map(names(all_model_results), makePCsBoxplot, all_model_results, opt, "padj_taxa_res", "padj_taxa_pcas", "status_c2", 6, 8)
 names(pcBoxplots) <- names(all_model_results)
 
 ## Plot barplot PCs and LFC
-pcBarplots <- map(names(all_model_results), makePCBarplot, all_model_results, pcBoxplots, daa_all, opt, w=8, h=14)
+pcBarplots <- map(names(all_model_results), makePCBarplot, all_model_results, pcBoxplots, daa_all, opt, "padj_taxa_res", "padj_taxa_pcas", "status_c2", w=10, h=10)
 names(pcBarplots) <- names(all_model_results)
 
 # Plot KNN (best model)

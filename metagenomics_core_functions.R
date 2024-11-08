@@ -431,11 +431,11 @@ getAlphaDiversity <- function(phseq_obj, vars, qvars= c(),
                                 measures = indices) +
       #ggplot(divtab, aes(x=Psoriasis, y=Shannon, col=Psoriasis, fill=Psoriasis)) +
       #facet_wrap(. ~ Sex, scales = "free") +
-      geom_boxplot(aes_string(fill = v), alpha = 0.7, width=0.5) +
+      geom_boxplot(aes_string(fill = v), alpha = 0.7, width=0.5, fill="white") +
       #scale_color_manual(values = c("#ffafcc", "#90DBF4")) + 
       #scale_fill_manual(values = c("#ffafcc", "#90DBF4")) +
       #scale_color_lancet() + 
-      #scale_fill_lancet() +
+      scale_color_npg() +
       labs(title = v, x = '') +
       theme_pubclean() +
       mytheme +
@@ -484,16 +484,24 @@ getAlphaDiversity <- function(phseq_obj, vars, qvars= c(),
 }
 
 
-makePCoA <- function(phobj, pcoa.bray, evals, var2color="Condition", name = "Bray-Curtis", extradims= 2:5, labelsamples="sampleID"){
+makePCoA <- function(phobj, pcoa.bray, evals, var2color="Condition",
+                     var2shape="Stress",
+                     name = "Bray-Curtis", extradims= 2:5, labelsamples="sampleID"){
   gs <- lapply(extradims, FUN=function(axis){
     gg <- plot_ordination(phobj, pcoa.bray, color = var2color, 
+                          shape = var2shape,
                           title = name, axes=c(1, axis)) + 
       #coord_fixed(sqrt(evals[2] / evals[1])) +
       #scale_color_manual(values=palette2)+ 
       stat_ellipse(level=0.95, linetype=2, alpha = 0.8, na.rm = TRUE) +
       geom_point(size = 2) +
-      geom_text_repel(aes_string(label = labelsamples)) +
-      mytheme 
+      #geom_text_repel(aes_string(label = labelsamples)) +
+      theme_pubclean() +
+      theme(axis.text.x = element_text(size = 14))+
+      theme(strip.text.x = element_text(size = 14))+
+      theme(axis.title.y = element_text(size = 14))+
+      theme(axis.title.x = element_text(size = 14))+
+      theme(axis.text.y = element_text( size = 14))
     # if(!is.numeric(gg$data[, var2color])){
     #   gg <- gg + scale_color_lancet() + scale_fill_lancet()
     # }
@@ -508,6 +516,7 @@ makeAllPCoAs <- function(phobj, outdir,
                          dist_type = "bray", 
                          dist_name = "Bray-Curtis", 
                          vars2plot = c(),
+                         var2shape = "",
                          extradims = 2:5,
                          create_pdfs = MULTI_PAGE_PDFS,
                          labelsamples="sampleID", w=12, h=5){
@@ -531,7 +540,7 @@ makeAllPCoAs <- function(phobj, outdir,
     
   }else{
     #Plot only one variable and return the plot without saving it
-    all_pcoas_plots <- list("Condition"=makePCoA(phobj, pcoa.bray, evals, vars2plot[1], dist_name, extradims))
+    all_pcoas_plots <- list("Condition"=makePCoA(phobj, pcoa.bray, evals, vars2plot[1], var2shape, dist_name, extradims))
   }
   
   return(all_pcoas_plots)
@@ -1152,25 +1161,80 @@ plotRelativeAbnBarsSpecies_ColByGenus <- function(phobj, variable="Condition", t
 }
 
 plotRelativeAbnBars_Fantaxtic <- function(phobj, variable="Condition", topn = 15, 
-                                               tax_level = "Genus",
-                                     outname="GenusBarplotFx.pdf", height=7, width=12){
+                                          tax_level = "Genus",
+                                          outname="GenusBarplotFx.pdf", height=8, width=12){
   library(fantaxtic)
   topntx <- get_top_taxa(physeq_obj = phobj, n = topn, relative = T,
-                        discard_other = T, other_label = "Other")
+                         discard_other = T, other_label = "Other")
+  
+  cc <- ggsci::pal_npg(palette = "nrc")(10)
+  user.colfn=colorRampPalette(cc)
+  newcc <- user.colfn(topn)
   
   topntx <- name_taxa(topntx, label = "", species = F, other_label = "Other")
   topntx <- fantaxtic_bar(topntx, color_by = tax_level, label_by = tax_level, 
-                        facet_by = variable, grid_by = NULL, 
-                        other_color = "Grey") +
-    mytheme +
-    theme(axis.text.x = element_text(size = 10, 
-                                     colour = "black", angle = 90, 
-                                     face = "plain", hjust=1, vjust=1))
-    #theme(strip =element_rect(fill="white"))+
+                          facet_by = variable, grid_by = NULL, 
+                          other_color = "Grey") +
+    scale_fill_manual(values = newcc) +
+    scale_color_manual(values = newcc) +
+    ylab("Relative Abundance") +
+    theme(legend.text = element_text(face="italic")) +
+    theme(axis.text.x = element_text( angle = 45, vjust=1)) +
+    theme(axis.title.x = element_text( size=12)) +
+    theme(axis.title.y = element_text( size=12))
   ggsave(filename = outname, topntx, height = height, width = width) 
   return(topntx)
 }
 
+plotRelativeAbnBars_Fantaxtic_grid <- function(phobj, 
+                                               variables="Condition", topn = 15, 
+                                          tax_level = "Genus",
+                                          outname="GenusBarplotFx.pdf", height=8, width=12){
+  library(fantaxtic)
+  
+  cc <- ggsci::pal_npg(palette = "nrc")(10)
+  user.colfn=colorRampPalette(cc)
+  newcc <- user.colfn(topn)
+  
+  topntx <- get_top_taxa(physeq_obj = phobj, n = topn, relative = T,
+                         discard_other = T, other_label = "Other")
+  topntx_df <- phyloseq::psmelt(topntx) %>% 
+    select(Sample, Sample.ID, Treatment, Region_sequenced, Stress, Mouse, Abundance, Genus, Species) %>% 
+    group_by(Sample) %>% 
+    dplyr::mutate(Relative_Abundance = Abundance/(sum(Abundance))) %>% 
+    dplyr::mutate(Species = gsub("_", " ", Species))
+  
+  only_trans <- topntx_df %>% filter(Treatment == "TRANSFER") %>% 
+    dplyr::mutate(Stress = "SD")
+  
+  topntx_df <- rbind(topntx_df, only_trans)
+  
+  regions <- list()
+  for(rr in unique(topntx_df$Stress)){
+    regions[[rr]] <- ggplot(topntx_df %>% filter(Stress == rr), 
+                            aes(fill=Species, group = Species, x=Mouse, y=Relative_Abundance)) +
+      facet_grid(Region_sequenced ~ Treatment, scales="free_x" ) +
+      geom_col() + 
+      scale_fill_manual(values = newcc) +
+      scale_color_manual(values = newcc) +
+      theme_classic() +
+      ylab("Relative Abundance")+
+      ggtitle(rr) + 
+      theme(plot.title = element_text(hjust = 0.5))  +
+      theme(axis.text.x = element_text( size=12)) + #angle = 45, vjust=1, 
+      theme(axis.text.y = element_text( size=12)) +
+      theme(axis.title.x = element_text( size=12)) +
+      theme(axis.title.y = element_text( size=12)) +
+      theme(strip.text.x = element_text( size=12)) + 
+      theme(strip.text.y = element_text( size=12)) +
+      theme(legend.text = element_text(face="italic"))
+  }
+ 
+  pdf(outname, height = height, width = width)
+  print(cowplot::plot_grid(plotlist = regions, ncol = 1))
+  dev.off()
+  return(topntxg)
+}
 
 plotPrevalenceVsAbundance <- function(phobj, outname="phylumBarplot.pdf", height=10, width=12){
   pre_prevalence <- getRelAbundanceTab(phobj)
@@ -1405,9 +1469,34 @@ getDeseqContrastFromNumerical <- function(dds, nvarname, opt, name){
               "nvarname"=nvarname))
 }
 
-getDeseqResults <- function(phobj, opt, name="", variables = c("Condition")){
-  formula <- paste0("~ ", paste(variables, sep=" + ", collapse=" + ")) %>% 
+getDeseqContrastWithInteraction <- function(dds, nvarname, opt, name){
+  res <- results(dds, name = nvarname)
+  # Normal not implemented for interactions
+  #resLFC <- lfcShrink(dds, coef = nvarname, type="normal", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
+  resLFC_ape <- tryCatch(lfcShrink(dds, coef = nvarname, type="apeglm", lfcThreshold = log2(opt$fc)),error=\(x)data.frame() ) #apeglm gives weird results
+  resLFC_ashr <- lfcShrink(dds, coef = nvarname, type="ashr", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
+  resdf <- defWriteDEAResults(res, resLFC_ape, opt, paste0(name, "_",nvarname, "_DAAshrinkNormal.tsv"))
+  resdf_ape <- defWriteDEAResults(res, resLFC_ape, opt, paste0(name, "_", nvarname, "_DAAshrinkApe.tsv"))
+  resdf_ashr <- defWriteDEAResults(res, resLFC_ashr, opt, paste0(name, "_", nvarname, "_DAAshrinkAshr.tsv"))
+  
+  return(list("res"=res,
+              "resLFC"=resLFC_ape,
+              "resLFC_ape"=resLFC_ape, 
+              "resLFC_ashr"=resLFC_ashr,
+              "resdf"=resdf,
+              "resdf_ape"=resdf_ape,
+              "resdf_shr"=resdf_ashr,
+              "nvarname"=nvarname))
+}
+
+getDeseqResults <- function(phobj, opt, name="", variables = c("Condition"), interact=FALSE){
+  if(interact == FALSE){
+    formula <- paste0("~ ", paste(variables, sep=" + ", collapse=" + ")) %>% 
     as.formula
+  }else{
+    formula <- paste0("~ ", paste(variables, sep=" * ", collapse=" * ")) %>% 
+      as.formula
+  }
   dds <- phyloseq_to_deseq2(phobj, design= formula)
   raw_counts <- counts(dds)
   if(opt$minsampleswithcount == 0){ 
@@ -1432,23 +1521,32 @@ getDeseqResults <- function(phobj, opt, name="", variables = c("Condition")){
   design <- dds@colData %>% as.data.frame()
   all_combos_done <- TRUE
   
-  all_combins <- map(variables, \(x){
-    if(is.numeric(design[, x])){
-      return(list(c(x, "NUMERIC")))
-    }
-    levs <- levels(design[, x] %>% unlist) 
-    combins <- lapply(combn(1:length(levs), 2, simplify = F), \(y)c(x, levs[y]))
-  }) %>% flatten
-
-  all_contrasts <- map(all_combins, \(lev_combin){
-    if(lev_combin[2] == "NUMERIC"){
-      getDeseqContrastFromNumerical(dds, lev_combin[1], opt, name)
-    }else{
-      getDeseqContrastFromCategorical(dds, lev_combin, opt, name)
-    }
-  })  
-  names(all_contrasts) <- lapply(all_combins, \(x)ifelse(x[2]=="NUMERIC", x[1], paste0(x[1],'_', x[3], '_vs_', x[2]) %>% gsub(" ", ".", .)))
-  all_combos_done <- TRUE
+  if(interact == FALSE){
+    all_combins <- map(variables, \(x){
+      if(is.numeric(design[, x])){
+        return(list(c(x, "NUMERIC")))
+      }
+      levs <- levels(design[, x] %>% unlist) 
+      combins <- lapply(combn(1:length(levs), 2, simplify = F), \(y)c(x, levs[y]))
+    }) %>% flatten
+  
+    all_contrasts <- map(all_combins, \(lev_combin){
+      if(lev_combin[2] == "NUMERIC"){
+        getDeseqContrastFromNumerical(dds, lev_combin[1], opt, name)
+      }else{
+        getDeseqContrastFromCategorical(dds, lev_combin, opt, name)
+      }
+    })  
+    names(all_contrasts) <- lapply(all_combins, \(x)ifelse(x[2]=="NUMERIC", x[1], paste0(x[1],'_', x[3], '_vs_', x[2]) %>% gsub(" ", ".", .)))
+    all_combos_done <- TRUE
+  }else{
+    all_contrast_names <- resultsNames(dds)
+    all_contrast_names <- all_contrast_names[2:length(all_contrast_names)]
+    all_contrasts <- map(all_contrast_names, \(lev_combin){
+        getDeseqContrastWithInteraction(dds, lev_combin, opt, name)
+    }) 
+    names(all_contrasts) <- all_contrast_names
+  }
   # Write raw counts  
   rawc_df <- defWriteMatAsDF(raw_counts, opt, paste0(name, "_", "raw_counts.tsv") )
   #filtx_df <- defWriteMatAsDF(filt_counts, opt, "raw_counts_filtered.tsv") 
@@ -2572,7 +2670,7 @@ getSignif2 <- function(vector, limits=c(0.05, 0.01, 0.001),
 
 makeCorrelationHeatmap <- function(mat1, mat2, cormethod="pearson",
                                    pval=0.05, select_asvs=c(), outdir="", name="corrHeatmap", 
-                                   clust=T, order_rows = c(), order_cols = c()){
+                                   clust=T, order_rows = c(), order_cols = c(), w=20, h=6){
   # select_asvs: plot these ASVs. Overrides pval
   # pval: plot ASVs with any correlation >  than this threshold
   cormat <- cor(mat1, mat2, method=cormethod)
@@ -2606,8 +2704,8 @@ makeCorrelationHeatmap <- function(mat1, mat2, cormethod="pearson",
   cor_pval <- cor_pval %>% t
   
   oname <- paste0(outdir, "/", name, ".pdf")
-  fontsize_row = 16 - nrow(cormat) / 15
-  fontsize_col = 16 - ncol(cormat) / 15
+  fontsize_row = max(16 - nrow(cormat) / 15, 1)
+  fontsize_col = max(16 - ncol(cormat) / 15, 1)
   
   pheatmap(cormat, display_numbers = cor_ptext, filename=oname,
            width = 20, height = 6,
@@ -2619,7 +2717,7 @@ makeCorrelationHeatmap <- function(mat1, mat2, cormethod="pearson",
   tmp <- tryCatch(dev.off(), error=function(x){})
   hm <- pheatmap(cormat, display_numbers = cor_ptext,
            filename=oname,
-           width = 20, height = 6,
+           width = w, height = h,
            fontsize_row = fontsize_row,
            fontsize_number = 16,
            fontsize_col = fontsize_col,
@@ -2781,7 +2879,7 @@ makeLinearModelsSingleVariable <- function(divtab,
 }
 
 
-deseq_full_pipeline <- function(phobj, name, vars2deseq, opt){
+deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE){
   if(!dir.exists(paste0(opt$out, "DeSEQ2"))) dir.create(paste0(opt$out, "DeSEQ2"))
   outdir <- paste0(opt$out, "DeSEQ2/", name, "/")
   opt$reserva <- opt$out
@@ -2791,7 +2889,7 @@ deseq_full_pipeline <- function(phobj, name, vars2deseq, opt){
     opt$minsampleswithcount <- opt$minfreq*nsamples(phobj)
     cat("Minfreq: ", opt$minfreq, ", setting minsampleswithcount to ", opt$minsampleswithcount)
   }
-  dearesults <- getDeseqResults(phobj, opt, name, variables = vars2deseq)
+  dearesults <- getDeseqResults(phobj, opt, name, variables = vars2deseq, interact = interact)
   
   list2env(dearesults, envir = environment())
   tax2annot <- tax_table(phobj)

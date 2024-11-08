@@ -97,9 +97,9 @@ confmat2df<-function(results, opt, name="results_confussionmatrix_all"){
 opt <- restaurar(opt)
 outdir_base <- opt$out
 
-load(paste0(opt$out, "DeSEQ2/DESEQ2_all.RData"))
-load(paste0(opt$out, "DeSEQ2/DESEQ2_all.RData"))
-load(paste0(opt$out, "PredictDAA/all_model_results.RData"))
+#load(paste0(opt$out, "DeSEQ2/DESEQ2_all.RData"))
+load(paste0(opt$out, "DESeq2_MainConditionOnlyGain/DESEQ2_all_removeWeightLoss.RData"))
+load(paste0(opt$out, "PredictDAA_onlyGain/all_model_results.RData"))
 load(paste0(opt$out, "phyloseq/phyloseq_all_list.RData"))
 
 
@@ -108,7 +108,7 @@ if(!dir.exists(opt$out)) dir.create(opt$out)
 
 alpha_indices <- c("Observed", "Chao1", "Shannon", "InvSimpson")
 
-phseq_to_use <- names(all_phyloseq)[c(1,9,10)]
+phseq_to_use <- names(all_phyloseq)[c(1,3,4,9,10)]
 varname <- "status_c2"
 interestvar <- "imc_00_log"
 imcdiff_var <- "imc_diff"
@@ -158,6 +158,9 @@ for(i in phseq_to_use){
   sig_vars <- models1$single_anovas %>% filter(`Pr(>F)` < 0.05) %>% rownames
   sig_vars <- sig_vars[sig_vars %in% names(metadata_pcadiv)]
   
+  sig_vars_PCs <- sig_vars[grep("^PC", sig_vars)]
+  sig_vars_meta <- sig_vars[! grepl("^PC", sig_vars)]
+  
   #write_tsv(models1$single_anovas, file = paste0(opt$out, i, "_single_anovas.tsv"))
   plotSignificantVars(metadata_pcadiv, sig_vars = sig_vars, yvar = dependent_variables[1], opt = opt, w=8, h=6)
   plotModelDiagnosticsAll(models1$models, opt, "single_var_model")
@@ -176,10 +179,12 @@ for(i in phseq_to_use){
   #By hand I checked that IMC_t0, PC3, PC13 and PC17 are significant in the presence of each other
   # Observed diversity is also significant but not after adding PC3. Therefore, I adjust the following model:
 
-  finalmod <- lm(imc_01_log ~ imc_00_log + PC3 + PC13 + PC17, data=metadata_pcadiv)
-  neutralmod <- lm(imc_01_log ~ imc_00_log, data=metadata_pcadiv)
-  plotModelDiagnosticsAll(list("imc_01_log ~ imc_00_log + PC3 + PC13 + PC17" = finalmod,
-                               "imc_01_log ~ imc_00_log" = neutralmod
+  final_formula <-paste0("imc_01_log ~ ", paste(sig_vars, sep=" + ", collapse=" + ")) 
+  simple_formula <-paste0("imc_01_log ~ ", paste(sig_vars_meta, sep=" + ", collapse=" + ")) 
+  finalmod <- lm(as.formula(final_formula), data=metadata_pcadiv)
+  neutralmod <- lm(as.formula(simple_formula), data=metadata_pcadiv)
+  plotModelDiagnosticsAll(list(final_formula = finalmod,
+                               simple_formula = neutralmod
                                ), opt, "best_model")
 
   levs <- unique(metadata_pcadiv$status_c2)
@@ -265,6 +270,9 @@ for(i in phseq_to_use){
                                             combos=1,
                                             outdir = opt$out, name = paste0(i, "_Regress_linMod1var") )
   sig_vars <- models1$single_anovas %>% filter(`Pr(>F)` < 0.05) %>% rownames
+  sig_vars_PCs <- sig_vars[grep("^PC", sig_vars)]
+  sig_vars_meta <- sig_vars[! grepl("^PC", sig_vars)]
+  
   
   #write_tsv(models1$single_anovas, file = paste0(opt$out, i, "_single_anovas.tsv"))
   plotSignificantVars(metadata_pcadiv, sig_vars = sig_vars, yvar = imcdiff_var, opt = opt, w=8, h=6)
@@ -283,10 +291,13 @@ for(i in phseq_to_use){
   write_tsv(models_all, file = paste0(opt$out, i, "_all_anovas_signif_variables_withHospital.tsv"))
   #By hand I checked that IMC_t0, PC3, PC13 and PC17 are significant in the presence of each other
   # Observed diversity is also significant but not after adding PC3. Therefore, I adjust the following model:
-  finalmod <- lm(imc_diff ~ age_months_t0_log + PC3 + PC13, data=metadata_pcadiv)
-  neutralmod <- lm(imc_diff ~ age_months_t0_log, data=metadata_pcadiv)
-  plotModelDiagnosticsAll(list("imc_diff ~ age_months_t0_log + PC3 + PC13" = finalmod,
-                               "imc_diff ~ age_months_t0_log" = neutralmod
+  
+  final_formula <-paste0("imc_diff ~ ", paste(sig_vars, sep=" + ", collapse=" + ")) 
+  simple_formula <-paste0("imc_diff ~ ", paste(sig_vars_meta, sep=" + ", collapse=" + ")) 
+  finalmod <- lm(as.formula(final_formula), data=metadata_pcadiv)
+  neutralmod <- lm(as.formula(simple_formula), data=metadata_pcadiv)
+  plotModelDiagnosticsAll(list(final_formula = finalmod,
+                               simple_formula = neutralmod
   ), opt, "best_model")
   
   levs <- unique(metadata_pcadiv$status_c2)

@@ -21,8 +21,8 @@ SEED <- 123
 MODE = "IATA"
 
 if(MODE == "IATA"){
-  opt <- list(out ="/home/ccarlos/Documentos/CLIMBOUT_CORALS/results_rstudio/240307_results2_prev20mincount10/",
-              indir = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/results_cluster3_Allsamples2_conf05rl100/mg09_combinempa/" ,
+  opt <- list(out ="/home/ccarlos/Documentos/CLIMBOUT_CORALS/results_rstudio/240307_results5_kraken05_prev05_filtNormalBetter/",
+              indir = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/results_cluster3_Allsamples2_conf05rl100/mg09_combinempa/" , #results_cluster3_Allsamples2_conf05rl100 results_cluster3_Allsamples1_rl75
               r_functions="/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/metagenomics_core_functions.R",
               predictive_functions="/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predictive_functions.R",
               read_metadata_script = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/read_metadata.R",
@@ -46,16 +46,17 @@ if(MODE == "IATA"){
               daa_integrate_all_contrasts = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_integrate_all_contrasts.R",
               predict_4groups = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predict_4groups.R",
               rewrite=FALSE,
-              minfreq = 0.2,
+              minfreq = 0.05,
               mincountspersample = 0,
-              mincount= 10,
+              mincount= 1,
               minsampleswithcount = 0,
               raref_quant = 0.15,
               fc=1, 
               pval=0.05, 
               ptype="adjusted", 
               fctype="shrunk",
-              num_genes_default=5
+              num_genes_default=5,
+              only_normal_weight=TRUE
   )
 }else{
   opt <- list(
