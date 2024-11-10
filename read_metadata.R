@@ -2,7 +2,13 @@
 # Read MetaData
 ########################################
 
-metadata <- data.frame(read_excel(opt$metadata))
+metadata <- data.frame(read_tsv(opt$metadata))%>% 
+  mutate(
+         imc_00 = peso_00/(0.01*talla_00)^2,
+         imc_01 = peso_01/(0.01*talla_01)^2,
+         edad_00_round = round(edad_00) %>% as.factor()
+  )
+
 metadata_with_origin  <- read_xlsx(opt$metadata_with_origin)
 metadata_gain_labels <- read_csv(opt$metadata_class) %>%  clean_names() %>% data.frame()
 rownames(metadata) <- paste0("C", metadata$id)
@@ -12,18 +18,19 @@ metadata$Sex[metadata$Sex == 0] <- "Boy"
 metadata$Sex[metadata$Sex == 1] <- "Girl"
 metadata$Sex <- factor(metadata$Sex)
 
-colnames(metadata)[7] <- "Category_T0"
-metadata$Category_T0[metadata$Category_T0 == 1] <- "Thinness"
-metadata$Category_T0[metadata$Category_T0 == 2] <- "Normal"
-metadata$Category_T0[metadata$Category_T0 == 3] <- "Overweight"
-metadata$Category_T0[metadata$Category_T0 == 4] <- "Obesity"
+colnames(metadata)[33] <- "Category_T0"
+metadata$Category_T0[metadata$Category_T0 == 0] <- "Thinness"
+metadata$Category_T0[metadata$Category_T0 == 1] <- "Normal"
+metadata$Category_T0[metadata$Category_T0 == 2] <- "Overweight"
+metadata$Category_T0[metadata$Category_T0 == 3] <- "Obesity"
 metadata$Category_T0 <- factor(metadata$Category_T0, levels = c("Thinness", "Normal", "Overweight", "Obesity"))
 
-metadata$cat_peso_01[metadata$cat_peso_01 == 1] <- "Thinness"
-metadata$cat_peso_01[metadata$cat_peso_01 == 2] <- "Normal"
-metadata$cat_peso_01[metadata$cat_peso_01 == 3] <- "Overweight"
-metadata$cat_peso_01[metadata$cat_peso_01 == 4] <- "Obesity"
-metadata$cat_peso_01 <- factor(metadata$cat_peso_01, levels = c("Thinness", "Normal", "Overweight", "Obesity"))
+colnames(metadata)[38] <- "Category_T1"
+metadata$Category_T1[metadata$Category_T1 == 1] <- "Thinness"
+metadata$Category_T1[metadata$Category_T1 == 2] <- "Normal"
+metadata$Category_T1[metadata$Category_T1 == 3] <- "Overweight"
+metadata$Category_T1[metadata$Category_T1 == 4] <- "Obesity"
+metadata$Category_T1 <- factor(metadata$Category_T1, levels = c("Thinness", "Normal", "Overweight", "Obesity"))
 
 na_metadata_t0 <- rownames(metadata[is.na(metadata$Category_T0),])
 na_metadata_t1 <- rownames(metadata[is.na(metadata$imc_01),])
@@ -38,11 +45,13 @@ nreads <- s_otu_tab %>% colSums()
 
 metadata$hospital <- metadata_with_origin$hospital[match(metadata$sampleID, metadata_with_origin$id)]
 
+newnames <- names(metadata_gain_labels)[!names(metadata_gain_labels) %in% names(metadata)]
+newnames <- newnames[!(newnames %in% c("x", "sexo_vs", "cat_peso_00", "cat_peso_01"))]
 
-metadata_gain_labels2 <- metadata_gain_labels %>% select(id_participante, age_months_t0, age_months_t1, status_c2, mean_t1, lower_bound_t1, upper_bound_t1, bmi_t1_2)
-table(metadata_gain_labels$id_participante %in% metadata$sampleID)
+metadata_gain_labels2 <- metadata_gain_labels %>% select(id, all_of(newnames))
+table(metadata_gain_labels2$id %in% metadata$sampleID)
 
-metadata <- merge(metadata, metadata_gain_labels2, by.x="sampleID", by.y="id_participante", all.x = TRUE) %>% 
+metadata <- merge(metadata, metadata_gain_labels2, by.x="sampleID", by.y="id", all.x = TRUE) %>% 
   dplyr::mutate(is_normal = !is.na(status_c2)) %>% 
   dplyr::mutate(status_c2 = dplyr::recode(status_c2, Normal = "Normal", `Ganancia excesiva`="Excessive gain", `Ganancia insuficiente`="Insufficient gain")) %>% 
   mutate(sampleID2 = sampleID,
@@ -50,13 +59,15 @@ metadata <- merge(metadata, metadata_gain_labels2, by.x="sampleID", by.y="id_par
 rownames(metadata) <- metadata$sampleID
   
 
-
 write_tsv(metadata, file = paste0(outdir, "metadata_full.tsv"))
 metadata_full <- metadata
 s_otu_tab_unfilt <- s_otu_tab
 
 #Filter samples in metadata
 common_samples <- names(s_otu_tab)[names(s_otu_tab) %in% rownames(metadata)]
+all(names(s_otu_tab) %in% metadata$sampleID)
+all(metadata$sampleID %in% names(s_otu_tab))
+
 metadata <- metadata_full[common_samples, ]
 s_otu_tab <- s_otu_tab_unfilt[, common_samples]
 
