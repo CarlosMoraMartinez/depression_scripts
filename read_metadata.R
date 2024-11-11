@@ -1,6 +1,8 @@
 ########################################
 # Read MetaData
 ########################################
+  
+riga_tandas45 <- read_tsv(opt$metadata_riga_45)
 
 metadata <- data.frame(read_tsv(opt$metadata))%>% 
   mutate(

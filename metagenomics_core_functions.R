@@ -1986,6 +1986,7 @@ makeAllPCAs <- function(phobj, counts_df, genes, vars2pca, opt, name = "PCAs"){
   vars2pca <- c(vars2pca,"reads_log10_current")
   
   pca_plots <- lapply(vars2pca,  FUN=function(vv, counts, design, genes){
+    cat(vv)
      plotPCA(counts,design, genes, vv)
   },counts_df, design, genes)
   names(pca_plots) <- vars2pca

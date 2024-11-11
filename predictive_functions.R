@@ -13,7 +13,7 @@ makeKmeans <- function(datasc, levs, varnames, SEED=123){
   return(list(confmat_no_l1o=confmat_kmeans, mod=mod_kmeans, predicted=predict_kmeans))
 }
 
-makeKnn_l1o <- function(datasc, levs, varnames, different_ks=c(1, 3, 5, 7, 9, 11, 13)){
+makeKnn_l1o <- function(datasc, levs, varnames, different_ks=c(1, 3, 5, 7, 9, 11, 13), folds=c()){
   library(class)
   #library(gmodels)
   
@@ -22,11 +22,15 @@ makeKnn_l1o <- function(datasc, levs, varnames, different_ks=c(1, 3, 5, 7, 9, 11
   train_df_all <- datasc %>% 
     dplyr::select(-class, -sample) %>% 
     dplyr::select(all_of(varnames))
+  
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
   for(k in  different_ks){
     kname = paste("K=", as.character(k), sep="", collapse="")
     results[[kname]] <- list()
     preds <- c()
-    for(i in 1:nrow(datasc)){
+    for(i in folds){
       train_df <- train_df_all[-i, ]
       test_df <- train_df_all[i, ]
       # Separar clases
@@ -59,6 +63,7 @@ makeKnn <- function(datasc, levs, nvars, different_ks=c(1, 3, 5, 7, 9, 11, 13)){
   conf_matrices_knn <- list()
   train_df <- datasc %>% dplyr::select(-class, -sample) %>% dplyr::select(all_of(varnames))
   train_labels <- datasc$class %>% factor(levels=levs)
+  
   for(k in  different_ks){
     kname = paste("K=", as.character(k), sep="", collapse="")
     test_pred[[kname]] <- knn(train_df, train_df, train_labels, k = k, prob = T)
@@ -70,13 +75,16 @@ makeKnn <- function(datasc, levs, nvars, different_ks=c(1, 3, 5, 7, 9, 11, 13)){
   return(list(confmats=conf_matrices_knn, mods=test_pred))
 }
 
-makeNaiveBayes_l1o <- function(datasc, levs, varnames, SEED=123){
+makeNaiveBayes_l1o <- function(datasc, levs, varnames, SEED=123, folds=c()){
   library(e1071)
   set.seed(SEED)
   
   predict_bayes1 <- factor()
   df <- datasc %>% dplyr::select(-class, -sample) %>% dplyr::select(all_of(varnames))
-  for(i in 1:nrow(datasc)){
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
+  for(i in folds){
     # Separar datos
     train_df <- df[-i, ]
     test_df <- df[i, ]
@@ -98,11 +106,14 @@ makeNaiveBayes_l1o <- function(datasc, levs, varnames, SEED=123){
               preds=predict_bayes1, preds_no_l1o=predict_bayes2, mod=modwithall))
 }
 
-make_classifTree_l1o <- function(datasc, levs, varnames){
+make_classifTree_l1o <- function(datasc, levs, varnames, folds=c()){
   library(C50)
   predict_tree1 <- factor()
   df <- datasc %>% dplyr::select(-class, -sample)  %>% dplyr::select(all_of(varnames))
-  for(i in 1:nrow(datasc)){
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
+  for(i in folds){
     # Separar datos
     train_df <- df[-i, ]
     test_df <- df[i, ]
@@ -131,11 +142,14 @@ make_classifTree_l1o <- function(datasc, levs, varnames){
               ))
 }
 
-make_randomForest_l1o <- function(datasc, levs, varnames){
+make_randomForest_l1o <- function(datasc, levs, varnames, folds=folds()){
   library(randomForest)
   df <- datasc %>% dplyr::select(-class, -sample)  %>% dplyr::select(all_of(varnames))
   predict_tree1 <- factor()
-  for(i in 1:nrow(datasc)){
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
+  for(i in folds){
     # Separar datos
     train_df <- df[-i, ]
     test_df <- df[i, ]
@@ -162,13 +176,16 @@ make_randomForest_l1o <- function(datasc, levs, varnames){
 }
 
 
-make_svm_l1o <- function(datasc, levs, varnames, kernel="linear", SEED=123){
+make_svm_l1o <- function(datasc, levs, varnames, kernel="linear", SEED=123, folds=c()){
   library(e1071)
   datasc$class <- factor(datasc$class)
   df <- datasc %>% dplyr::select(-class, -sample)  %>% dplyr::select(all_of(varnames))
   predict1 <- factor(levels = levs)
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
   set.seed(SEED)
-  for(i in 1:nrow(datasc)){
+  for(i in folds){
     # Separar datos
     train_df <- df[-i, ]
     test_df <- df[i, ]
@@ -206,11 +223,16 @@ make_svm_l1o <- function(datasc, levs, varnames, kernel="linear", SEED=123){
               roc_auc=NULL))
 }
 
-make_glm_l1o <- function(datasc, levs, varnames){
+make_glm_l1o <- function(datasc, levs, varnames, folds= c()){
   predict_glm1 <- c()
   df <- datasc %>% dplyr::select(-sample) 
   formula <- paste0("class ~ ", paste(varnames, sep="+", collapse="+")) %>% as.formula()
-  for(i in 1:nrow(datasc)){
+  
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
+  
+  for(i in folds){
     # Separar datos
     train_df <- df[-i, ]
     test_df <- df[i, ]
@@ -230,12 +252,17 @@ make_glm_l1o <- function(datasc, levs, varnames){
 }
 
 
-make_glm_l1o_multiclass <- function(datasc, levs, varnames){
+make_glm_l1o_multiclass <- function(datasc, levs, varnames, folds=c()){
   library(nnet)
   predict_glm1 <- c()
   df <- datasc %>% dplyr::select(-sample) 
   formula <- paste0("class ~ ", paste(varnames, sep="+", collapse="+")) %>% as.formula()
-  for(i in 1:nrow(datasc)){
+  
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
+  
+  for(i in folds){
     # Separar datos
     train_df <- df[-i, ]
     test_df <- df[i, ]
@@ -371,7 +398,7 @@ getTableFromConfmatrices_multiclass <- function(modlist){
   rownames(res) <- NULL
   return(res)
 }
-makeAllModels <- function(datasc, plim=0.01, opt, name="Condition"){
+makeAllModels <- function(datasc, plim=0.01, opt, name="Condition", nfolds=0){
   levs <- datasc %>% pull(class) %>% as.factor %>% levels
   # Select features
   if(length(levs)==2){
@@ -379,23 +406,33 @@ makeAllModels <- function(datasc, plim=0.01, opt, name="Condition"){
   }else{
     compsig <- get_signif_components_multiclass(datasc, levs)
   }
-  write_tsv(compsig, file=paste0(opt$out, "significant_PCAcomponents_", name,".tsv"))
+
+  tryCatch({readr::write_tsv(compsig, file=paste0(opt$out, "significant_PCAcomponents_", name,".tsv"))},
+           error = function(x){print("ERROR writting sig Components")})
+
   varnames <- c(compsig$var[compsig$pval <= plim])
   if(length(varnames) < 2){
     varnames <- compsig %>% arrange(pval) %>% head(2) %>% pull(var)
   }
   
-  if(length(levs)==2){
-    res_glms <- make_glm_l1o(datasc, levs, varnames)
+  if(nfolds == 0){
+    folds <- c() ## leave 1 out
   }else{
-    res_glms <- make_glm_l1o_multiclass(datasc, levs, varnames)
+    folds <- createFolds(datasc$class, k = nfolds, list = TRUE, returnTrain = FALSE)
   }
-  res_svm_lin <- make_svm_l1o(datasc, levs, varnames, kernel="linear")
-  res_svm_rad <- make_svm_l1o(datasc, levs, varnames, kernel="radial")
-  res_randfor <- make_randomForest_l1o(datasc, levs, varnames)
-  res_tree <- make_classifTree_l1o(datasc, levs, varnames)
-  res_naivebayes <- makeNaiveBayes_l1o(datasc, levs, varnames, SEED=SEED)
-  res_knn_l1o <- makeKnn_l1o(datasc, levs, varnames, different_ks=seq(1,13, by=2))
+  
+  
+  if(length(levs)==2){
+    res_glms <- make_glm_l1o(datasc, levs, varnames, folds = folds)
+  }else{
+    res_glms <- make_glm_l1o_multiclass(datasc, levs, varnames, folds = folds)
+  }
+  res_svm_lin <- make_svm_l1o(datasc, levs, varnames, kernel="linear", folds = folds)
+  res_svm_rad <- make_svm_l1o(datasc, levs, varnames, kernel="radial", folds = folds)
+  res_randfor <- make_randomForest_l1o(datasc, levs, varnames, folds = folds)
+  res_tree <- make_classifTree_l1o(datasc, levs, varnames, folds = folds)
+  res_naivebayes <- makeNaiveBayes_l1o(datasc, levs, varnames, SEED=SEED, folds = folds)
+  res_knn_l1o <- makeKnn_l1o(datasc, levs, varnames, different_ks=seq(1,13, by=2), folds = folds)
   #res_knn_no_l1o <- makeKnn(datasc, levs, varnames, different_ks=seq(1,13, by=2))
   res_kmeans <- makeKmeans(datasc, levs, varnames, SEED=SEED)
   
@@ -472,14 +509,23 @@ plotSVM<-function(modelo_svm, datasc, varnames, opt, name){
   return(g1)
 }
 
-callDoAllModelsFromALLPCAs <- function(all_pcas, name, metadata, vars2pca=c("Condition")){
+callDoAllModelsFromALLPCAs <- function(all_pcas, name, metadata, vars2pca=c("Condition"), 
+                                       variable_plim=0.01, 
+                                       meta_vars = c() ,
+                                       nfolds = 0){
   datasc <- all_pcas[[1]]$pca$x %>% 
     as.data.frame %>% 
     rownames_to_column("sample") %>% 
     dplyr::mutate(class=unlist(metadata[match(sample, metadata$sampleID), vars2pca[1]])) %>% 
     dplyr::filter(!is.na(class)) %>% 
     dplyr::mutate(class=factor(class))
-  allmodssumm <- makeAllModels(datasc, plim=0.01, opt, name= name)
+  if(length(meta_vars) > 0){
+    meta_filt <- metadata %>% select(sampleID, all_of(meta_vars))
+    byy <- join_by(sample == sampleID)
+    datasc <- datasc %>% inner_join(meta_filt, by=byy)
+  
+  }
+  allmodssumm <- makeAllModels(datasc, plim=variable_plim, opt, name= name, nfolds = nfolds)
   
   modelo_svm <- allmodssumm$models$`SVM-linear`$mod_noscale
   allmodssumm$plot_svm_rad <-plotSVM(modelo_svm, datasc, allmodssumm$varnames, opt, paste0(name, "_linear"))
@@ -492,7 +538,11 @@ callDoAllModelsFromALLPCAs <- function(all_pcas, name, metadata, vars2pca=c("Con
 
 
 callDoAllModelsFromALLPCAsOriginalVars <- function(all_pcas, PCs, modelo_svm, vstdf, 
-                                                name, vars2pca=c("Condition"), metadata, daares, topns = c(5, 10, 20)){
+                                                name, vars2pca=c("Condition"), metadata, 
+                                                daares, topns = c(5, 10, 20),
+                                                variable_plim=0.01, 
+                                                meta_vars = c() ,
+                                                nfolds = 0){
   
   pcts <- summary(all_pcas[[1]]$pca)$importance[2, PCs]
   pcslope <- pcts[1]/pcts[2]
@@ -577,13 +627,25 @@ makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
   outdir <- paste0(opt$out, phname)
   
   resph <- all_model_results[[phname]]
-  pcnames <- resph[[get_pcnames_from]]$varnames
-  tabs <- resph[[get_pcnames_from]]$modummary %>% dplyr::mutate(sel_method = "PCA", varsused = paste(pcnames, collapse="|"))
-  if("padj_taxa_res_indiv" %in% names(resph)){
-    tabs <- rbind(
-      tabs,
-      resph$padj_taxa_res_indiv$allmodsum
-    )
+  
+  if(length(get_pcnames_from) == 1){
+    pcnames <- resph[[get_pcnames_from]]$varnames
+    tabs <- resph[[get_pcnames_from]]$modummary %>% dplyr::mutate(sel_method = "PCA", varsused = paste(pcnames, collapse="|"))
+
+    if("padj_taxa_res_indiv" %in% names(resph)){
+      tabs <- rbind(
+        tabs,
+        resph$padj_taxa_res_indiv$allmodsum
+      )
+    }
+  }else{
+    tabs <- map(get_pcnames_from, \(xn){
+      pcnames <- resph[[xn]]$varnames
+      resph[[xn]]$modummary %>% dplyr::mutate(sel_method = xn, 
+                                  varsused = paste(pcnames, collapse="|"))}
+                ) %>% bind_rows %>% 
+      dplyr::mutate(sel_method = gsub("_taxa_res", "", sel_method))
+        
   }
   write_tsv(tabs, file = paste0(outdir, phname, "_modelSummariesWithIndividualSpecies.tsv"))
   tabs2plot <- tabs %>% 
@@ -600,6 +662,8 @@ makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
 
   tabs2plot <- tabs2plot %>% dplyr::mutate(model = factor(model, levels=modorder),
                                          sel_method = factor(sel_method, levels=levorder)) 
+  
+  get_pcnames_from <- "ALL"
   (g1 <- ggplot(tabs2plot, aes(x=model, 
                              y=Accuracy_l1out, 
                              col=sel_method,
@@ -617,7 +681,7 @@ makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
     ggpubr::theme_pubr() +
     theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
   )
-  ggsave(paste0(outdir, "/all_model_accuracy_1.pdf"), g1, 
+  ggsave(paste0(outdir, "/" ,get_pcnames_from,"all_model_accuracy_1.pdf"), g1, 
        width = w, height = w*0.5)
   tabs2plot2 <- tabs2plot %>%  dplyr::filter(!grepl("top (5|10)", sel_method, perl=T)) 
   g2 <- ggplot(tabs2plot2, aes(x=model, 
@@ -640,7 +704,7 @@ makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
   theme(legend.position="right")+ 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
 
-  ggsave(paste0(outdir, "/", phname, "all_model_accuracy_2.pdf"), g2, 
+  ggsave(paste0(outdir, "/", phname, "_", get_pcnames_from, "all_model_accuracy_2.pdf"), g2, 
        width = 12, height = 8)
   g3 <- ggplot(tabs2plot2, aes(x=model, 
                              y=Sensitivity_l1out, 
@@ -662,7 +726,7 @@ makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
   theme(legend.position="right")+ 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
 
-  ggsave(paste0(outdir, "/", phname, "all_model_sensitivity.pdf"), g3, 
+  ggsave(paste0(outdir, "/", phname, "_", get_pcnames_from,"all_model_sensitivity.pdf"), g3, 
        width = 12, height = 8)
 
   g4 <- ggplot(tabs2plot2, aes(x=model, 
@@ -685,7 +749,7 @@ makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
   theme(legend.position="right") + 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
 
-  ggsave(paste0(outdir, "/", phname, "all_model_Specificity.pdf"), g4, 
+  ggsave(paste0(outdir, "/", phname, "_", get_pcnames_from,"all_model_Specificity.pdf"), g4, 
        width = 12, height = 8)
 
   g5 <- ggplot(tabs2plot2, aes(x=model, 
@@ -710,21 +774,21 @@ makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
   theme(legend.position="right") + 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
 
-  ggsave(paste0(outdir, "/", phname, "all_model_Kappa.pdf"), g5, 
+  ggsave(paste0(outdir, "/", phname, "_", get_pcnames_from,"all_model_Kappa.pdf"), g5, 
        width = 6, height = 3)
 
   cw <- cowplot::plot_grid(plotlist=list(g2, g3, g4), ncol = 1)
-  pdf(paste0(outdir, "/", phname, "_all_model_combined.pdf"), width = w, height = h)
+  pdf(paste0(outdir, "/", phname, "_", get_pcnames_from,"_all_model_combined.pdf"), width = w, height = h)
   print(cw)
   dev.off()
 
   cw <- cowplot::plot_grid(plotlist=list(g2, g5), ncol = 1)
-  pdf(paste0(outdir, "/", phname, "_all_model_combined2.pdf"), width = w, height = w)
+  pdf(paste0(outdir, "/", phname, "_", get_pcnames_from,"_all_model_combined2.pdf"), width = w, height = w)
   print(cw)
   dev.off()
 
   cw <- cowplot::plot_grid(plotlist=list(g2, g5, g3, g4), ncol = 1)
-  pdf(paste0(outdir, "/", phname, "_all_model_combined3.pdf"), width = w, height = w*1.7)
+  pdf(paste0(outdir, "/", phname, "_", get_pcnames_from,"_all_model_combined3.pdf"), width = w, height = w*1.7)
   print(cw)
   dev.off()
 
@@ -973,3 +1037,54 @@ plotAllModelPredictions <- function(phname, all_model_results, opt,
   return(list(cw=cw, plots=modplots))
 }
 
+
+make_meta_PCA<- function(this_metadata, food_variables, 
+                         condVar,
+                         outdir, make_log=TRUE,
+                         name="PCA_vars"){
+  mt_long <- this_metadata %>% 
+    select(sampleID, all_of(c(condVar, food_variables))) %>% 
+    na.omit() %>% 
+    gather("var", "value", all_of(food_variables))
+  
+  gh <- ggplot(mt_long, aes(x=value)) +
+    facet_wrap(~var, scales = "free") +
+    geom_histogram() +
+    theme_minimal()
+  
+  mtlog <- this_metadata %>% 
+    select(sampleID, all_of(c(condVar, food_variables))) %>% 
+    na.omit() %>% 
+    dplyr::mutate_if(is.numeric, \(x)scale(log(x+1)))
+  
+  mtloglong <- mtlog %>% gather("var", "value", all_of(food_variables))
+  
+  ghl <- ggplot(mtloglong, aes(x=value)) +
+    facet_wrap(~var, scales = "free") +
+    geom_histogram() +
+    theme_minimal()
+  
+  ggsave(paste0(outdir,"/", name, "_rawHistogram.pdf"), gh, width = 12, height = 12)
+  ggsave(paste0(outdir,"/", name, "_logHistogram.pdf"), ghl, width = 12, height = 12)
+  
+  if(make_log){
+    d2pca <- mtlog
+  }else{
+    d2pca <- this_metadata %>% 
+      select(sampleID, all_of(c(condVar, food_variables))) %>% 
+      na.omit() %>% 
+      dplyr::mutate_if(is.numeric, \(x)scale(x))
+  }
+  
+  countdf <- d2pca %>% 
+    dplyr::select(all_of(food_variables)) %>% 
+    #column_to_rownames("sampleID") %>%  # already has
+    as.matrix() %>% 
+    t %>% 
+    as.data.frame() %>% 
+    rownames_to_column("gene")
+  pca_plot <- plotPCA(countdf, d2pca, food_variables, condVar)
+    
+  ggsave(paste0(outdir,"/", name, "_PCA.pdf"), pca_plot$plots, width = 10, height = 6)
+  return(pca_plot)
+}

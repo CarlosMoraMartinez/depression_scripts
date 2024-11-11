@@ -16,6 +16,7 @@ library(knitr)
 library(vegan)
 library(janitor)
 library(plyr)
+library(readxl)
 
 SEED <- 123
 MODE = "LOCAL"
@@ -62,7 +63,7 @@ if(MODE == "IATA"){
   )
 }else{
   CODEDIR = "/home/carmoma/Documents/CORALS/scripts_PAR/240806scripts/depression_scripts/"
-  opt <- list(out ="/home/carmoma/Documents/CORALS/results_rstudio/results_predictOctober_1",
+  opt <- list(out ="/home/carmoma/Documents/CORALS/results_rstudio/results_predictOctober_1/",
               indir = "/home/carmoma/Documents/CORALS/results_cluster_240924/names_changed_all/" , #results_cluster3_Allsamples2_conf05rl100 results_cluster3_Allsamples1_rl75
               
               r_functions=paste0(CODEDIR, "metagenomics_core_functions.R"),

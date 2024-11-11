@@ -131,6 +131,25 @@ if(!file.exists(phseq_batch_tanda_shrink_fname) | opt$rewrite){
   load(phseq_batch_tanda_shrink_fname)
 }
 
+## Remove batch effect in rarefied samples
+phseq_rarthenbatch_tanda_fname <- paste0(path_phyloseq,'/pre_phyloseq_raref_then_Combat.RData')
+count_matrix <- otu_table(pre_phyloseq_rarefied)
+data_matrix <- sample_data(pre_phyloseq_rarefied) %>% data.frame %>% 
+  dplyr::mutate(status_c2 = ifelse(is.na(status_c2), "initially_overweight", status_c2),
+                hospital = ifelse(is.na(hospital), "NA", hospital))
+
+if(!file.exists(phseq_rarthenbatch_tanda_fname) | opt$rewrite){
+  adjusted <- ComBat_seq(count_matrix, batch=data_matrix$hospital, group=data_matrix$status_c2)
+  phseq_rerefthenbatch_tanda <- phyloseq(sample_data(data_matrix),
+                                otu_table(adjusted, taxa_are_rows = TRUE),
+                                tax_table(as.matrix(classification)))
+  
+  
+  save(phseq_batch_tanda, file =phseq_rarthenbatch_tanda_fname)
+}else{
+  load(phseq_batch_tanda_fname)
+}
+
 ## Remove batch effect, rarefy
 phseq_batch_tanda_raref_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_Combat_Tanda2_raref.RData')
 if(!file.exists(phseq_batch_tanda_raref_fname) | opt$rewrite){
@@ -225,7 +244,8 @@ if(!file.exists(allphyloseqlist_fname) | opt$rewrite){
     remove_tanda2 = pre_phyloseq_removet2, 
     remove_tanda2_rarefied_min = pre_phyloseq_rarefied_not2,
     rmbatch_tanda =phseq_batch_tanda,
-    rmbatch_tanda_shrink = phseq_batch_tanda_shrink
+    rmbatch_tanda_shrink = phseq_batch_tanda_shrink,
+    phseq_rerefthenbatch_tanda = phseq_rerefthenbatch_tanda
     #rmbatch_tanda_raref =phseq_batch_tanda_raref,
     
     #rmbatch_onlyNorm0 =phseq_batch_tanda_onlyNorT0,
