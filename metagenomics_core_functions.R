@@ -1978,6 +1978,7 @@ getNullPlot <- function(opt, name="var", error=FALSE){
 makeAllPCAs <- function(phobj, counts_df, genes, vars2pca, opt, name = "PCAs"){
   design <- sample_data(phobj)
   design<- data.frame(design) %>% dplyr::filter(sampleID %in% names(counts_df))
+  counts_df <- counts_df %>% dplyr::select(gene, all_of(design$sampleID))
   nreads <- otu_table(phobj) %>% colSums()
 
   design <- design %>% 

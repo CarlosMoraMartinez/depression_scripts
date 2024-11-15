@@ -16,6 +16,14 @@ all_model_results <- list()
 food_variables<- names(s_meta)[4:29]
 extra_variables <- c("edad_00_meses_logscale", "af_extraesc_m_00_logscale")
 
+metacyc_abn <- read_tsv(paste0(opt$out, "Functional/functTabInput_MetaCyc_filteredByProcess.tsv"))
+
+metacyc_daa <- read_tsv(paste0(opt$out, "Functional/DAAlimma_process_MetaCyc.tsv"))
+
+metacyc_abnt <- metacyc_abn %>% column_to_rownames("Pathway") %>% as.matrix %>% t %>% 
+  as.data.frame %>% rownames_to_column("sampleID")
+
+
 NFOLDS <- 10
 
 for(i in phseq_to_use){
@@ -76,6 +84,31 @@ for(i in phseq_to_use){
   this_metadata <- this_metadata %>%
     mutate_at(food_variables, ~ scale(log(. +1)))
   
+  ### functional 
+  nfc <- nrow(this_metadata)
+  funcfreqs <- metacyc_abnt %>% select(-sampleID) %>% map(\(x)sum(x>0)) %>% unlist
+  funcnames <- funcfreqs[funcfreqs > nfc*opt$minfreq] %>% names 
+  metacyc_abnt2 <- metacyc_abnt %>% select(sampleID, all_of(funcnames)) %>% clean_names()
+  funcnames <- names(metacyc_abnt2)[2:ncol(metacyc_abnt2)]
+  
+  byy <- join_by(sampleID == sample_id) 
+  this_metadata <- this_metadata %>% left_join(metacyc_abnt2, by=byy)
+  
+  functional_PCA <- make_meta_PCA(this_metadata, funcnames, 
+                                  var2predict,
+                                  outdir,
+                                  make_log=TRUE,
+                                  name="functional")
+  
+  pcamatfun <- functional_PCA$pca$x %>% 
+    as.data.frame %>% 
+    rownames_to_column("sample")
+  names(pcamatfun)[2:ncol(pcamatfun)] <- paste("MetaCyc_", names(pcamatfun)[2:ncol(pcamatfun)], sep="")
+  byy <- join_by(sampleID == sample) 
+  
+  this_metadata <- this_metadata %>% inner_join(pcamatfun, by = byy)
+  
+  
   all_model_results[[i]][["padj_taxa_taxa"]] <- taxa_padj
   all_model_results[[i]][["praw_taxa_taxa"]] <- taxa_praw
   all_model_results[[i]][["padj_taxa_pcas"]] <- all_pcas_adj
@@ -102,14 +135,14 @@ for(i in phseq_to_use){
                                                                                metadata=this_metadata, vars2pca=var2predict,
                                                                                variable_plim = 0.05,
                                                                                meta_vars = meta_predictvars2, nfolds = NFOLDS)
-  all_model_results[[i]][["padj_taxa_res_food"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadjFood"), 
+  all_model_results[[i]][["padj_taxa_res_foodPCA05"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadjFood"), 
                                                                                metadata=this_metadata, vars2pca=var2predict,
                                                                                variable_plim = 0.05,
-                                                                               meta_vars = meta_predictvars[1:length(food_variables)], nfolds = NFOLDS)
-  all_model_results[[i]][["praw_taxa_res_food"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPrawFood"), 
+                                                                               meta_vars = meta_predictvars1[1:length(food_variables)], nfolds = NFOLDS)
+  all_model_results[[i]][["praw_taxa_res_foodPCA05"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPrawFood"), 
                                                                                metadata=this_metadata, vars2pca=var2predict,
                                                                                variable_plim = 0.05,
-                                                                               meta_vars = meta_predictvars[1:length(food_variables)], nfolds = NFOLDS)
+                                                                               meta_vars = meta_predictvars1[1:length(food_variables)], nfolds = NFOLDS)
   
   all_model_results[[i]][["padj_taxa_res_foodraw1"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadjFoodraw1"), 
                                                                                metadata=this_metadata, vars2pca=var2predict,
@@ -121,12 +154,56 @@ for(i in phseq_to_use){
                                                                                meta_vars = food_variables, nfolds = NFOLDS)
   all_model_results[[i]][["padj_taxa_res_foodraw05"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadjFoodraw05"), 
                                                                                    metadata=this_metadata, vars2pca=var2predict,
-                                                                                   variable_plim = 1,
+                                                                                   variable_plim = 0.05,
                                                                                    meta_vars = food_variables, nfolds = NFOLDS)
   all_model_results[[i]][["praw_taxa_res_foodraw05"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPrawFoodraw05"), 
                                                                                    metadata=this_metadata, vars2pca=var2predict,
-                                                                                   variable_plim = 1,
+                                                                                   variable_plim = 0.05,
                                                                                    meta_vars = food_variables, nfolds = NFOLDS)
+  all_model_results[[i]][["padj_taxa_res_functPCA05"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadjFoodraw05"), 
+                                                                                    metadata=this_metadata, vars2pca=var2predict,
+                                                                                    variable_plim = 0.05,
+                                                                                    meta_vars =  names(pcamatfun)[2:ncol(pcamatfun)], nfolds = NFOLDS)
+  all_model_results[[i]][["praw_taxa_res_functPCA05"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPrawFoodraw05"), 
+                                                                                    metadata=this_metadata, vars2pca=var2predict,
+                                                                                    variable_plim = 0.05,
+                                                                                    meta_vars =  names(pcamatfun)[2:ncol(pcamatfun)], nfolds = NFOLDS)
+  all_model_results[[i]][["padj_taxa_res_functPCA05FoodPCA05"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadjFoodraw05"), 
+                                                                                     metadata=this_metadata, vars2pca=var2predict,
+                                                                                     variable_plim = 0.05,
+                                                                                     meta_vars =  c(meta_predictvars1[1:length(food_variables)], names(pcamatfun)[2:ncol(pcamatfun)]), 
+                                                                                     nfolds = NFOLDS)
+  all_model_results[[i]][["praw_taxa_res_functPCA05FoodPCA05"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPrawFoodraw05"), 
+                                                                                     metadata=this_metadata, vars2pca=var2predict,
+                                                                                     variable_plim = 0.05,
+                                                                                     meta_vars =  c(meta_predictvars1[1:length(food_variables)], names(pcamatfun)[2:ncol(pcamatfun)]),
+                                                                                     nfolds = NFOLDS)
+  all_model_results[[i]][["padj_taxa_res_functPCA1FoodPCA1"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadjFoodraw05"), 
+                                                                                              metadata=this_metadata, vars2pca=var2predict,
+                                                                                              variable_plim = 1,
+                                                                                              meta_vars =  c(meta_predictvars1[1:length(food_variables)], names(pcamatfun)[2:ncol(pcamatfun)]), 
+                                                                                              nfolds = NFOLDS)
+  all_model_results[[i]][["praw_taxa_res_functPCA1FoodPCA1"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPrawFoodraw05"), 
+                                                                                              metadata=this_metadata, vars2pca=var2predict,
+                                                                                              variable_plim = 1,
+                                                                                              meta_vars =  c(meta_predictvars1[1:length(food_variables)], names(pcamatfun)[2:ncol(pcamatfun)]),
+                                                                                              nfolds = NFOLDS)
+  all_model_results[[i]][["padj_taxa_res_functPCA1"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadjFoodraw05"), 
+                                                                                     metadata=this_metadata, vars2pca=var2predict,
+                                                                                     variable_plim = 1,
+                                                                                     meta_vars =  names(pcamatfun)[2:ncol(pcamatfun)], nfolds = NFOLDS)
+  all_model_results[[i]][["praw_taxa_res_functPCA1"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPrawFoodraw05"), 
+                                                                                     metadata=this_metadata, vars2pca=var2predict,
+                                                                                     variable_plim = 1,
+                                                                                     meta_vars =  names(pcamatfun)[2:ncol(pcamatfun)], nfolds = NFOLDS)
+  all_model_results[[i]][["padj_taxa_res_functraw05"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadjFoodraw05"), 
+                                                                                    metadata=this_metadata, vars2pca=var2predict,
+                                                                                    variable_plim = 0.05,
+                                                                                    meta_vars = funcnames, nfolds = NFOLDS)
+  all_model_results[[i]][["praw_taxa_res_functraw05"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPrawFoodraw05"), 
+                                                                                    metadata=this_metadata, vars2pca=var2predict,
+                                                                                    variable_plim = 0.05,
+                                                                                    meta_vars = funcnames, nfolds = NFOLDS)
   
   #all_model_results[[i]][["padj_taxa_res01"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01, name=paste0(i, "ConditionPadj01"), 
   #                                                                          metadata=this_metadata, vars2pca=var2predict,

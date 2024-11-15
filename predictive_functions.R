@@ -1047,10 +1047,16 @@ make_meta_PCA<- function(this_metadata, food_variables,
     na.omit() %>% 
     gather("var", "value", all_of(food_variables))
   
+  if(length(food_variables) < 40){
   gh <- ggplot(mt_long, aes(x=value)) +
     facet_wrap(~var, scales = "free") +
     geom_histogram() +
     theme_minimal()
+  
+  ggsave(paste0(outdir,"/", name, "_rawHistogram.pdf"), gh, width = 12, height = 12)
+  }else{
+    gh <- NULL
+  }
   
   mtlog <- this_metadata %>% 
     select(sampleID, all_of(c(condVar, food_variables))) %>% 
@@ -1059,13 +1065,17 @@ make_meta_PCA<- function(this_metadata, food_variables,
   
   mtloglong <- mtlog %>% gather("var", "value", all_of(food_variables))
   
+  if(length(food_variables) < 40){
   ghl <- ggplot(mtloglong, aes(x=value)) +
     facet_wrap(~var, scales = "free") +
     geom_histogram() +
     theme_minimal()
   
-  ggsave(paste0(outdir,"/", name, "_rawHistogram.pdf"), gh, width = 12, height = 12)
   ggsave(paste0(outdir,"/", name, "_logHistogram.pdf"), ghl, width = 12, height = 12)
+  }else{
+    gh1 <- NULL
+  }
+  
   
   if(make_log){
     d2pca <- mtlog
@@ -1083,6 +1093,7 @@ make_meta_PCA<- function(this_metadata, food_variables,
     t %>% 
     as.data.frame() %>% 
     rownames_to_column("gene")
+  names(countdf)[2:ncol(countdf)] <- d2pca$sampleID
   pca_plot <- plotPCA(countdf, d2pca, food_variables, condVar)
     
   ggsave(paste0(outdir,"/", name, "_PCA.pdf"), pca_plot$plots, width = 10, height = 6)

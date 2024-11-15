@@ -27,6 +27,8 @@ if(MODE == "IATA"){
               
               r_functions="/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/metagenomics_core_functions.R",
               predictive_functions="/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predictive_functions.R",
+              functional_functions="/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predictive_functions.R",
+              functional_script="/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predictive_functions.R",
               read_metadata_script = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/read_metadata.R",
               create_phyloseq_script = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/generate_phyloseq_objects.R",
               read_otutable_script = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/read_otu_table.R",
@@ -65,6 +67,7 @@ if(MODE == "IATA"){
   CODEDIR = "/home/carmoma/Documents/CORALS/scripts_PAR/240806scripts/depression_scripts/"
   opt <- list(out ="/home/carmoma/Documents/CORALS/results_rstudio/results_predictOctober_1/",
               indir = "/home/carmoma/Documents/CORALS/results_cluster_240924/names_changed_all/" , #results_cluster3_Allsamples2_conf05rl100 results_cluster3_Allsamples1_rl75
+              input_funcional = "/home/carmoma/Documents/CORALS/results_cluster_240924/Humann3_analisis_funcional/MERGED_changed_names/",
               
               r_functions=paste0(CODEDIR, "metagenomics_core_functions.R"),
               predictive_functions=paste0(CODEDIR, "predictive_functions.R"),
@@ -83,6 +86,9 @@ if(MODE == "IATA"){
               daa_integrate_with_and_without_correction = paste0(CODEDIR, "daa_integrate_with_and_without_correction.R"),
               daa_integrate_all_contrasts = paste0(CODEDIR, "daa_integrate_all_contrasts.R"),
               predict_4groups = paste0(CODEDIR, "predict_4groups.R"),
+              functional_functions=paste0(CODEDIR, "functional_auxiliary_functions.R"),
+              functional_script=paste0(CODEDIR, "functional_daa.R"),
+              
               
               metadata = "/home/carmoma/Documents/CORALS/METADATA/metadata_NEW_only_CORALS.csv",
               metadata_class = "/home/carmoma/Documents/CORALS/METADATA/classified_kids_NEWDATA_PROVISIONAL.csv",

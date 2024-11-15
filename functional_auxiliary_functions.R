@@ -36,14 +36,19 @@ getCazyClass <- function(cazy_tt){
 
 limma4functional <- function(df2, metad2, interestvar = "Condition", covars=c()){
   library(limma)
+  
+  covars <- janitor::make_clean_names(covars)
+  interestvar <- janitor::make_clean_names(interestvar)
   for(covar in covars){
     metad2 <- metad2 %>% dplyr::filter(!is.na(metad2[, covar]))
   }
+  names(metad2) <- janitor::make_clean_names(names(metad2))
+  
   rownames(df2) <- NULL
   expr <- df2 %>% column_to_rownames("Pathway") %>% as.matrix
-  expr <- expr[, metad2$sampleID]
+  expr <- expr[, metad2$sample_id]
   expr <- log(expr+1)
-  metad2[, interestvar] <- as.factor(metad2[, interestvar])
+  metad2[, interestvar] <- as.factor((metad2[, interestvar] %>% gsub(" ", "_", .)))
   if(length(covars) > 0){
     form <- paste("~0 ", interestvar, paste(covars, collapse = ' + '), 
                   sep = ' + ', collapse=" + ") %>% 
@@ -56,8 +61,14 @@ limma4functional <- function(df2, metad2, interestvar = "Condition", covars=c())
   colnames(design) <- gsub(interestvar, "", colnames(design), perl=F)
   #colnames(design) <- gsub("metad2\\$Condition", "", colnames(design), perl=F)
   fit <- lmFit(expr, design)
-  cont.matrix <- makeContrasts(case_vs_control = Depression - Control,
-                               levels = design)
+  
+  levs <- unique(metad2[, interestvar])
+  contrname <- paste0(levs[2], "_vs_", levs[1])
+  contrfor <- paste0(contrname, " = ", levs[2], " - ", levs[1])
+  texpr <- paste0("makeContrasts(", contrfor, ", levels = design)")
+  cont.matrix <- eval(parse(text=texpr))
+  #cont.matrix <- makeContrasts(contrfor,
+  #                             levels = design)
   fit2 <- contrasts.fit(fit, cont.matrix)
   fit2 <- eBayes(fit2)
   tt <- topTable(fit2, n=Inf, sort.by = "P", adjust.method = "BH")
