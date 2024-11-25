@@ -65,7 +65,7 @@ if(MODE == "IATA"){
   )
 }else{
   CODEDIR = "/home/carmoma/Documents/CORALS/scripts_PAR/240806scripts/depression_scripts/"
-  opt <- list(out ="/home/carmoma/Documents/CORALS/results_rstudio/results_predictOctober_1/",
+  opt <- list(out ="/home/carmoma/Documents/CORALS/results_rstudio/results_predictOctober_4/",
               indir = "/home/carmoma/Documents/CORALS/results_cluster_240924/names_changed_all/" , #results_cluster3_Allsamples2_conf05rl100 results_cluster3_Allsamples1_rl75
               input_funcional = "/home/carmoma/Documents/CORALS/results_cluster_240924/Humann3_analisis_funcional/MERGED_changed_names/",
               

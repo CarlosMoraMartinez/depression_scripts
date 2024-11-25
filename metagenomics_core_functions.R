@@ -1489,7 +1489,7 @@ getDeseqContrastWithInteraction <- function(dds, nvarname, opt, name){
               "nvarname"=nvarname))
 }
 
-getDeseqResults <- function(phobj, opt, name="", variables = c("Condition"), interact=FALSE){
+getDeseqResults <- function(phobj, opt, name="", variables = c("Condition"), interact=FALSE, poscounts=FALSE){
   if(interact == FALSE){
     formula <- paste0("~ ", paste(variables, sep=" + ", collapse=" + ")) %>% 
     as.formula
@@ -1508,7 +1508,7 @@ getDeseqResults <- function(phobj, opt, name="", variables = c("Condition"), int
   
   ##Add pseudocount if necessary
   anyNonZero <- raw_counts %>% apply(MAR=1, all) %>% any
-  if(!anyNonZero){
+  if(!anyNonZero | poscounts){
     do_poscounts = TRUE
     dds <- DESeq(dds, betaPrior = F, sfType = "poscounts")
   }else{
@@ -2881,7 +2881,7 @@ makeLinearModelsSingleVariable <- function(divtab,
 }
 
 
-deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE){
+deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE, poscounts=FALSE){
   if(!dir.exists(paste0(opt$out, "DeSEQ2"))) dir.create(paste0(opt$out, "DeSEQ2"))
   outdir <- paste0(opt$out, "DeSEQ2/", name, "/")
   opt$reserva <- opt$out
@@ -2891,7 +2891,7 @@ deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE){
     opt$minsampleswithcount <- opt$minfreq*nsamples(phobj)
     cat("Minfreq: ", opt$minfreq, ", setting minsampleswithcount to ", opt$minsampleswithcount)
   }
-  dearesults <- getDeseqResults(phobj, opt, name, variables = vars2deseq, interact = interact)
+  dearesults <- getDeseqResults(phobj, opt, name, variables = vars2deseq, interact = interact, poscounts = poscounts)
   
   list2env(dearesults, envir = environment())
   tax2annot <- tax_table(phobj)

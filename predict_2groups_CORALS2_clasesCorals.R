@@ -3,12 +3,12 @@ source(opt$predictive_functions)
 
 
 #opt$out <- "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_1/"
-var2predict <- "status_c2"
-vars2pca <- c("status_c2", "Category_T0", "hospital", "Sex", "edad_00_meses")
+var2predict <- "Category_BinT1"
+vars2pca <- c("Category_T0", "Category_T1","Category_BinT0", "Category_BinT1", "hospital", "Sex", "edad_00_meses")
 
 opt <- restaurar(opt)                  
 load(paste0(opt$out, "DeSEQ2/DESEQ2_all.RData"))
-opt$out <- paste0(opt$out, "PredictDAA_onlyGain2")
+opt$out <- paste0(opt$out, "PredictDAA_CoralsCategory")
 if(!dir.exists(opt$out)) dir.create(opt$out)
 opt <- restaurar(opt)
 
@@ -31,11 +31,14 @@ NFOLDS <- 10
 for(i in phseq_to_use){
   cat("Doing Predictive models for: ", i, "\n")
   all_model_results[[i]] <- list()
-  phobj <- all_phyloseq[[i]]
-  outdir <- paste0(opt$out, "PredictDAA_onlyGain/", i, "/")
+  phobj_full <- all_phyloseq[[i]]
+  outdir <- paste0(opt$out, "PredictDAA_CoralsCategory/", i, "/")
   opt$reserva <- opt$out
   opt$out <- outdir
   if(!dir.exists(opt$out)) dir.create(opt$out)
+  
+  phobj <- prune_samples(!is.na(sample_data(phobj_full)$Category_T1),phobj_full)
+  
   
   taxa_padj <- daa_all[[i]]$all_contrasts$status_c2_Normal_vs_Excessive.gain$resdf %>% 
     dplyr::filter(padj <= opt$pval & abs(log2FoldChangeShrink) >= log2(opt$fc) ) %>% 
