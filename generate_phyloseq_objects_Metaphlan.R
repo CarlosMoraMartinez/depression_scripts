@@ -12,92 +12,116 @@ if(! dir.exists(path_phyloseq)){dir.create(path_phyloseq)}
 ps_bracken_species <- phyloseq(sample_data(s_meta),
                                otu_table(s_otu_tab, taxa_are_rows = TRUE),
                                tax_table(as.matrix(classification)))
+
+ps_bracken_species_species <- phyloseq(sample_data(s_meta),
+                                       otu_table(s_otu_tab_sp, taxa_are_rows = TRUE),
+                                       tax_table(as.matrix(classification_sp)))
 pre_phyloseq <- ps_bracken_species
-save(file=paste0(path_phyloseq, "/phyloseq_object_analysis1.RData"), ps_bracken_species)
+save(file=paste0(path_phyloseq, "/phyloseq_object_analysis1_strain.RData"), ps_bracken_species)
+save(file=paste0(path_phyloseq, "/phyloseq_object_analysis1_summedSpecies.RData"), ps_bracken_species_species)
 
-filterPhyla <- NA
-(pre_phyloseq1 = subset_taxa(pre_phyloseq, !Phylum %in% filterPhyla))
 filterPhyla <- c("Chloroplast", "Mitochondria", "Eukaryota", "Metazoa", "Viruses")
-pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Kingdom %in% filterPhyla)
-pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Phylum %in% filterPhyla)
-pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Class %in% filterPhyla)
-pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Order %in% filterPhyla) # 12 a nivel Order
-pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Family %in% filterPhyla) # 7 a nivel Family
-pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Genus %in% filterPhyla)
 
-save(file=paste0(path_phyloseq, "/phyloseq_object_raw_filt_by_Phylum.RData"), pre_phyloseq1)
+get_filtered_phyloseq <- function(pre_phyloseq1, phseqname="", filterPhyla){
+  filterPhyla <- NA
+  pre_phyloseq1 = subset_taxa(pre_phyloseq1, !Phylum %in% c(NA))
+  
+  pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Kingdom %in% filterPhyla)
+  pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Phylum %in% filterPhyla)
+  pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Class %in% filterPhyla)
+  pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Order %in% filterPhyla) # 12 a nivel Order
+  pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Family %in% filterPhyla) # 7 a nivel Family
+  pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Genus %in% filterPhyla)
 
-all_phyloseq <- list(raw = pre_phyloseq1)
+  save(file=paste0(path_phyloseq, "/phyloseq_object_raw_filt_by_Phylum_", phseqname,".RData"), pre_phyloseq1)
+  
+  all_phyloseq_tmp <- list()
+  all_phyloseq_tmp[[paste0("raw_", phseqname)]] <- pre_phyloseq1
+  
+  ## Calculate prevalence
+  ottmp <- phyloseq::otu_table(pre_phyloseq1)
+  pre_prevalence <- apply(X = ottmp,
+                          MARGIN = ifelse(taxa_are_rows(pre_phyloseq1), yes = 1, no = 2),
+                          FUN = function(x){sum(x > opt$mincountspersample)})
+  pre_prevalence = data.frame(Prevalence = pre_prevalence,
+                              TotalAbundance = phyloseq::taxa_sums(pre_phyloseq1),
+                              tax_table(pre_phyloseq1), 
+                              relative_prevalence = pre_prevalence/ nsamples(pre_phyloseq1)
+  )
+  write_tsv(pre_prevalence, paste0(opt$out, "/raw_prevalence_", phseqname, ".tsv"))
 
-## Calculate prevalence
-ottmp <- phyloseq::otu_table(pre_phyloseq1)
-pre_prevalence <- apply(X = ottmp,
-                        MARGIN = ifelse(taxa_are_rows(pre_phyloseq1), yes = 1, no = 2),
-                        FUN = function(x){sum(x > opt$mincountspersample)})
-pre_prevalence = data.frame(Prevalence = pre_prevalence,
-                            TotalAbundance = phyloseq::taxa_sums(pre_phyloseq1),
-                            tax_table(pre_phyloseq1), 
-                            relative_prevalence = pre_prevalence/ nsamples(pre_phyloseq1)
-)
-write_tsv(pre_prevalence, paste0(opt$out, "/raw_prevalence.tsv"))
+  ## Filtered to frequency
+  prevalenceThreshold = opt$minfreq * nsamples(pre_phyloseq1)
+  keepTaxa = rownames(pre_prevalence)[(pre_prevalence$Prevalence >= prevalenceThreshold)]
+  (pre_phyloseq_filt = prune_taxa(keepTaxa, pre_phyloseq1))
+  filtered_phyloseq_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt_by_prevalence', as.character(100*opt$minfreq), phseqname,'.RData')
+  save(pre_phyloseq_filt, file = filtered_phyloseq_filename)
 
-## Filtered to frequency
-prevalenceThreshold = opt$minfreq * nsamples(pre_phyloseq1)
-keepTaxa = rownames(pre_prevalence)[(pre_prevalence$Prevalence >= prevalenceThreshold)]
-(pre_phyloseq_filt = prune_taxa(keepTaxa, pre_phyloseq1))
-filtered_phyloseq_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt_by_prevalence', as.character(100*opt$minfreq), '.RData')
-save(pre_phyloseq_filt, file = filtered_phyloseq_filename)
-
-#Reads before rarefeact
-nreads <- otu_table(pre_phyloseq_filt) %>% colSums()
-s_meta$nreads_filt <- nreads[s_meta$sampleID]
-write_tsv(s_meta, paste0(outdir, "/full_metadata2.tsv"))
+  #Reads before rarefeact
+  nreads <- otu_table(pre_phyloseq_filt) %>% colSums()
+  s_meta$nreads_filt <- nreads[s_meta$sampleID]
+  write_tsv(s_meta, paste0(outdir, "/", phseqname, "_full_metadata2.tsv"))
 
 
-sample_data(pre_phyloseq_filt)$nreads_filt <- nreads[sample_data(pre_phyloseq_filt)$sampleID]
-## Rarefaction min
-raref_min_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt', as.character(100*opt$minfreq), '_rarefMin.RData')
-if(!file.exists(raref_min_filename) | opt$rewrite){
-  pre_phyloseq_rarefied <-rarefy_even_depth(pre_phyloseq_filt, rngseed = SEED)
-  save(pre_phyloseq_rarefied, file =raref_min_filename)
-}else{
-  load(raref_min_filename)
+  sample_data(pre_phyloseq_filt)$nreads_filt <- nreads[sample_data(pre_phyloseq_filt)$sampleID]
+  
+  all_phyloseq_tmp[[paste0("filt_", phseqname)]] <- pre_phyloseq_filt
+  
+  return(all_phyloseq_tmp)
+
 }
 
-## Rarefaction 0.15
-#min_depth <- otu_table(pre_phyloseq_filt) %>% colSums() %>% quantile(opt$raref_quant)
-#raref_quant_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt_raref_quant', as.character(100*opt$raref_quant), '.RData')
-#if(!file.exists(raref_quant_filename) | opt$rewrite){
-#  pre_phyloseq_rarefied2 <-rarefy_even_depth(pre_phyloseq_filt, sample.size = min_depth, rngseed = SEED)
-#  save(pre_phyloseq_rarefied2, file =raref_quant_filename)
-#}else{
-#  load(raref_quant_filename)
-#}
-#muestras_eliminadas <- sample_names(pre_phyloseq_filt)[!sample_names(pre_phyloseq_filt) %in% sample_names(pre_phyloseq_rarefied2)] 
+addRarefied <- function(phobj, phseqname, phlist){
+  raref_min_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt', as.character(100*opt$minfreq), '_rarefMin_', phseqname, '.RData')
+  if(!file.exists(raref_min_filename) | opt$rewrite){
+    pre_phyloseq_rarefied <-rarefy_even_depth(phobj, rngseed = SEED)
+    save(pre_phyloseq_rarefied, file =raref_min_filename)
+  }else{
+    load(raref_min_filename)
+  } 
+  phlist[[paste0(phseqname, "_rarefied_min")]] <- pre_phyloseq_rarefied
+  return(phlist)
+}
 
-#eliminadas_df <- s_meta %>% 
-#  dplyr::filter(sampleID %in% muestras_eliminadas) %>% 
-#  dplyr::arrange(nreads_filt)
-#eliminadas_df %>% write_tsv(file=paste0(path_phyloseq, "/muestras_eliminadas_raref", as.character(opt$raref_quant), ".tsv"))
+addPrunedSamples <- function(phobj, phseqname, phlist, samples){
+  rmtanda2_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTandaZaragoza', phseqname, '.RData')
+  if(!file.exists(rmtanda2_fname) | opt$rewrite){
+    pre_phyloseq_removet2 <- phyloseq::prune_samples(samples, phobj) 
+    save(pre_phyloseq_removet2, file = rmtanda2_fname)
+  }else{load(rmtanda2_fname)}
+  
+  phlist[[paste0(phseqname, "_rmTanda")]] <- pre_phyloseq_removet2
+  return(phlist)
+}
 
+lista_strain <- get_filtered_phyloseq(ps_bracken_species, "strain", filterPhyla)
+lista_spsum <- get_filtered_phyloseq(ps_bracken_species_species, "spsum", filterPhyla)
+
+## Rarefaction min
+
+lista_strain <- addRarefied(lista_strain$filt_strain, names(lista_strain)[2], lista_strain)
+lista_spsum <- addRarefied(lista_spsum$filt_spsum, names(lista_spsum)[2], lista_spsum)
 
 ## Eliminar tanda 2
-rmtanda2_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTandaZaragoza.RData')
+
 standa1 <- metadata %>% dplyr::filter(hospital != "Zaragoza") %>% pull(sampleID) %>% as.character()
-if(!file.exists(rmtanda2_fname) | opt$rewrite){
-  pre_phyloseq_removet2 <- phyloseq::prune_samples(standa1, pre_phyloseq_filt) 
-  save(pre_phyloseq_removet2, file = rmtanda2_fname)
-}else{load(rmtanda2_fname)}
 
-##  Eliminar tanda 2 - Rarefaction min
-raref_min_filename_not2 <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTandaZaragoza_rarefMin.RData')
-if(!file.exists(raref_min_filename_not2) | opt$rewrite){
-  pre_phyloseq_rarefied_not2 <-rarefy_even_depth(pre_phyloseq_removet2, rngseed = SEED)
-  save(pre_phyloseq_rarefied_not2, file =raref_min_filename_not2)
-}else{
-  load(raref_min_filename_not2)
-}
+lista_strain <- addPrunedSamples(lista_strain$filt_strain, names(lista_strain)[2], lista_strain, standa1)
+lista_spsum <- addPrunedSamples(lista_spsum$filt_spsum, names(lista_spsum)[2], lista_spsum, standa1)
 
+
+lista_strain <- addRarefied(lista_strain$filt_strain_rmTanda, names(lista_strain)[4], lista_strain)
+lista_spsum <- addRarefied(lista_spsum$filt_spsum_rmTanda, names(lista_spsum)[4], lista_spsum)
+
+table(names(lista_strain) %in% names(lista_spsum))
+all_phyloseq <- append(lista_strain, lista_spsum)
+allphyloseqlist_fname <- paste0(path_phyloseq, "/phyloseq_all_list.RData")
+save(all_phyloseq, file=allphyloseqlist_fname)
+
+
+
+######################################################################
+#### de aqui hacia abajo: de momento no
 
 ## Remove batch effect
 # https://github.com/zhangyuqing/ComBat-seq
@@ -250,30 +274,3 @@ if(!file.exists(phseq_batch_tanda_fname2) | opt$rewrite){
 ###############################################3
 ## Phyloseq list
 
-
-
-allphyloseqlist_fname <- paste0(path_phyloseq, "/phyloseq_all_list.RData")
-if(!file.exists(allphyloseqlist_fname) | opt$rewrite){
-  all_phyloseq <- list(
-    raw = pre_phyloseq1, 
-    filt = pre_phyloseq_filt, 
-    rarefied_min = pre_phyloseq_rarefied, 
-    #rarefied_quant = pre_phyloseq_rarefied2,
-    remove_tanda2 = pre_phyloseq_removet2,
-    remove_tanda2_rarefied_min = pre_phyloseq_rarefied_not2,
-    rmbatch_tanda =phseq_batch_tanda,
-    rmbatch_ageBF = phseq_batch_tanda_age
-    #rmbatch_tanda_shrink = phseq_batch_tanda_shrink,
-    #phseq_rerefthenbatch_tanda = phseq_rerefthenbatch_tanda
-    #rmbatch_tanda_raref =phseq_batch_tanda_raref,
-    
-    #rmbatch_onlyNorm0 =phseq_batch_tanda_onlyNorT0,
-    #rmbatch_onlyNorm0_shrink = phseq_batch_tanda_shrink_onlyNorT0,
-    #rmbatch_onlyNorm0_raref =phseq_batch_tanda_raref_onlyNorT0
-    
-    
-  )
-  save(all_phyloseq, file=allphyloseqlist_fname)
-}else{
-  load(allphyloseqlist_fname)
-}

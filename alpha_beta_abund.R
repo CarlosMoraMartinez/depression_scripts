@@ -4,20 +4,22 @@
 ## Cualitativas
 
 alpha_indices <- c("Observed", "Chao1", "Shannon", "InvSimpson")
-vars2test <- c("status_c2", "Sex", "Category_T0", "Category_T1", "hospital", "tanda")
+vars2test <- c("status_c2", "Sex", "Category_T0", "Category_T1", "hospital", "tanda", "age_class1")
 
-quant_vars <- c("edad_00_meses", "imc_00", "imc_01", "nreads")
+quant_vars <- c("edad_00_meses", "edad_00", "imc_00", "imc_01", "nreads", "edu_m_00", "mg_p_00", "cintura_00", "z_cintura_00")
 vars2log <- c( "edad_00_meses", "imc_00", "imc_01")
 
 quant_vars_ext <- c(quant_vars, paste(vars2log, "_log", sep=""))
-interestvar <- "status_c2"
+interestvar <- "edad_00" # "status_c2"
 extravars <- c(quant_vars, vars2test)
 extravars <- extravars[extravars != interestvar]
+extravars <- extravars[extravars != "age_class1"]
+extravars <- extravars[extravars != "edad_00_meses"]
 
 outdir <- paste0(opt$out, "/AlphaDiversity/")
 if(!dir.exists(outdir)) dir.create(outdir)
 
-extravars2 <- c("Sex", "edad_00_meses_log", "imc_00_log", "imc_01_log")
+extravars2 <- c("Sex", "imc_00_log", "imc_01_log", "edu_m_00", "mg_p_00", "cintura_00") #"edad_00_meses_log"
 
 
 phseq_to_use <- names(all_phyloseq)
@@ -65,10 +67,10 @@ for(phname in phseq_to_use){
 outdir <- paste0(opt$out, "/BetaDiversity/")
 if(!dir.exists(outdir)) dir.create(outdir)
 
-phseq_to_use <- names(all_phyloseq)[c(2,3,7,9)]
+phseq_to_use <- names(all_phyloseq)[3:5]  #[c(9,10,2,7)] # [c(2,3,7,9)]
 
 dists <- c("bray") # "jaccard"
-METHODS <- c("PCoA") #, "NMDS"
+METHODS <- c("PCoA", "NMDS") #, "NMDS"
 vars2pcoa <- c(vars2test, quant_vars_ext)
 ccaplots <- list()
 for(phname in phseq_to_use){
@@ -78,17 +80,25 @@ for(phname in phseq_to_use){
       cat("Beta diversity for ", name, "\n")
       if(method != "NMDS"){
         extradims_use <- 2:3
+        w <- 12
+        h <- 4
       }else{
         extradims_use <- c(2)
+        w <- 6
+        h <- 4
       }
-      ccaplots[[name]] <- makeAllPCoAs(all_phyloseq[[phname]], outdir,
+      logvars <- vars2pcoa[grepl("_log$", vars2pcoa, perl=T)]
+      origvars <- gsub("_log", "", logvars)
+      phobj <- updatePsWithLogs(all_phyloseq[[phname]], origvars)
+      
+      ccaplots[[name]] <- makeAllPCoAs(phobj, outdir,
                                        method = method,
                                        name = name, 
                                        dist_type = dist, 
                                        dist_name = dist,
                                        vars2plot = vars2pcoa, 
                                        extradims = extradims_use, 
-                                       create_pdfs = T, w=16, h=12)
+                                       create_pdfs = T, w=w, h=h) #w=16, h=12
     }}}
 
 # Composition 4 each

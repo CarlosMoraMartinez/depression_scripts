@@ -485,26 +485,31 @@ getAlphaDiversity <- function(phseq_obj, vars, qvars= c(),
 
 
 makePCoA <- function(phobj, pcoa.bray, evals, var2color="Condition",
-                     var2shape="Stress",
+                     #var2shape="Stress",
                      name = "Bray-Curtis", extradims= 2:5, labelsamples="sampleID"){
+  
+  pointsize <- ifelse(nsamples(phobj)> 100, ifelse(nsamples(phobj)> 500, 0.3, 1), 2)
   gs <- lapply(extradims, FUN=function(axis){
     gg <- plot_ordination(phobj, pcoa.bray, color = var2color, 
-                          shape = var2shape,
+                          #shape = var2shape,
                           title = name, axes=c(1, axis)) + 
       #coord_fixed(sqrt(evals[2] / evals[1])) +
       #scale_color_manual(values=palette2)+ 
-      stat_ellipse(level=0.95, linetype=2, alpha = 0.8, na.rm = TRUE) +
-      geom_point(size = 2) +
+      geom_point(size = pointsize, alpha=0.8 )+
+      #+ #alpha=0.8
       #geom_text_repel(aes_string(label = labelsamples)) +
-      theme_pubclean() +
+      theme_classic() +  ## theme_pubclean
       theme(axis.text.x = element_text(size = 14))+
       theme(strip.text.x = element_text(size = 14))+
       theme(axis.title.y = element_text(size = 14))+
       theme(axis.title.x = element_text(size = 14))+
       theme(axis.text.y = element_text( size = 14))
-    # if(!is.numeric(gg$data[, var2color])){
-    #   gg <- gg + scale_color_lancet() + scale_fill_lancet()
-    # }
+    gg$layers[[1]] <- NULL
+     if(!is.numeric(gg$data[, var2color])){
+       gg <- gg + 
+         stat_ellipse(level=0.95, linetype=2, alpha = 1, na.rm = TRUE, lwd=1.0) +
+         scale_color_npg() + scale_fill_npg() 
+     }
     return(gg)
   })
   cw <- cowplot::plot_grid(plotlist=gs)
@@ -532,7 +537,13 @@ makeAllPCoAs <- function(phobj, outdir,
       vars2plot <- vars2plot[! vars2plot %in% c("Codigo", "Num_paciente")]
     }
     all_pcoas_plots <- lapply(vars2plot, FUN=function(vv, phobj, pcoa.bray, evals){
-      makePCoA(phobj, pcoa.bray, evals, vv, dist_name, extradims, labelsamples = labelsamples)
+      
+      makePCoA(phobj=phobj, pcoa.bray=pcoa.bray, 
+               evals=evals, 
+               var2color=vv, 
+               name=dist_name, 
+               extradims=extradims, 
+               labelsamples = labelsamples)
     },phobj, pcoa.bray, evals)
     names(all_pcoas_plots) <- vars2plot
     
@@ -1432,12 +1443,16 @@ getDeseqContrastFromCategorical <- function(dds, lev_combin, opt, name){
   contrastvec <- c(lev_combin[1], lev_combin[3], lev_combin[2])
   contrast_name <- paste0(lev_combin[1],'_', lev_combin[3], '_vs_', lev_combin[2]) %>% gsub(" ", ".", .)
   res <- results(dds, contrast = contrastvec)
+  
+  nested_dir <- paste0(name, "_", contrast_name, "/")
+  
   resLFC <- lfcShrink(dds, contrast = contrastvec, type="normal", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
   resLFC_ape <- tryCatch(lfcShrink(dds, coef = contrast_name, type="apeglm", lfcThreshold = log2(opt$fc)),error=\(x)data.frame() ) #apeglm gives weird results
   resLFC_ashr <- lfcShrink(dds, contrast = contrastvec, type="ashr", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
-  resdf <- defWriteDEAResults(res, resLFC, opt, paste0(name, "_",contrast_name, "_DAAshrinkNormal.tsv"))
-  resdf_ape <- defWriteDEAResults(res, resLFC_ape, opt, paste0(name, "_", contrast_name, "_DAAshrinkApe.tsv"))
-  resdf_ashr <- defWriteDEAResults(res, resLFC_ashr, opt, paste0(name, "_", contrast_name, "_DAAshrinkAshr.tsv"))
+  resdf <- defWriteDEAResults(res, resLFC, opt, paste0(name, "_",contrast_name, "_DAAshrinkNormal.tsv"), nested_dir=nested_dir)
+  resdf_ape <- defWriteDEAResults(res, resLFC_ape, opt, paste0(name, "_", contrast_name, "_DAAshrinkApe.tsv"), nested_dir=nested_dir)
+  resdf_ashr <- defWriteDEAResults(res, resLFC_ashr, opt, paste0(name, "_", contrast_name, "_DAAshrinkAshr.tsv"), nested_dir=nested_dir)
+  
   
   return(list("res"=res,
               "resLFC"=resLFC,
@@ -1446,18 +1461,23 @@ getDeseqContrastFromCategorical <- function(dds, lev_combin, opt, name){
               "resdf"=resdf,
               "resdf_ape"=resdf_ape,
               "resdf_shr"=resdf_ashr, 
+              is_categorical = TRUE,
+              name = name,
               contrast_vec = contrastvec,
-              contrast_name = contrast_name))
+              contrast_name = contrast_name,
+              nested_dir = nested_dir))
 }
 
 getDeseqContrastFromNumerical <- function(dds, nvarname, opt, name){
   res <- results(dds, name = nvarname)
+  nested_dir <- paste0(name, "_", nvarname, "/")
+  
   resLFC <- lfcShrink(dds, coef = nvarname, type="normal", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
   resLFC_ape <- tryCatch(lfcShrink(dds, coef = nvarname, type="apeglm", lfcThreshold = log2(opt$fc)),error=\(x)data.frame() ) #apeglm gives weird results
   resLFC_ashr <- lfcShrink(dds, coef = nvarname, type="ashr", lfcThreshold = log2(opt$fc)) #apeglm gives weird results
-  resdf <- defWriteDEAResults(res, resLFC, opt, paste0(name, "_",nvarname, "_DAAshrinkNormal.tsv"))
-  resdf_ape <- defWriteDEAResults(res, resLFC_ape, opt, paste0(name, "_", nvarname, "_DAAshrinkApe.tsv"))
-  resdf_ashr <- defWriteDEAResults(res, resLFC_ashr, opt, paste0(name, "_", nvarname, "_DAAshrinkAshr.tsv"))
+  resdf <- defWriteDEAResults(res, resLFC, opt, paste0(name, "_",nvarname, "_DAAshrinkNormal.tsv"), nested_dir=nested_dir)
+  resdf_ape <- defWriteDEAResults(res, resLFC_ape, opt, paste0(name, "_", nvarname, "_DAAshrinkApe.tsv"), nested_dir=nested_dir)
+  resdf_ashr <- defWriteDEAResults(res, resLFC_ashr, opt, paste0(name, "_", nvarname, "_DAAshrinkAshr.tsv"), nested_dir=nested_dir)
   
   return(list("res"=res,
               "resLFC"=resLFC,
@@ -1466,7 +1486,12 @@ getDeseqContrastFromNumerical <- function(dds, nvarname, opt, name){
               "resdf"=resdf,
               "resdf_ape"=resdf_ape,
               "resdf_shr"=resdf_ashr,
-              "nvarname"=nvarname))
+              "nvarname"=nvarname,
+              is_categorical = FALSE,
+              name = name,
+              contrast_vec = c(nvarname, nvarname, nvarname),
+              contrast_name = nvarname,
+              nested_dir = nested_dir))
 }
 
 getDeseqContrastWithInteraction <- function(dds, nvarname, opt, name){
@@ -1486,13 +1511,14 @@ getDeseqContrastWithInteraction <- function(dds, nvarname, opt, name){
               "resdf"=resdf,
               "resdf_ape"=resdf_ape,
               "resdf_shr"=resdf_ashr,
+              is_categorical = TRUE,
               "nvarname"=nvarname))
 }
 
-getDeseqResults <- function(phobj, opt, name="", variables = c("Condition"), interact=FALSE, poscounts=FALSE){
+getDeseqResults <- function(phobj, opt, name="", variables = c("Condition"), interact=FALSE, doPoscounts = FALSE, all_combins=list()){
   if(interact == FALSE){
     formula <- paste0("~ ", paste(variables, sep=" + ", collapse=" + ")) %>% 
-    as.formula
+      as.formula
   }else{
     formula <- paste0("~ ", paste(variables, sep=" * ", collapse=" * ")) %>% 
       as.formula
@@ -1508,7 +1534,7 @@ getDeseqResults <- function(phobj, opt, name="", variables = c("Condition"), int
   
   ##Add pseudocount if necessary
   anyNonZero <- raw_counts %>% apply(MAR=1, all) %>% any
-  if(!anyNonZero | poscounts){
+  if(!anyNonZero || doPoscounts){
     do_poscounts = TRUE
     dds <- DESeq(dds, betaPrior = F, sfType = "poscounts")
   }else{
@@ -1517,19 +1543,24 @@ getDeseqResults <- function(phobj, opt, name="", variables = c("Condition"), int
   }
   
   write_file(paste(resultsNames(dds), collapse="\t" ), file=paste0(opt$out, name, "_", "DEA_resultsNames.tsv"))
-
+  
   design <- dds@colData %>% as.data.frame()
+  write_tsv(design, file = paste0(opt$out, name, "_", "DEA_design.tsv"))
   all_combos_done <- TRUE
   
   if(interact == FALSE){
-    all_combins <- map(variables, \(x){
-      if(is.numeric(design[, x])){
-        return(list(c(x, "NUMERIC")))
-      }
-      levs <- levels(design[, x] %>% unlist) 
-      combins <- lapply(combn(1:length(levs), 2, simplify = F), \(y)c(x, levs[y]))
-    }) %>% flatten
-  
+    if(length(all_combins) == 0){
+      all_combins <- map(variables, \(x){
+        if(is.numeric(design[, x])){
+          return(list(c(x, "NUMERIC")))
+        }
+        levs <- levels(design[, x] %>% unlist) 
+        combins <- lapply(combn(1:length(levs), 2, simplify = F), \(y)c(x, levs[y]))
+      }) %>% flatten
+    }else{
+      all_combins <- lapply(all_combins, \(x)gsub(" |:", ".", x, perl=T))
+    }
+    
     all_contrasts <- map(all_combins, \(lev_combin){
       if(lev_combin[2] == "NUMERIC"){
         getDeseqContrastFromNumerical(dds, lev_combin[1], opt, name)
@@ -1543,14 +1574,25 @@ getDeseqResults <- function(phobj, opt, name="", variables = c("Condition"), int
     all_contrast_names <- resultsNames(dds)
     all_contrast_names <- all_contrast_names[2:length(all_contrast_names)]
     all_contrasts <- map(all_contrast_names, \(lev_combin){
-        getDeseqContrastWithInteraction(dds, lev_combin, opt, name)
+      getDeseqContrastWithInteraction(dds, lev_combin, opt, name)
     }) 
     names(all_contrasts) <- all_contrast_names
   }
+  
+  tax2annot <- tax_table(phobj)
+  all_contrasts <- map(all_contrasts, \(this_contrast){
+    this_contrast$resdf_annot <- this_contrast$resdf %>% 
+      dplyr::mutate(Genus = data.frame(tax2annot[taxon, "Genus"])$Genus) %>%
+      dplyr::select(Genus, everything()) %>% 
+      dplyr::arrange(pvalue) 
+    write_tsv(this_contrast$resdf_annot, file=paste0(opt$out, this_contrast$nested_dir, "/DEA_annot.tsv"))
+    return(this_contrast)
+  })
+  
   # Write raw counts  
   rawc_df <- defWriteMatAsDF(raw_counts, opt, paste0(name, "_", "raw_counts.tsv") )
   #filtx_df <- defWriteMatAsDF(filt_counts, opt, "raw_counts_filtered.tsv") 
-
+  
   # Normalized counts  
   norm_counts <- counts(dds, normalized = T)
   norm_counts_df <- defWriteMatAsDF(norm_counts, opt, paste0(name, "_", "norm_counts.tsv") )
@@ -1572,6 +1614,7 @@ getDeseqResults <- function(phobj, opt, name="", variables = c("Condition"), int
     "resLFC_ape"=all_contrasts[[1]]$resLFC_ape, 
     "resLFC_ashr"=all_contrasts[[1]]$resLFC_ashr,
     "resdf"=all_contrasts[[1]]$resdf,
+    "resdf_annot"=all_contrasts[[1]]$resdf_annot,
     "resdf_ape"=all_contrasts[[1]]$resdf_ape,
     "resdf_shr"=all_contrasts[[1]]$resdf_ashr,
     "raw_df" = rawc_df, 
@@ -1688,12 +1731,15 @@ defWriteMatAsDF <- function(mat, opt, name){
   return(df)
 }
 
-defWriteDEAResults <- function(res, resLFC, opt, name){
-  fname <-paste(opt$out, name, sep="/", collapse="/") 
+defWriteDEAResults <- function(res, resLFC, opt, name, nested_dir = ""){
+  if(nested_dir != ""){
+    if(! dir.exists(paste0(opt$out, nested_dir))) dir.create(paste0(opt$out, nested_dir))
+  }
+  fname <-paste(opt$out, nested_dir, name, sep="/", collapse="/") 
   resdf <- res %>% as.data.frame(row.names = rownames(.)) %>% 
     rownames_to_column("taxon") %>% 
     dplyr::mutate(log2FoldChangeShrink = resLFC$log2FoldChange,
-           lfcSE_Shrink = resLFC$lfcSE, svalue = resLFC$svalue)
+                  lfcSE_Shrink = resLFC$lfcSE, svalue = resLFC$svalue)
   write_tsv(resdf, fname)
   return(resdf)
 }
@@ -2088,15 +2134,14 @@ getGTTableFromRes <- function(res, genes, name){
 }
 
 
-
-getSummaryTablesDeseq <- function(res, opt){
+getSummaryTablesDeseq <- function(res, opt, nested_dir = ""){
   namestab <- c(paste("p < ", as.character(opt$pval), sep="", collapse="") ,
                 paste("LFC > ", as.character(log2(opt$fc)), sep="", collapse="")
   )
   restab <- res %>% as.data.frame() %>% 
     dplyr::mutate(a = pvalue <= opt$pval, 
-           b = ifelse(log2FoldChange <= -log2(opt$fc),"less frequent",
-                      ifelse( log2FoldChange >= log2(opt$fc), "more frequent", "equal"))
+                  b = ifelse(log2FoldChange <= -log2(opt$fc),"less frequent",
+                             ifelse( log2FoldChange >= log2(opt$fc), "more frequent", "equal"))
     ) %>% 
     dplyr::select(a:b) %>% 
     set_names(namestab) %>% 
@@ -2109,8 +2154,8 @@ getSummaryTablesDeseq <- function(res, opt){
   
   restab_adj <- res %>% as.data.frame() %>% 
     dplyr::mutate(a = padj <= opt$pval, 
-           b = ifelse(log2FoldChange <= -log2(opt$fc),"less frequent",
-                      ifelse( log2FoldChange >= log2(opt$fc), "more frequent", "equal"))
+                  b = ifelse(log2FoldChange <= -log2(opt$fc),"less frequent",
+                             ifelse( log2FoldChange >= log2(opt$fc), "more frequent", "equal"))
     ) %>% 
     dplyr::select(a:b) %>% 
     set_names(namestab) %>% 
@@ -2120,8 +2165,8 @@ getSummaryTablesDeseq <- function(res, opt){
                                  paste("p > ", as.character(opt$pval), sep="", collapse=""))
   
   #restab_adj %>% kable(caption="Number of taxons (species) per category using adjusted p-values")  
-  write_tsv(as.data.frame(restab), paste0(opt$out, "/num_diff_rawpval.tsv"))
-  write_tsv(as.data.frame(restab_adj), paste0(opt$out, "/num_diff_adjpval.tsv"))
+  write_tsv(as.data.frame(restab), paste0(opt$out, nested_dir, "/num_diff_rawpval.tsv"))
+  write_tsv(as.data.frame(restab_adj), paste0(opt$out, nested_dir, "/num_diff_adjpval.tsv"))
   return(list("restab"=restab, "restab_adj"=restab_adj))
 }
 
@@ -2881,59 +2926,175 @@ makeLinearModelsSingleVariable <- function(divtab,
 }
 
 
-deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE, poscounts=FALSE){
-  if(!dir.exists(paste0(opt$out, "DeSEQ2"))) dir.create(paste0(opt$out, "DeSEQ2"))
-  outdir <- paste0(opt$out, "DeSEQ2/", name, "/")
-  opt$reserva <- opt$out
+
+make_all_maplots <- function(all_contrasts, opt){
+  for(singleres in all_contrasts){
+    
+    tryCatch(make_maplot(singleres$res, opt, paste0(singleres$nested_dir,singleres$name, "_MAPlot-rawFC.pdf")),  
+             error=\(x)cat("Error make_maplot rawFC\n"))
+    tryCatch(make_maplot(singleres$resLFC, opt,  paste0(singleres$nested_dir, singleres$name, "_MAPlot-rawFC-normal.pdf")),  
+             error=\(x)cat("Error make_maplot rawFC-normal\n"))
+    tryCatch(make_maplot(singleres$resLFC_ape, opt,  paste0(singleres$nested_dir,singleres$name, "_MAPlot-rawFC-ape.pdf")),  
+             error=\(x)cat("Error make_maplot rawFC-apet\n"))
+    tryCatch(make_maplot(singleres$resLFC_ashr, opt,  paste0(singleres$nested_dir,singleres$name, "_MAPlot-rawFC-ashr.pdf")),  
+             error=\(x)cat("Error make_maplot rawFC-ashr\n"))
+    
+    rtabs <- getSummaryTablesDeseq(singleres$res, opt, singleres$nested_dir)
+    
+    tryCatch(make_volcano(singleres$res, opt, paste0(singleres$nested_dir,singleres$name, "volcano_rawfc_rawpval.pdf"), "pvalue"), 
+             error=\(x)cat("Error make_volcano raw FC, raw p-val\n"))
+    tryCatch(make_volcano(singleres$res, opt, paste0(singleres$nested_dir,singleres$name, "volcano_rawfc_adjpval.pdf"), "padj"),  
+             error=\(x)cat("Error make_volcano  raw FC, adj p-val\n"))
+    
+    tryCatch(make_volcano(singleres$resLFC, opt, paste0(singleres$nested_dir,singleres$name, "volcano_shnormfc_rawpval.pdf"), "pvalue"), 
+             error=\(x)cat("Error make_volcano Shrink normal, raw p-val\n"))
+    tryCatch(make_volcano(singleres$resLFC, opt, paste0(singleres$nested_dir,singleres$name, "volcano_shnormfc_adjpval.pdf"), "padj"),  
+             error=\(x)cat("Error make_volcanoShrink normal, adj p-val \n"))
+    
+    tryCatch(make_volcano(singleres$resLFC_ape, opt, paste0(singleres$nested_dir,singleres$name, "volcano_shapefc_rawpval.pdf"), "pvalue"), 
+             error=\(x)cat("Error make_volcano Shrink ape, raw p-val\n"))
+    tryCatch(make_volcano(singleres$resLFC_ape, opt, paste0(singleres$nested_dir,singleres$name, "volcano_shapefc_adjpval.pdf"), "padj"),  
+             error=\(x)cat("Error make_volcano Shrink ape, adj p-val\n"))
+    
+    tryCatch(make_volcano(singleres$resLFC_ashr, opt, paste0(singleres$nested_dir,singleres$name, "volcano_shashfc_rawpval.pdf"), "pvalue"), 
+             error=\(x)cat("Error make_volcano Shrink ashr, raw p-val\n"))
+    tryCatch(make_volcano(singleres$resLFC_ashr, opt, paste0(singleres$nested_dir,singleres$name, "volcano_shashfc_adjpval.pdf"), "padj"),  
+             error=\(x)cat("Error make_volcano Shrink ashr, adj p-val\n"))
+    
+    while(dev.cur() != 1) dev.off()
+  }
+}
+
+
+make_all_heatmaps<- function(dearesults, df2plot, metadata, vars2heatmap, dds, opt){
+  for(singleres in dearesults){
+    taxalist_praw <-singleres$resdf %>% dplyr::filter(pvalue < opt$pval) %>% pull(taxon) %>% unlist %>% unique
+    taxalist_padj <-  singleres$resdf %>% dplyr::filter(padj < opt$pval) %>% pull(taxon) %>% unlist %>% unique
+    if(singleres$is_categorical){
+    samples <- metadata %>% dplyr::filter(!!sym(singleres$contrast_vec[1]) %in% singleres$contrast_vec[2:3] ) %>% 
+      pull(sampleID)
+    }else{
+      samples <- metadata %>% dplyr::filter( ! is.na(!!sym(singleres$contrast_vec[1])) ) %>% 
+        pull(sampleID)
+    }
+    df2plot2 <- df2plot %>% select(gene, all_of(samples))
+    
+    tryCatch(makeHeatmap(singleres$resdf, dds, df2plot2, vars2heatmap,
+                         opt, name = paste0(singleres$nested_dir, singleres$name, "diff_ab_heatmap_rawpval.pdf"), 
+                         logscale = F, ptype="pvalue", trim_values = TRUE, taxalist=taxalist_praw), 
+             error=\(x) cat("Error makeHeatmap praw"))
+    tryCatch(makeHeatmap(singleres$resdf, dds, df2plot2, vars2heatmap,
+                         opt, name = paste0(singleres$nested_dir, singleres$name, "diff_ab_heatmap_adjpval.pdf"), 
+                         logscale = F, ptype="padj", trim_values = TRUE, taxalist=taxalist_padj), 
+             error=\(x) cat("Error makeHeatmap padj"))
+    
+    while(dev.cur() != 1) dev.off()
+  }
+  
+}
+
+make_heatmap_subset<- function(dearesult, df2plot, taxa, samples, vars2heatmap, dds, name, opt){
+  
+  df2plot2 <- df2plot %>% select(gene, all_of(samples))
+  
+  tryCatch(makeHeatmap(dearesult$resdf, dds, df2plot2, vars2heatmap,
+                       opt, name = paste0(name, "_condHeatmap.pdf"), 
+                       logscale = F, ptype="pvalue", trim_values = TRUE, taxalist=taxa, check_taxa = FALSE), 
+           error=\(x) cat("Error makeHeatmap condHeatmap: ", name))
+  
+  while(dev.cur() != 1) dev.off()
+  
+}
+
+
+deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE,  doPoscounts=FALSE, 
+                                all_combins = list(), plot_all = TRUE, deseqname = "DeSEQ2/", vars2heatmap=c()){
+  opt <- restaurar(opt)
+  if(!dir.exists(paste0(opt$out, deseqname))) dir.create(paste0(opt$out, deseqname))
+  outdir <- paste0(opt$out, deseqname, name, "/")
+  #opt$reserva <- opt$out
   opt$out <- outdir
   if(!dir.exists(opt$out)) dir.create(opt$out)
   if(opt$minfreq > 0){
     opt$minsampleswithcount <- opt$minfreq*nsamples(phobj)
     cat("Minfreq: ", opt$minfreq, ", setting minsampleswithcount to ", opt$minsampleswithcount)
   }
-  dearesults <- getDeseqResults(phobj, opt, name, variables = vars2deseq, interact = interact, poscounts = poscounts)
+  dearesults <- getDeseqResults(phobj, opt, name, variables = vars2deseq, interact = interact, 
+                                doPoscounts=doPoscounts, all_combins=all_combins)
   
-  list2env(dearesults, envir = environment())
-  tax2annot <- tax_table(phobj)
-  resdf_annot <- resdf %>% 
-    dplyr::mutate(Genus = data.frame(tax2annot[taxon, "Genus"])$Genus) %>%
-    dplyr::select(Genus, everything()) %>% 
-    dplyr::arrange(pvalue) 
-  write_tsv(resdf_annot, file=paste0(opt$out, "/DEA_annot.tsv"))
+  cat("Length of contrasts is: ", length(dearesults$all_contrasts), "; length of wanted contrasts was ", length(all_combins))
+  tmp_names <- sapply(all_combins, \(x) paste(x[1], x[3], "vs", x[2], sep="_"))
+  contrasts_not_made <- names(dearesults$all_contrasts)[! (names(dearesults$all_contrasts) %in% tmp_names )]
+  write_tsv(data.frame(contrast = contrasts_not_made), file = paste0(opt$out, "contrasts_not_made.tsv"))
+  cat("CONTRASTS NOT MADE: ", contrasts_not_made)
+  #save(dearesults, file = paste0(opt$out, name, "_DEAresults.RData"))
+  if(plot_all){
+    make_all_maplots(dearesults$all_contrasts, opt)
+  }else{
+    make_all_maplots(list(dearesults$all_contrasts[[1]]), opt)
+  }
+  #list2env(dearesults, envir = environment())
+  
   # resdf_annot %>% filter(pvalue < 0.05) %>% dplyr::select(Genus, taxon) %>% 
   #   kable(caption="Differentially abundant ASVs at adjusted p-value < 0.05")
-  tryCatch(make_maplot(res, opt, paste0(name, "_MAPlot-rawFC.pdf")),  error=\(x)cat("Error make_maplot"))
-  tryCatch(make_maplot(resLFC, opt,  paste0(name, "_MAPlot-rawFC.pdf")),  error=\(x)cat("Error make_maplot"))
-  tryCatch(make_maplot(resLFC_ape, opt,  paste0(name, "_MAPlot-rawFC-ape.pdf")),  error=\(x)cat("Error make_maplot"))
-  tryCatch(make_maplot(resLFC_ashr, opt,  paste0(name, "_MAPlot-rawFC-ashr.pdf")),  error=\(x)cat("Error make_maplot"))
-  plotDispEsts(dds, CV=T , ylim = c(1e-6, 1e1))
-  rtabs <- getSummaryTablesDeseq(res, opt)
-  tryCatch(make_volcano(resLFC, opt, paste0(name, "volcano_rawfc_rawpval.pdf"), "pvalue"), error=\(x)cat("Error make_volcano"))
-  tryCatch(make_volcano(res, opt, paste0(name, "volcano_rawfc_adjpval.pdf"), "padj"),  error=\(x)cat("Error make_volcano"))
-  df2plot <- if(! nrow(vst_counts_df)){norm_counts_df}else{vst_counts_df}
   
-  if(all_combos_done & length(all_contrasts) > 1){
+  # make heatmaps for each contrast
+  df2plot <- if(! nrow(dearesults$vst_counts_df)){dearesults$norm_counts_df}else{dearesults$vst_counts_df}
+  if(plot_all){
+    if(is.null(vars2heatmap)) vars2heatmap <- vars2deseq
+    make_all_heatmaps(dearesults$all_contrasts, df2plot, 
+                      sample_data(phobj) %>% data.frame, 
+                      vars2heatmap, dearesults$dds, opt)
+  }
+  tryCatch({
+    pdf( paste0(opt$out,singleres$name, "_DESVlot.pdf")); 
+    print(plotDispEsts(dearesults$dds, CV=T , ylim = c(1e-6, 1e1))); 
+    dev.off()},  
+    error=\(x)cat("Error plotDispEsts")) 
+  
+  # make global heatmaps
+  if(dearesults$all_combos_done & length(dearesults$all_contrasts) > 1){
     cat("All contrasts TRUE, intersecting Taxon list")
-    taxalist_praw <- map(all_contrasts, \(x){
+    taxalist_praw <- map(dearesults$all_contrasts, \(x){
       x$resdf %>% dplyr::filter(pvalue < opt$pval) %>% pull(taxon)
     }) %>% unlist %>% unique
-    taxalist_padj <- map(all_contrasts, \(x){
+    taxalist_padj <- map(dearesults$all_contrasts, \(x){
       x$resdf %>% dplyr::filter(padj < opt$pval) %>% pull(taxon)
     }) %>% unlist %>% unique
   }else{
     taxalist_praw = taxalist_padj = c()
   }
-  tryCatch(makeHeatmap(resdf, dds, df2plot, vars2deseq,
-              opt, name = paste0(name, "diff_ab_heatmap_rawpval.pdf"), 
-              logscale = F, ptype="pvalue", trim_values = TRUE, taxalist=taxalist_praw), 
+  
+  if(length(vars2heatmap) == 0) vars2heatmap <- vars2deseq
+  
+  tryCatch(makeHeatmap(dearesults$resdf, dearesults$dds, df2plot, vars2heatmap,
+                       opt, name = paste0(name, "diff_ab_heatmap_rawpval.pdf"), 
+                       logscale = F, ptype="pvalue", trim_values = TRUE, taxalist=taxalist_praw), 
            error=\(x) cat("Error makeHeatmap praw"))
-  tryCatch(makeHeatmap(resdf, dds, df2plot, vars2deseq,
-              opt, name = paste0(name, "diff_ab_heatmap_adjpval.pdf"), 
-              logscale = F, ptype="padj", trim_values = TRUE, taxalist=taxalist_padj), 
-              error=\(x) cat("Error makeHeatmap padj"))
-  opt$out <- opt$reserva
+  tryCatch(makeHeatmap(dearesults$resdf, dearesults$dds, df2plot, vars2heatmap,
+                       opt, name = paste0(name, "diff_ab_heatmap_adjpval.pdf"), 
+                       logscale = F, ptype="padj", trim_values = TRUE, taxalist=taxalist_padj), 
+           error=\(x) cat("Error makeHeatmap padj"))
+  
+  dfcorr <- df2plot %>% column_to_rownames("gene") %>% 
+    as.matrix %>% cor %>% 
+    as.data.frame %>% rownames_to_column("gene")
+  tryCatch(makeHeatmap(dearesults$resdf, dearesults$dds, dfcorr, vars2heatmap,
+                       opt, name = paste0(name, "corr_heatmap_rawpval.pdf"), 
+                       logscale = F, ptype="pvalue", trim_values = TRUE, taxalist=dfcorr$gene,
+                       italics_rownames = FALSE, check_taxa = FALSE), 
+           error=\(x) cat("Error makeHeatmap praw"))
+  tryCatch(makeHeatmap(dearesults$resdf, dearesults$dds, dfcorr, vars2heatmap,
+                       opt, name = paste0(name, "corr_heatmap_adjpval.pdf"), 
+                       logscale = F, ptype="padj", trim_values = TRUE, taxalist=dfcorr$gene,
+                       italics_rownames = FALSE, check_taxa = FALSE), 
+           error=\(x) cat("Error makeHeatmap padj"))
+  #opt$out <- opt$reserva
+  opt <- restaurar(opt)
+  
   return(dearesults)
 }
+
 
 
 plotAbundanceFullPipeline <- function(phobj, interestvar, outdir, phname, levs, tops=c(5,10,15,20)){

@@ -65,7 +65,7 @@ if(MODE == "IATA"){
   )
 }else{
   CODEDIR = "/home/carlos/Documentos/CORALS/scripts_PAR/240806scripts/depression_scripts/"
-  opt <- list(out ="/home/carlos/Documentos/CORALS/results_rstudio/results_Feb25_gam1/",
+  opt <- list(out ="/home/carlos/Documentos/CORALS/results_rstudio/results_Feb25_gam2_metaphlan/",
               indir = "/home/carlos/Documentos/CORALS/results_cluster_240924/names_changed_all/" , #results_cluster3_Allsamples2_conf05rl100 results_cluster3_Allsamples1_rl75
               input_funcional = "/home/carlos/Documentos/CORALS/results_cluster_240924/Humann3_analisis_funcional/MERGED_changed_names/",
               
@@ -73,7 +73,7 @@ if(MODE == "IATA"){
               predictive_functions=paste0(CODEDIR, "predictive_functions.R"),
               read_metadata_script = paste0(CODEDIR, "read_metadata.R"),
               create_phyloseq_script = paste0(CODEDIR, "generate_phyloseq_objects.R"),
-              read_otutable_script = paste0(CODEDIR, "read_otu_table.R"),
+              read_otutable_script = paste0(CODEDIR, "read_otu_table_metaphlan.R"),
               alpha_beta_script = paste0(CODEDIR, "alpha_beta_abund.R"),
               daa_main_condition = paste0(CODEDIR, "daa_main_condition.R"),
               make_permanova_script = paste0(CODEDIR, "make_permanova.R"),

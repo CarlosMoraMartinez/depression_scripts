@@ -38,6 +38,27 @@ opt <- restaurar(opt)
 save(daa_all, file = paste0(opt$out, "DESeq2_statusAtT0_2/DESEQ2_all_statusAtT0.RData"))
 load(paste0(opt$out, "DESeq2_statusAtT0_2/DESEQ2_all_statusAtT0.RData"))
 
+## other covariates one by one
+
+opt <- restaurar(opt)
+
+all_vars2deseq <- c("z_t0", "z_t1", "status_c2", "edad_00", "bmi_t0", "bmi_t1")
+opt$mincount <- 1
+phseq_to_use <- names(all_phyloseq)#c("remove_tanda2", "rmbatch_tanda", "filt")
+for(vars2deseq in all_vars2deseq){
+  daa_all <- list()
+  for(phname in phseq_to_use){
+  
+    cat("Doing DESeq2 Analysys for: ", phname, ", variable: ", var2use, "\n")
+    phobj <- all_phyloseq[[phname]]
+    samples <- sample_data(phobj)$sampleID[! is.na(sample_data(phobj)[, var2use])]
+    phobj_filt <- phyloseq::prune_samples(samples, phobj)
+    
+    daa_all[[phname]] <-deseq_full_pipeline(phobj_filt, phname, vars2deseq, opt)
+  }
+  save(daa_all, file = paste0(opt$out, "DeSEQ2/", var2use, "DESEQ2_all.RData"))
+}
+
 ### Several covariates
 
 daa_all_covs <- list()

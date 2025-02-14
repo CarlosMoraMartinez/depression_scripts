@@ -1,18 +1,19 @@
 # Predict  
 source(opt$predictive_functions)
 
-
+s_meta <- read_tsv("/home/carmoma/Documents/CORALS/results_rstudio/results_predictOctober_5_correctCatT1//inputdata/metadata_presentInOtus.tsv")
+new_metadata <- read_csv("/home/carmoma/Documents/CORALS/METADATA/classified_kids_NEWDATA_PROVISIONAL_withZval.csv")
 #opt$out <- "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_1/"
-var2predict <- "Category_BinT1"
-vars2pca <- c("Category_T0", "Category_T1","Category_BinT0", "Category_BinT1", "hospital", "Sex", "edad_00_meses")
+var2predict <- "Z_t0_"
+vars2pca <- c("status_c2", "Category_T0", "hospital", "Sex", "edad_00_meses", "Z_t0_", "Z_t1_")
 
 opt <- restaurar(opt)                  
-load(paste0(opt$out, "DeSEQ2/DESEQ2_all.RData"))
-opt$out <- paste0(opt$out, "PredictDAA_CoralsCategory_balancedTest")
+load("/home/carmoma/Documents/CORALS/results_rstudio/results_predictOctober_4/DeSEQ2/DESEQ2_all.RData")
+opt$out <- paste0(opt$out, "PredictDAA_onlyGain2")
 if(!dir.exists(opt$out)) dir.create(opt$out)
 opt <- restaurar(opt)
 
-phseq_to_use <-  c( "filt", "remove_tanda2", "rmbatch_tanda", "rarefied_min") # names(daa_all)[c(2,5,7,9)]
+phseq_to_use <- "filt"#names(daa_all)[c(2,5,7,9)]
 all_model_results <- list()
 
 food_variables<- names(s_meta)[4:29]
@@ -25,32 +26,20 @@ metacyc_daa <- read_tsv(paste0(opt$out, "Functional/DAAlimma_process_MetaCyc.tsv
 metacyc_abnt <- metacyc_abn %>% column_to_rownames("Pathway") %>% as.matrix %>% t %>% 
   as.data.frame %>% rownames_to_column("sampleID")
 
-samples2use <- s_meta %>% filter(Category_T0 %in% c("Thinness", "Normal")) %>% filter(!is.na(Category_T1))
-samples2use_1 <- samples2use %>% filter(Category_T1 %in% c("Thinness", "Normal")) %>% pull(sampleID)
-samples2use_2 <- samples2use %>% filter(!Category_T1 %in% c("Thinness", "Normal")) %>% pull(sampleID)
-samples2use 
 
 NFOLDS <- 10
+OUTDIRNAME <- "PredictDAA_ZscoreT0/"
 
 for(i in phseq_to_use){
   cat("Doing Predictive models for: ", i, "\n")
   all_model_results[[i]] <- list()
-  phobj_full <- all_phyloseq[[i]]
-  outdir <- paste0(opt$out, "PredictDAA_CoralsCategory_balancedTest/", i, "/")
+  phobj <- all_phyloseq[[i]]
+  outdir <- paste0(opt$out, OUTDIRNAME , i, "/")
   opt$reserva <- opt$out
   opt$out <- outdir
   if(!dir.exists(opt$out)) dir.create(opt$out)
   
-  phobj <- prune_samples(!is.na(sample_data(phobj_full)$Category_T1),phobj_full)
-  phobj <- prune_samples(sample_data(phobj)$sampleID %in% samples2use$sampleID, phobj)
-  
-  meta_mod <- sample_data(phobj) %>% data.frame %>% 
-    dplyr::mutate(Category_BinT1 = ifelse(Category_T1 %in% c("Thinness", "Normal"), "Normal", "Overweight"),
-                  Category_BinT0 = ifelse(Category_T0 %in% c("Thinness", "Normal"), "Normal", "Overweight"))
-  sample_data(phobj)$Category_BinT1 <- meta_mod$Category_BinT1
-  sample_data(phobj)$Category_BinT0 <- meta_mod$Category_BinT0
-  
-  taxa_padj <- daa_all[[i]]$all_contrasts$Category_BinT1_Overweight_vs_Normal$resdf %>% 
+  taxa_padj <- daa_all[[i]]$all_contrasts$status_c2_Normal_vs_Excessive.gain$resdf %>% 
     dplyr::filter(padj <= opt$pval & abs(log2FoldChangeShrink) >= log2(opt$fc) ) %>% 
     pull(taxon)
   taxa_praw <- daa_all[[i]]$resdf %>% pull(taxon)
@@ -60,10 +49,10 @@ for(i in phseq_to_use){
   all_pcas_adj <- makeAllPCAs(phobj, df2pca, taxa_padj, vars2pca, opt, "DiffTaxaPadj")
   all_pcas_praw <- makeAllPCAs(phobj, df2pca, taxa_praw, vars2pca, opt, "DiffTaxaPraw")
   
-  taxa_padj01 <- daa_all[[i]]$all_contrasts$Category_BinT1_Overweight_vs_Normal$resdf %>% 
+  taxa_padj01 <- daa_all[[i]]$all_contrasts$status_c2_Normal_vs_Excessive.gain$resdf %>% 
     dplyr::filter(padj <= 0.01 & abs(log2FoldChangeShrink) >= log2(opt$fc) ) %>% 
     pull(taxon)
-  taxa_padj001 <-  daa_all[[i]]$all_contrasts$Category_BinT1_Overweight_vs_Normal$resdf %>% 
+  taxa_padj001 <-  daa_all[[i]]$all_contrasts$status_c2_Normal_vs_Excessive.gain$resdf %>% 
     dplyr::filter(padj <= 0.001 & abs(log2FoldChangeShrink) >= log2(opt$fc) ) %>% 
     pull(taxon)
   all_pcas_adj01 <- makeAllPCAs(phobj, df2pca, taxa_padj01, vars2pca, opt, "DiffTaxaPadj01")
@@ -241,11 +230,11 @@ for(i in phseq_to_use){
 }
 opt <- restaurar(opt)
 
-save(all_model_results, file=paste0(opt$out, "PredictDAA_CoralsCategory_balancedTest/all_model_results.RData"))
+save(all_model_results, file=paste0(opt$out, "PredictDAA_onlyGain2/all_model_results.RData"))
 #load(file=paste0(opt$out, "PredictDAA/all_model_results.RData"))
 
 #Integrate
-opt$out <- paste0(opt$out, "PredictDAA_CoralsCategory_balancedTest/")
+opt$out <- paste0(opt$out, "PredictDAA_onlyGain/")
 
 makeLinePlotComparingPhobjs(all_model_results, opt, models_name1 = "padj_taxa_res", models_name2 = "padj_taxa_res01")
 ## Compare with Bacteria in componets

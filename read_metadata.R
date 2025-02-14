@@ -15,6 +15,11 @@ metadata_with_origin  <- read_xlsx(opt$metadata_with_origin)
 metadata_gain_labels <- read_csv(opt$metadata_class) %>%  clean_names() %>% data.frame()
 rownames(metadata) <- paste0("C", metadata$id)
 
+meta_mother <- read_xlsx(opt$metadata_mother)
+rownames(meta_mother) <- paste0("C", meta_mother$id)
+
+
+
 colnames(metadata)[2] <- "Sex"
 metadata$Sex[metadata$Sex == 0] <- "Boy"
 metadata$Sex[metadata$Sex == 1] <- "Girl"
@@ -28,10 +33,10 @@ metadata$Category_T0[metadata$Category_T0 == 3] <- "Obesity"
 metadata$Category_T0 <- factor(metadata$Category_T0, levels = c("Thinness", "Normal", "Overweight", "Obesity"))
 
 colnames(metadata)[38] <- "Category_T1"
-metadata$Category_T1[metadata$Category_T1 == 1] <- "Thinness"
-metadata$Category_T1[metadata$Category_T1 == 2] <- "Normal"
-metadata$Category_T1[metadata$Category_T1 == 3] <- "Overweight"
-metadata$Category_T1[metadata$Category_T1 == 4] <- "Obesity"
+metadata$Category_T1[metadata$Category_T1 == 0] <- "Thinness"
+metadata$Category_T1[metadata$Category_T1 == 1] <- "Normal"
+metadata$Category_T1[metadata$Category_T1 == 2] <- "Overweight"
+metadata$Category_T1[metadata$Category_T1 == 3] <- "Obesity"
 metadata$Category_T1 <- factor(metadata$Category_T1, levels = c("Thinness", "Normal", "Overweight", "Obesity"))
 
 na_metadata_t0 <- rownames(metadata[is.na(metadata$Category_T0),])
@@ -48,7 +53,7 @@ nreads <- s_otu_tab %>% colSums()
 metadata$hospital <- metadata_with_origin$hospital[match(metadata$sampleID, metadata_with_origin$id)]
 
 newnames <- names(metadata_gain_labels)[!names(metadata_gain_labels) %in% names(metadata)]
-newnames <- newnames[!(newnames %in% c("x", "sexo_vs", "cat_peso_00", "cat_peso_01"))]
+newnames <- newnames[!(newnames %in% c("x", "sexo_vs"))] ## , "cat_peso_00", "cat_peso_01"
 
 metadata_gain_labels2 <- metadata_gain_labels %>% select(id, all_of(newnames))
 table(metadata_gain_labels2$id %in% metadata$sampleID)
@@ -61,26 +66,42 @@ metadata <- merge(metadata, metadata_gain_labels2, by.x="sampleID", by.y="id", a
 rownames(metadata) <- metadata$sampleID
   
 
+assertthat::assert_that(all(meta_mother$id %in% metadata$sampleID2 ))
+names(meta_mother) %in% names(metadata) %>% any
+nrow(metadata)
+nrow(meta_mother)
+metadata <- metadata %>% merge(meta_mother, by.x="sampleID2", by.y = "id")
+nrow(metadata)
+rownames(metadata) <- metadata$sampleID
+
 write_tsv(metadata, file = paste0(outdir, "metadata_full.tsv"))
 metadata_full <- metadata
 s_otu_tab_unfilt <- s_otu_tab
 
 #Filter samples in metadata
 common_samples <- names(s_otu_tab)[names(s_otu_tab) %in% rownames(metadata)]
-all(names(s_otu_tab) %in% metadata$sampleID)
-all(metadata$sampleID %in% names(s_otu_tab))
+table(names(s_otu_tab) %in% metadata$sampleID)
+names(s_otu_tab)[! names(s_otu_tab) %in% metadata$sampleID]
+table(metadata$sampleID %in% names(s_otu_tab))
 
-metadata <- metadata_full[common_samples, ]
+metadata <- metadata[common_samples, ]
 s_otu_tab <- s_otu_tab_unfilt[, common_samples]
 
+all(rownames(metadata) == colnames(s_otu_tab))
 
 nreads <- s_otu_tab %>% colSums()
 metadata$nreads <- nreads[rownames(metadata)]
+metadata$hospital[is.na(metadata$hospital)] <- "Zaragoza"
 greads <- ggplot(metadata, aes(x=hospital, y = log10(nreads), fill=hospital))+geom_violin(alpha=0.6)+geom_boxplot(width=0.2, fill="lightgray")+ theme_bw()
 ggsave(filename = paste0(outdir, "/reads_per_hospital.pdf"), greads, width = 7, height = 4)
 
 all(names(s_otu_tab) == rownames(metadata))
 write_tsv(s_otu_tab %>% rownames_to_column("taxon") %>% select(taxon, everything()), file = paste0(outdir, "otu_tab_names_presentInMetadata.tsv"))
+
+
+metadata$age_class1 <- factor(ifelse(metadata$edad_00_round %in% c(7, 8), ">7", as.character(metadata$edad_00_round)),
+                                 levels=c("3", "4", "5", "6", ">7"))
+
 write_tsv(metadata, file = paste0(outdir, "metadata_presentInOtus.tsv"))
 
 #Filter only normal weight at T0
