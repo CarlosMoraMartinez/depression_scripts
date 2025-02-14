@@ -11,24 +11,25 @@ load( paste0(opt$out, "DeSEQ2/DESEQ2_all_edad00.RData"))
 outdir <- paste0(opt$out, "fit_models/")
 if(!dir.exists(outdir)) dir.create(outdir)
 
-tempdf <- daa_all$remove_tanda2$vstds %>% t %>% 
+phname <- "filt_spsum_rmTanda"
+tempdf <- daa_all$filt_spsum_rmTanda$norm_counts %>% t %>% 
   as.data.frame %>% 
   rownames_to_column("sampleID") %>% 
-  merge(sample_data(all_phyloseq$remove_tanda2) %>% data.frame, by.x="sampleID", by.y="sampleID", all=T)
+  merge(sample_data(all_phyloseq$filt_spsum_rmTanda) %>% data.frame, by.x="sampleID", by.y="sampleID", all=T)
 
-tempdf_norm <- daa_all$remove_tanda2$norm_counts %>% t %>% 
+tempdf_norm <- daa_all$filt_spsum_rmTanda$norm_counts %>% t %>% 
   as.data.frame %>% 
   rownames_to_column("sampleID") %>% 
-  merge(sample_data(all_phyloseq$remove_tanda2) %>% data.frame, by.x="sampleID", by.y="sampleID", all=T)
+  merge(sample_data(all_phyloseq$filt_spsum_rmTanda) %>% data.frame, by.x="sampleID", by.y="sampleID", all=T)
 
-tempdf_raw <- daa_all$remove_tanda2$raw_counts %>% t %>% 
+tempdf_raw <- daa_all$filt_spsum_rmTanda$raw_counts %>% t %>% 
   as.data.frame %>% 
   rownames_to_column("sampleID") %>% 
-  merge(sample_data(all_phyloseq$remove_tanda2) %>% data.frame, by.x="sampleID", by.y="sampleID", all=T)
+  merge(sample_data(all_phyloseq$filt_spsum_rmTanda) %>% data.frame, by.x="sampleID", by.y="sampleID", all=T)
 
 
 
-bacnames <- daa_all$remove_tanda2$vstds %>% rownames
+bacnames <- daa_all$filt_spsum_rmTanda$norm_counts %>% rownames ##VST FAILED
 table(bacnames %in% names(tempdf))
 
 glist <- map(bacnames, \(bb){
@@ -41,14 +42,14 @@ glist <- map(bacnames, \(bb){
   
 })
 
-pdf(paste0(opt$out, "DeSEQ2/edad_vs_bact.pdf"), width=8, height=6)
+pdf(paste0(outdir,  "/edad_vs_bact.pdf"), width=8, height=6)
 for(gg in glist){
   print(gg)
 }
 dev.off()
 
 ## With norm data
-bacnames_norm <- daa_all$remove_tanda2$norm_counts %>% rownames
+bacnames_norm <- daa_all$filt_spsum_rmTanda$norm_counts %>% rownames
 table(bacnames_norm %in% names(tempdf_norm))
 
 glist <- map(bacnames_norm, \(bb){
