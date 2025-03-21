@@ -72,7 +72,7 @@ for(phname in phseq_to_use){
   
 }
 opt <- restaurar(opt)
-#save(daa_all, file = paste0(opt$out, deseqname, "DESEQ2_all.RData"))
+save(daa_all, file = paste0(opt$out, deseqname, "DESEQ2_all.RData"))
 #load(paste0(opt$out, deseqname, "DESEQ2_all.RData"))
 
 combs_cp <- ALL_COMBINS

@@ -24,7 +24,7 @@ if(!dir.exists(input_tabs_dir)) dir.create(input_tabs_dir)
 
 ######
 
-s_abund <- read_tsv(paste0(opt$indir, "species.mpa.combined.clean2.txt"))
+s_abund <- read_tsv(paste0(opt$indir, "species.K2.mpa.combined.clean2.txt"))
 #s_tax_tab <- s_abund %>%
 #  dplyr::rename("taxonomy" = "#Classification") %>%
 #  dplyr::select(taxonomy) %>%

@@ -1233,7 +1233,7 @@ plotRelativeAbnBars_Fantaxtic_grid <- function(phobj,
   pdf(outname, height = height, width = width)
   print(cowplot::plot_grid(plotlist = regions, ncol = 1))
   dev.off()
-  return(topntxg)
+  return(topntx)
 }
 
 plotPrevalenceVsAbundance <- function(phobj, outname="phylumBarplot.pdf", height=10, width=12){
