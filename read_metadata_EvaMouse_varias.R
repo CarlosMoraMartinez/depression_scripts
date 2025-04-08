@@ -35,8 +35,8 @@ all_mpas<- all_mpas %>% mutate(
   })
 )
 
-write_tsv(meta3, paste0(input_tabs_dir, "/full_metadata.tsv"))
-s_meta <- meta3 %>% column_to_rownames("sample")
+#write_tsv(meta2, paste0(input_tabs_dir, "/full_metadata.tsv"))
+#s_meta <- meta2 %>% column_to_rownames("sample")
 
 walk2(all_mpas$Condition, all_mpas$metadata, \(condname, tab) write_tsv(tab, 
                                                                                  paste0(input_tabs_dir, 

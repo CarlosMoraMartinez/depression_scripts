@@ -3,8 +3,9 @@ library(ggpmisc)
 # Make combinations:
 treatment_order <- c("REG3", "REG2", "REG1", "NO ABS", "ABS") %>% rev
 region_order <- c("REG3", "REG2", "REG1") %>% rev
-sd_order <- c("SD", "CONTROL") %>% rev
+sd_order <- c("SD", "Control") %>% rev
 
+meta3 <- all_phyloseq$MGBC_plus_NRA_rarefied_min %>% sample_data %>% data.frame
 metad <- meta3 %>% filter(Treatment != "TRANSFER") #%>% 
   #dplyr::mutate(Treatment = factor(Treatment, levels = c("REG3", "REG2", "REG1", "NO ABS", "ABS")))
 
@@ -48,7 +49,7 @@ vars2deseq <- c("Treatment_region")
 vars2heatmap <- c("Treatment", "Region_sequenced", "Stress", "flowcell")
 opt$mincount <- 10
 opt$minsampleswithcount <- 3
-phseq_to_use <- names(all_phyloseq)[1:2]
+phseq_to_use <- names(all_phyloseq)[10]
 deseqname = "DeSEQ2_v8/"
 
 for(phname in phseq_to_use){
@@ -73,7 +74,8 @@ for(phname in phseq_to_use){
 }
 opt <- restaurar(opt)
 save(daa_all, file = paste0(opt$out, deseqname, "DESEQ2_all.RData"))
-#load(paste0(opt$out, deseqname, "DESEQ2_all.RData"))
+
+load(paste0(opt$out, deseqname, "DESEQ2_all.RData"))
 
 combs_cp <- ALL_COMBINS
 names(combs_cp) <- sapply(combs_cp, \(x) paste(x[1], x[3], "vs", x[2], sep="_"))
@@ -557,7 +559,8 @@ for(phname in phseq_to_use){
           theme(plot.title = element_text(hjust = 0.5, vjust=0.5)) +
           theme(plot.margin = unit(c(0,1,0,3), "cm"))
         w = 3.81 + 0.191*length(taxa2plot)
-        ggsave(paste0(opt$out, paste0(stressmain, "_CompareRegionSeq_points_LFCShrink_p01.pdf")), gg, width = w, height = 6.1)
+        ggsave(paste0(opt$out, paste0(stressmain, "_CompareRegionSeq_points_LFCShrink_p01.pdf")), gg, width = w, height = 6.1,
+               limitsize = F)
         
         return(gg)
       })
@@ -676,7 +679,8 @@ for(phname in phseq_to_use){
           theme(plot.title = element_text(hjust = 0.5, vjust=0.5)) +
           theme(plot.margin = unit(c(0,1,0,3), "cm"))
         w = 3.81 + 0.191*length(taxa2plot)
-        ggsave(paste0(opt$out, paste0(stressmain, "_CompareRegionSeq_points_LFCShrink_p01_withABS.pdf")), gg, width = w, height = 6.1)
+        ggsave(paste0(opt$out, paste0(stressmain, "_CompareRegionSeq_points_LFCShrink_p01_withABS.pdf")), gg,
+               width = w, height = 6.1, limitsize = F)
         
         return(gg)
       })
@@ -791,7 +795,8 @@ for(phname in phseq_to_use){
           theme(plot.title = element_text(hjust = 0.5, vjust=0.5))+
           theme(plot.margin = unit(c(0,1,0,3), "cm"))
         w = 3.81 + 0.191*length(taxa2plot)
-        ggsave(paste0(opt$out, paste0(regmain, "_CompareStress_points_LFCShrink_p01.pdf")), gg, width = w, height = 5)
+        ggsave(paste0(opt$out, paste0(regmain, "_CompareStress_points_LFCShrink_p01.pdf")), gg, width = w, 
+               height = 5, limitsize = F)
         
         return(gg)
       })
@@ -863,7 +868,8 @@ for(phname in phseq_to_use){
           theme(plot.title = element_text(hjust = 0.5, vjust=0.5))+
           theme(plot.margin = unit(c(0,1,0,3), "cm"))
         w = 3.81 + 0.191*length(taxa2plot)
-        ggsave(paste0(opt$out, paste0(regmain, "_CompareStress_points_LFCShrink_p01_withABS.pdf")), gg, width = w, height = 5)
+        ggsave(paste0(opt$out, paste0(regmain, "_CompareStress_points_LFCShrink_p01_withABS.pdf")), gg, width = w, height = 5, 
+               limitsize = F)
         
         return(gg)
       })
@@ -940,6 +946,10 @@ for(phname in phseq_to_use){
       left_join(allmodels)
     write_tsv(allmodels2, file = paste0(opt$out, "models_VSTAbundances_sameRegionNoAbs.tsv"))
     
+    
+    cols <- ggsci::pal_npg()(length(unique(allmodels2$Treatment)))
+    for(ccr in 4:length(cols)) cols <- cols[c(length(cols), 1:(length(cols)-1))]
+    
     gbeta <- ggplot(allmodels2, aes(x = Region_sequenced, y = adj.r.squared, 
                                     col=Treatment, 
                                     fill=Treatment, 
@@ -954,10 +964,12 @@ for(phname in phseq_to_use){
       theme(axis.text.y = element_text( size = 14)) +
       ylab("Adjusted R2") + 
       xlab("Region Sequenced") +
-      scale_fill_npg()+
-      scale_color_npg() +
+      #scale_fill_npg()+
+      #scale_color_npg() +
+      scale_color_manual(values=cols) +
+      scale_fill_manual(values = cols) +
       theme_classic()
-    ggsave(paste0(opt$out, "/plot_ModelsVSTAbundances_AdjRsquared.pdf"), gbeta, width = 8, height = 2.7) 
+    ggsave(paste0(opt$out, "/plot_ModelsVSTAbundances_AdjRsquared.pdf"), gbeta, width = 7, height = 2.2) 
     
     gbeta <- ggplot(allmodels2, aes(x = Region_sequenced, y = estimate_mean_abundance, 
                                     col=Treatment, 
@@ -973,8 +985,10 @@ for(phname in phseq_to_use){
       theme(axis.text.y = element_text( size = 14)) +
       ylab("Slope of mean abundance predictor") + 
       xlab("Region Sequenced") +
-      scale_fill_npg()+
-      scale_color_npg() +
+      #scale_fill_npg()+
+      #scale_color_npg() +
+      scale_color_manual(values=cols) +
+      scale_fill_manual(values = cols) +
       theme_classic()
     ggsave(paste0(opt$out, "/plot_ModelsVSTAbundances_Slope.pdf"), gbeta, width = 8, height = 2.7) 
     opt <- restaurar(opt)

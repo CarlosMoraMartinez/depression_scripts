@@ -8,8 +8,8 @@ signif_levels=c("***"=0.001, "**"=0.01, "*"=0.05, "ns"=1.1)
 alpha_indices <- c("Observed", "Chao1", "Shannon", "InvSimpson")
 vars2test <- c("Treatment", "Region_sequenced", "Stress", "Treatment_full", "flowcell", "Treatment_region") #"Category_T0"
 
-quant_vars <- c("nreads_filt", "num_reads")
-vars2log <- c( "nreads_filt", "num_reads")
+quant_vars <- c("num_reads") #"nreads_filt", 
+vars2log <- c( "num_reads") #"nreads_filt", 
 
 quant_vars_ext <- c(quant_vars, paste(vars2log, "_log", sep=""))
 interestvar <- "Treatment"
@@ -22,7 +22,7 @@ if(!dir.exists(outdir)) dir.create(outdir)
 extravars2 <- extravars
 
 
-phseq_to_use <- names(all_phyloseq)[2]
+phseq_to_use <- names(all_phyloseq)
 #load(allphyloseqlist_fname)
 
 for(phname in phseq_to_use){
@@ -135,6 +135,7 @@ for(phname in phseq_to_use){
   alphaplots_compRegions <- list()
   alphaplots_compTreatments <- list()
   alphaplots_compStress <- list()
+  alphaplots_onlyControls <- list()
   for(ind in alpha_indices){
     auxsig <- divtab %>% 
       filter(Treatment != "TRANSFER") %>% 
@@ -223,10 +224,10 @@ for(phname in phseq_to_use){
         caption = get_pwc_label(auxsig)
       )
     
-    
     ggsave(filename = paste0(outdir, "/", phname, "_", ind, "_AlphaDiv_byRegion.pdf"), alphaplots_compRegions[[ind]], width = 7, height = 4)
     ggsave(filename = paste0(outdir, "/", phname, "_", ind, "_AlphaDiv_byTreatment.pdf"), alphaplots_compTreatments[[ind]], width = 7, height = 4)
     ggsave(filename = paste0(outdir, "/", phname, "_", ind, "_AlphaDiv_byStress.pdf"), alphaplots_compStress[[ind]], width = 7, height = 6)
+  
   }
   pdf( paste0(outdir, "/", phname, "_allIndices_AlphaDiv_byRegion.pdf"), width=14, height = 8)
   print(cowplot::plot_grid(plotlist = alphaplots_compRegions))
@@ -239,6 +240,92 @@ for(phname in phseq_to_use){
   pdf( paste0(outdir, "/", phname, "_allIndices_AlphaDiv_byStress.pdf"), width=12, height = 9)
   print(cowplot::plot_grid(plotlist = alphaplots_compStress))
   dev.off()
+  
+  # Only Controls
+  
+  aux_divtab <- divtab %>% 
+    filter(Treatment == "NO ABS") %>% 
+    gather(key="Index", value="Ind_value", all_of(alpha_indices)) %>% 
+    mutate(Index = factor(Index, levels = alpha_indices))
+  
+  gctrl <- ggplot(aux_divtab, 
+                  aes(x=Region_sequenced ,
+                      y = Ind_value, 
+                      fill=Region_sequenced,
+                      col=Region_sequenced))+
+    facet_wrap(. ~ Index, scales="free", nrow=1) +
+    #geom_violin(alpha=0.6)+
+    geom_boxplot(width=0.7, fill="white", size=1)+
+    geom_point() + # size=2
+    theme(plot.margin = margin(t = 20, r = 20, b = 40, l = 20)) +
+    stat_compare_means(method = "t.test", label = "p.signif", 
+                       step.increase=0.1, 
+                       symnum.args = signif_codes,
+                       vjust=0.2, 
+                       inherit_aes = T,
+                       #bracket.size=1,
+                       #tip.length = 0,
+                       size=6,
+                       comparisons = list(c("REG1", "REG2"), 
+                                          c("REG1", "REG3"),
+                                          c("REG2", "REG3")))  +
+    scale_color_npg() +
+    #ggtitle(ind) +
+    theme_bw() +
+    xlab("Region Sequenced") +
+    #scale_fill_npg() +
+    theme(axis.text.x = element_text(vjust=1,hjust=1, angle = 45)) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    ylab("Index value") +
+    theme(axis.text.x = element_text(size = 12, 
+                                     colour = "black", 
+                                     vjust=1, hjust=1,
+                                     angle = 45)) +
+    theme(strip.text.x = element_text(size = 14)) +
+    theme(axis.text.y = element_text(size = 12)) +
+    theme(axis.title.y = element_text(size = 14)) + 
+    theme(axis.title.x = element_text(size = 14))
+   # theme(plot.margin = margin(t = 20, r = 20, b = 40, l = 20))
+  ggsave(filename = paste0(outdir, "/", phname, "_AlphaDiv_onlyNoAbs.pdf"), gctrl, width = 10, height = 6)
+  
+  gctrl <- ggplot(aux_divtab %>% filter(Stress == "Control"), 
+                  aes(x=Region_sequenced ,
+                      y = Ind_value, 
+                      fill=Region_sequenced,
+                      col=Region_sequenced))+
+    facet_wrap(. ~ Index, scales="free", nrow=1) +
+    #geom_violin(alpha=0.6)+
+    geom_boxplot(width=0.7, fill="white", size=1)+
+    geom_point( ) + #size=2
+    stat_compare_means(method = "t.test", label = "p.signif", 
+                       step.increase=0.1, 
+                       symnum.args = signif_codes,
+                       vjust=0.2, 
+                       inherit_aes = T,
+                       #bracket.size=1,
+                       #tip.length = 0,
+                       size=6,
+                       comparisons = list(c("REG1", "REG2"), 
+                                          c("REG1", "REG3"),
+                                          c("REG2", "REG3"))) +
+    scale_color_npg() +
+    #ggtitle(ind) +
+    theme_bw() +
+    xlab("Region Sequenced") +
+    #scale_fill_npg() +
+    theme(axis.text.x = element_text(vjust=1,hjust=1, angle = 45)) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    ylab("Index value") +
+    theme(axis.text.x = element_text(size = 12, 
+                                     colour = "black", 
+                                     vjust=1, hjust=1,
+                                     angle = 45)) +
+    theme(strip.text.x = element_text(size = 14)) +
+    theme(axis.text.y = element_text(size = 12)) +
+    theme(axis.title.y = element_text(size = 14)) + 
+    theme(axis.title.x = element_text(size = 14))
+  # theme(plot.margin = margin(t = 20, r = 20, b = 40, l = 20))
+  ggsave(filename = paste0(outdir, "/", phname, "_AlphaDiv_onlyNoAbsControls.pdf"), gctrl, width = 14, height = 6)
   
   
   # Typical plots
@@ -270,35 +357,40 @@ for(phname in phseq_to_use){
       name <- paste0(phname, "_", dist, "_", method, "_5dims")
       cat("Beta diversity for ", name, "\n")
       
-      ccaplots[[name]] <- makeAllPCoAs(all_phyloseq[[phname]], outdir,
-                                       method = method,
-                                       name = name, 
-                                       dist_type = dist, 
-                                       dist_name = dist,
-                                       vars2plot = vars2pcoa, 
-                                       var2shape = var2shape,
-                                       extradims = 2:5, 
-                                       create_pdfs = T, w=8, h = 8)
-      
-      
-      name <- paste0(phname, "_", dist, "_", method)
-      ccaplots[[name]] <- makeAllPCoAs(all_phyloseq[[phname]], outdir,
-                                       method = method,
-                                       name = name,
-                                       dist_type = dist,
-                                       dist_name = dist,
-                                       vars2plot = vars2pcoa,
-                                       var2shape = var2shape,
-                                       extradims = 2:3,
-                                       create_pdfs = T, w=8)
+      #ccaplots[[name]] <- makeAllPCoAs(all_phyloseq[[phname]], outdir,
+      #                                 method = method,
+      #                                 name = name, 
+      #                                 dist_type = dist, 
+      #                                 dist_name = dist,
+      #                                 vars2plot = vars2pcoa, 
+      #                                 var2shape = var2shape,
+      #                                 extradims = 2:5, 
+      #                                 create_pdfs = T, w=8, h = 8)
+      #
+      #
+      #name <- paste0(phname, "_", dist, "_", method)
+      #ccaplots[[name]] <- makeAllPCoAs(all_phyloseq[[phname]], outdir,
+      #                                 method = method,
+      #                                 name = name,
+      #                                 dist_type = dist,
+      #                                 dist_name = dist,
+      #                                 vars2plot = vars2pcoa,
+      #                                 var2shape = var2shape,
+      #                                 extradims = 2:3,
+      #                                 create_pdfs = T, w=8)
 
       ## Make better PCoA
       phobj <- all_phyloseq[[phname]]
       pcoa.bray <- ordinate(phobj, method = method, distance = dist)
       evals <- pcoa.bray$values$Eigenvalues
 
+      if(method == "NMDS"){
       df2plot <- pcoa.bray$points %>% data.frame %>%
         rownames_to_column()
+      }else{
+        df2plot <- pcoa.bray$vectors %>% data.frame %>%
+          rownames_to_column()
+      }
 
       gg <- plot_ordination(phobj, pcoa.bray,
                             color = "Region_sequenced",
@@ -307,7 +399,29 @@ for(phname in phseq_to_use){
         #coord_fixed(sqrt(evals[2] / evals[1])) +
         #scale_color_manual(values=palette2)+
         #stat_ellipse(level=0.95, linetype=2, alpha = 0.8, na.rm = TRUE) +
-        geom_point(size = 1.5) +
+        geom_point(size = 2) +
+        #geom_point(size = 1, aes(col=Stress)) +
+        #geom_text_repel(aes_string(label = labelsamples)) +
+        theme_bw() +
+       # xlim(-2, 1) +
+        theme(axis.text.x = element_text(size = 14))+
+        theme(strip.text.x = element_text(size = 14))+
+        theme(axis.title.y = element_text(size = 14))+
+        theme(axis.title.x = element_text(size = 14))+
+        theme(axis.text.y = element_text( size = 14)) +
+        scale_color_npg() +
+        facet_grid( ~ Stress)
+      ggsave(paste0(outdir, name, "_extra1.pdf"), gg, width = 8, height = 4)
+      #ggsave(paste0(outdir, name, "_extra1b.pdf"), gg, width = 6.5, height = 3)
+      
+      gg <- plot_ordination(phobj, pcoa.bray,
+                            color = "Region_sequenced",
+                            shape = "Treatment",
+                            title = name, axes=c(1, 2)) +
+        #coord_fixed(sqrt(evals[2] / evals[1])) +
+        #scale_color_manual(values=palette2)+
+        #stat_ellipse(level=0.95, linetype=2, alpha = 0.8, na.rm = TRUE) +
+        geom_point(size = 2) +
         #geom_point(size = 1, aes(col=Stress)) +
         #geom_text_repel(aes_string(label = labelsamples)) +
         theme_bw() +
@@ -317,8 +431,10 @@ for(phname in phseq_to_use){
         theme(axis.title.x = element_text(size = 14))+
         theme(axis.text.y = element_text( size = 14)) +
         scale_color_npg() +
-        facet_grid( ~ Stress)
-      ggsave(paste0(outdir, name, "_extra1.pdf"), gg, width = 8, height = 4)
+        facet_grid(Stress ~ .)
+      ggsave(paste0(outdir, name, "_extra1_vert.pdf"), gg, width = 4.5, height = 4.5)
+      
+      
       gg2 <- plot_ordination(phobj, pcoa.bray,
                             color = "Treatment",
                             #shape = "Stress",
@@ -339,6 +455,9 @@ for(phname in phseq_to_use){
         scale_color_npg() +
         facet_grid(Stress ~ Region_sequenced)
       ggsave(paste0(outdir, name, "_extra2.pdf"), gg2, width = 8, height = 5)
+      
+      make_ternary_plot_byTreatment(df2plot, phobj, outdir, name )
+      make_ternary_plot_byRegion(df2plot, phobj, outdir, name )
       
       ## Now only Controls
       phobj_controls <- subset_samples(phobj, Treatment == "NO ABS" & Stress == "Control")
@@ -388,7 +507,25 @@ for(phname in phseq_to_use){
        
       ggsave(paste0(outdir, name, "_onlyControls_extra2.pdf"), gg2, width = 5, height = 3)
       
+      gg <- plot_ordination(phobj_controls, pcoa.bray,
+                            color = "Region_sequenced",
+                            shape = "Mouse",
+                            title = name, axes=c(1, 2)) +
+        #coord_fixed(sqrt(evals[2] / evals[1])) +
+        #scale_color_manual(values=palette2)+
+        #stat_ellipse(level=0.95, linetype=2, alpha = 0.8, na.rm = TRUE) +
+        geom_point(size = 3) +
+        #geom_point(size = 1, aes(col=Stress)) +
+        #geom_text_repel(aes_string(label = labelsamples)) +
+        theme_bw() +
+        theme(axis.text.x = element_text(size = 14))+
+        theme(strip.text.x = element_text(size = 14))+
+        theme(axis.title.y = element_text(size = 14))+
+        theme(axis.title.x = element_text(size = 14))+
+        theme(axis.text.y = element_text( size = 14)) +
+        scale_color_npg() 
       
+      ggsave(paste0(outdir, name, "_onlyControls_extra3.pdf"), gg, width = 5, height = 3)
       
     }}}
 
@@ -419,7 +556,9 @@ for(phname in phseq_to_use){
 # top taxa in controls only
 
 
-phobj_controls <- subset_samples(all_phyloseq[["rarefied_min"]], Treatment == "NO ABS" & Stress == "Control")
+phobj_controls <- subset_samples(all_phyloseq[["MGBC_plus_NRA_rarefied_min"]], 
+                                 Treatment == "NO ABS" & Stress == "Control")
+s_meta <- sample_data(all_phyloseq[["MGBC_plus_NRA_rarefied_min"]]) %>% data.frame
 otutab <- otu_table(phobj_controls) %>% data.frame %>% 
   rownames_to_column("Species") %>%
   mutate_if(is.numeric, \(x) 100*x/sum(x)) %>% 

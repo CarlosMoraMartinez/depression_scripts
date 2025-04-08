@@ -6,9 +6,16 @@ library(ggvenn)
 
 #options(ggplot2.discrete.fill = c("#1E90FF", "#00AA5A", "#F75A3F", "#8E7BFF","#00D1EE", "#00E6BB", "#F9F871", "#F45680", "#A5ABBD", "#B60E50"))
 #options(ggplot2.discrete.colour = c("#1E90FF","#00AA5A", "#F75A3F",  "#8E7BFF","#00D1EE", "#00E6BB", "#F9F871", "#F45680", "#A5ABBD", "#B60E50"))
+signif_codes <- list(cutpoints = c(0, 0.001, 0.01, 0.05, Inf), symbols = c("***", "**", "*", "ns"))
 
-options(ggplot2.discrete.fill = c("#A1C6EA","#FD8B2F", "#00AA5A", "#8E7BFF","#00D1EE", "#00E6BB", "#F9F871", "#F45680", "#A5ABBD", "#B60E50"))
-options(ggplot2.discrete.colour = c("#A1C6EA","#FD8B2F","#00AA5A",   "#8E7BFF","#00D1EE", "#00E6BB", "#F9F871", "#F45680", "#A5ABBD", "#B60E50"))
+options(ggplot2.discrete.fill = c("#A1C6EA","#FD8B2F", "#00AA5A", 
+                                  "#8E7BFF","#00D1EE", "#00E6BB", 
+                                  "#F9F871", "#F45680", "#A5ABBD", 
+                                  "#B60E50"))
+options(ggplot2.discrete.colour = c("#A1C6EA","#FD8B2F","#00AA5A",   
+                                    "#8E7BFF","#00D1EE", "#00E6BB", 
+                                    "#F9F871", "#F45680", "#A5ABBD", 
+                                    "#B60E50"))
 C_CASE = "#FD8B2F" #"rgba(200, 44, 44, 0.8)"
 C_CASE2 = "tomato"
 C_CASE_LINK = "#fBd895" #"#f9c784"
@@ -1851,7 +1858,8 @@ make_full_region_heatmap <- function(mat, sdata_parcial,
                                          w=5, h=2, 
                                          trim_values=FALSE,
                                          italics_rownames=TRUE, 
-                                         trimquantile = 0.01){
+                                         trimquantile = 0.01, 
+                                         max_hm_h=16){
   outname <- paste(opt$out, name, sep="/", collapse="/")
   annot <- sdata_parcial %>%
     column_to_rownames("sampleID") %>% 
@@ -1866,10 +1874,16 @@ make_full_region_heatmap <- function(mat, sdata_parcial,
   fontsize_row = 10 - nrow(mat) / 13
   fontsize_col = 10 - ncol(mat) / 13
   
+  if(any(is.na(mat))){
+    cat("Removing NAs from matrix\n")
+    mat[is.na(mat)] <- 0
+  }
+  
   mat_trim <- mat
+  
   if(trim_values){
-    mat_trim[mat> quantile(mat, 1-trimquantile)] <- quantile(mat, 1-trimquantile)
-    mat_trim[mat < quantile(mat, trimquantile)] <- quantile(mat, trimquantile)
+    mat_trim[mat> quantile(mat, 1-trimquantile)] <- quantile(mat, 1-trimquantile, na.rm=T)
+    mat_trim[mat < quantile(mat, trimquantile)] <- quantile(mat, trimquantile, na.rm=T)
   }
   
   labels_row <- gsub("_", " ", rownames(mat_trim))
@@ -1878,18 +1892,38 @@ make_full_region_heatmap <- function(mat, sdata_parcial,
       bquote(italic(.(x)))
     }) %>% as.expression()
   }
-  gaps_col <- annot[colnames(mat), ] %>% unite("temp", all_of(variables), sep=":") %>% 
+  newfaclevels <- sdata_parcial %>% 
+    select(all_of(vars2heatmap2)) %>% 
+    distinct %>% unite("temp", all_of(variables), sep=":") %>% 
+    pull(temp)
+  
+  gaps_col <- annot[colnames(mat), ] %>% 
+    unite("temp", all_of(variables), sep=":") %>% 
+    dplyr::mutate(temp = factor(temp, levels = newfaclevels)) %>% 
     group_by(temp) %>% 
     dplyr::summarise(n = n()) %>% 
     dplyr::mutate(n = cumsum(n)) %>% 
     pull(n)
   
   numcols <- max(sapply(annot, \(x)length(unique(x))))
-  cc <- ggsci::pal_d3(palette = "category10")(numcols)
+  cc <- ggsci::pal_npg()(numcols) #palette = "category10"
   user.colfn=colorRampPalette(cc)
   newcc <- user.colfn(numcols) # in case there are too many colors
   
-  color_list_cols <- lapply(annot, \(x) {y <-newcc[1:length(unique(x))]; names(y)<- unique(x); y})
+  color_list_cols <- lapply(annot, \(x) {
+    levs <- unique(x)
+    if(length(levs) > 3){
+      y <-c(newcc[4:length(levs)] ,newcc[1:3])
+      names(y)<- unique(x)
+    }else{
+      y <-newcc[1:length(unique(x))]
+      names(y)<- unique(x)
+    }
+    
+    #y <-newcc[(length(newcc) - length(unique(x))+ 1):length(newcc)]
+    #names(y)<- unique(x)
+    return(y)
+    })
   
     hm <- pheatmap(mat_trim, 
                    show_rownames=nrow(mat) < 120,
@@ -1905,7 +1939,12 @@ make_full_region_heatmap <- function(mat, sdata_parcial,
     )
  
   w <- if(ncol(mat)>10) w+0.05*ncol(mat) else 7
-  h <- if(nrow(mat)>10) h+0.05*nrow(mat) else 7
+ 
+  if(max_hm_h == 0){
+    h <- if(nrow(mat)>10) h+0.05*nrow(mat) else 7
+  }else{
+    h <- max_hm_h
+  }
   pdf(outname, width = w, height = h)
   print(hm)
   tmp <- dev.off()
@@ -1917,12 +1956,13 @@ makeHeatmap <- function(resdf, dds, df2plot,
                         logscale=FALSE, 
                         ptype = "padj", w=5, h=4, 
                         trim_values=FALSE,
-                        italics_rownames=TRUE, taxalist=c(), check_taxa = TRUE){
+                        italics_rownames=TRUE, taxalist=c(), 
+                        check_taxa = TRUE, max_hm_h=16){
   outname <- paste(opt$out, name, sep="/", collapse="/")
   annot <- as.data.frame(colData(dds)[variable])
   names(annot) <- c(variable)
   rownames(annot) <- colData(dds)$sampleID
-  
+  cat("Making heatmap with h=", max_hm_h, "\n")
   if(length(taxalist)==0){
     if(ptype == "padj"){
       taxa <- resdf %>% filter(padj <= opt$pval & 
@@ -1974,7 +2014,7 @@ makeHeatmap <- function(resdf, dds, df2plot,
   }
   
   numcols <- max(sapply(annot, \(x)length(unique(x))))
-  cc <- ggsci::pal_d3(palette = "category10")(numcols)
+  cc <- ggsci::pal_npg()(numcols) #palette = "category10"
   user.colfn=colorRampPalette(cc)
   newcc <- user.colfn(numcols) # in case there are too many colors
   
@@ -2007,7 +2047,12 @@ makeHeatmap <- function(resdf, dds, df2plot,
     )
   }
   w <- if(ncol(mat)>10) w+0.05*ncol(mat) else 7
-  h <- if(nrow(mat)>10) h+0.05*nrow(mat) else 7
+  if(max_hm_h == 0){
+    h <- if(nrow(mat)>10) h+0.05*nrow(mat) else 7
+  }else{
+    h <- max_hm_h
+  }
+  cat("Saving heatmap of size ",w, "x", h, " to ", outname, "\n")
   pdf(outname, width = w, height = h)
   print(hm)
   tmp <- dev.off()
@@ -3073,7 +3118,7 @@ make_all_maplots <- function(all_contrasts, opt){
 }
 
 
-make_all_heatmaps<- function(dearesults, df2plot, metadata, vars2heatmap, dds, opt){
+make_all_heatmaps<- function(dearesults, df2plot, metadata, vars2heatmap, dds, opt, max_hm_h=16){
   for(singleres in dearesults){
     taxalist_praw <-singleres$resdf %>% dplyr::filter(pvalue < opt$pval) %>% pull(taxon) %>% unlist %>% unique
     taxalist_padj <-  singleres$resdf %>% dplyr::filter(padj < opt$pval) %>% pull(taxon) %>% unlist %>% unique
@@ -3083,11 +3128,11 @@ make_all_heatmaps<- function(dearesults, df2plot, metadata, vars2heatmap, dds, o
     
     tryCatch(makeHeatmap(singleres$resdf, dds, df2plot2, vars2heatmap,
                          opt, name = paste0(singleres$nested_dir, singleres$name, "diff_ab_heatmap_rawpval.pdf"), 
-                         logscale = F, ptype="pvalue", trim_values = TRUE, taxalist=taxalist_praw), 
+                         logscale = F, ptype="pvalue", trim_values = TRUE, taxalist=taxalist_praw, max_hm_h), 
              error=\(x) cat("Error makeHeatmap praw"))
     tryCatch(makeHeatmap(singleres$resdf, dds, df2plot2, vars2heatmap,
                          opt, name = paste0(singleres$nested_dir, singleres$name, "diff_ab_heatmap_adjpval.pdf"), 
-                         logscale = F, ptype="padj", trim_values = TRUE, taxalist=taxalist_padj), 
+                         logscale = F, ptype="padj", trim_values = TRUE, taxalist=taxalist_padj, max_hm_h), 
              error=\(x) cat("Error makeHeatmap padj"))
     
     while(dev.cur() != 1) dev.off()
@@ -3095,13 +3140,16 @@ make_all_heatmaps<- function(dearesults, df2plot, metadata, vars2heatmap, dds, o
  
 }
 
-make_heatmap_subset<- function(dearesult, df2plot, taxa, samples, vars2heatmap, dds, name, opt){
+make_heatmap_subset<- function(dearesult, df2plot, taxa, samples, vars2heatmap, dds, name, opt, max_hm_h=16){
   
     df2plot2 <- df2plot %>% select(gene, all_of(samples))
     
+    cat("h of subset heatmap is: ", max_hm_h, "\n")
     tryCatch(makeHeatmap(dearesult$resdf, dds, df2plot2, vars2heatmap,
                          opt, name = paste0(name, "_condHeatmap.pdf"), 
-                         logscale = F, ptype="pvalue", trim_values = TRUE, taxalist=taxa, check_taxa = FALSE), 
+                         logscale = F, ptype="pvalue", trim_values = TRUE, 
+                         taxalist=taxa, check_taxa = FALSE,
+                         max_hm_h=max_hm_h), 
              error=\(x) cat("Error makeHeatmap condHeatmap: ", name))
     
     while(dev.cur() != 1) dev.off()
@@ -3110,7 +3158,8 @@ make_heatmap_subset<- function(dearesult, df2plot, taxa, samples, vars2heatmap, 
 
 
 deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE,  doPoscounts=FALSE, 
-                                all_combins = list(), plot_all = TRUE, deseqname = "DeSEQ2/", vars2heatmap=c()){
+                                all_combins = list(), plot_all = TRUE, deseqname = "DeSEQ2/", 
+                                vars2heatmap=c(), max_hm_h=16){
   opt <- restaurar(opt)
   if(!dir.exists(paste0(opt$out, deseqname))) dir.create(paste0(opt$out, deseqname))
   outdir <- paste0(opt$out, deseqname, name, "/")
@@ -3145,7 +3194,7 @@ deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE,  d
   if(plot_all){
     make_all_heatmaps(dearesults$all_contrasts, df2plot, 
                       sample_data(phobj) %>% data.frame, 
-                      vars2heatmap, dearesults$dds, opt)
+                      vars2heatmap, dearesults$dds, opt, max_hm_h=max_hm_h)
   }
   tryCatch({
     pdf( paste0(opt$out,singleres$name, "_DESVlot.pdf")); 
@@ -3170,11 +3219,13 @@ deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE,  d
   
   tryCatch(makeHeatmap(dearesults$resdf, dearesults$dds, df2plot, vars2heatmap,
               opt, name = paste0(name, "diff_ab_heatmap_rawpval.pdf"), 
-              logscale = F, ptype="pvalue", trim_values = TRUE, taxalist=taxalist_praw), 
+              logscale = F, ptype="pvalue", trim_values = TRUE, taxalist=taxalist_praw,
+              max_hm_h=max_hm_h), 
            error=\(x) cat("Error makeHeatmap praw"))
   tryCatch(makeHeatmap(dearesults$resdf, dearesults$dds, df2plot, vars2heatmap,
               opt, name = paste0(name, "diff_ab_heatmap_adjpval.pdf"), 
-              logscale = F, ptype="padj", trim_values = TRUE, taxalist=taxalist_padj), 
+              logscale = F, ptype="padj", trim_values = TRUE, taxalist=taxalist_padj, 
+              max_hm_h=max_hm_h), 
               error=\(x) cat("Error makeHeatmap padj"))
   
   dfcorr <- df2plot %>% column_to_rownames("gene") %>% 
@@ -3183,12 +3234,14 @@ deseq_full_pipeline <- function(phobj, name, vars2deseq, opt, interact=FALSE,  d
   tryCatch(makeHeatmap(dearesults$resdf, dearesults$dds, dfcorr, vars2heatmap,
                        opt, name = paste0(name, "corr_heatmap_rawpval.pdf"), 
                        logscale = F, ptype="pvalue", trim_values = TRUE, taxalist=dfcorr$gene,
-                       italics_rownames = FALSE, check_taxa = FALSE), 
+                       italics_rownames = FALSE, check_taxa = FALSE, 
+                       max_hm_h=max_hm_h), 
            error=\(x) cat("Error makeHeatmap praw"))
   tryCatch(makeHeatmap(dearesults$resdf, dearesults$dds, dfcorr, vars2heatmap,
                        opt, name = paste0(name, "corr_heatmap_adjpval.pdf"), 
                        logscale = F, ptype="padj", trim_values = TRUE, taxalist=dfcorr$gene,
-                       italics_rownames = FALSE, check_taxa = FALSE), 
+                       italics_rownames = FALSE, check_taxa = FALSE, 
+                       max_hm_h=max_hm_h), 
            error=\(x) cat("Error makeHeatmap padj"))
   #opt$out <- opt$reserva
   opt <- restaurar(opt)

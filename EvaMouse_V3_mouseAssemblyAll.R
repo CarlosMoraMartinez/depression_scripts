@@ -24,11 +24,12 @@ if(MODE == "IATA"){
   opt <- list()
 }else{
   BASEDIR = "/home/carlos/projects/EvaMouse_Otcubre2024/"
-  opt <- list(out =paste0(BASEDIR, "Results_rstudio/results4_assembly_test_bad/"),
+  opt <- list(out =paste0(BASEDIR, "Results_rstudio/results7_newTrim/"),
               indir = paste0(BASEDIR, "/Results_cluster/") ,
               otu_tables_list = paste0(BASEDIR, "/Results_cluster/Results_20_newTrim/GENERAL_STATS_TABLES/MPA_LIST.txt"),
               r_functions= paste0(BASEDIR, "/code/depression_scripts/metagenomics_core_functions.R"),
               predictive_functions=paste0(BASEDIR, "/code//depression_scripts/predictive_functions.R"),
+              phyloseq_functions=paste0(BASEDIR, "/code//depression_scripts/functions_phyloseq.R"),
               
               read_metadata_script = paste0(BASEDIR, "/code//depression_scripts/read_metadata_EvaMouse_varias.R"),
               create_phyloseq_script = paste0(BASEDIR, "/code/depression_scripts/generate_phyloseq_objects_varias.R"),
@@ -36,6 +37,7 @@ if(MODE == "IATA"){
               alpha_beta_script = paste0(BASEDIR, "/code/depression_scripts/alpha_beta_abund.R"),
               daa_main_condition = paste0(BASEDIR, "/code/depression_scripts/daa_main_condition.R"),
               plot_reads_script = paste0(BASEDIR, "/code/depression_scripts/plot_reads.R"),
+              ternary_plots_functions = paste0(BASEDIR, "/code/depression_scripts/triangle_plot_functions.R"),
               
               make_permanova_script = paste0(BASEDIR, "/code/depression_scripts/make_permanova.R"),
               daa_include_single_covariate = paste0(BASEDIR, "/code/depression_scripts/daa_include_single_covariate.R"),
@@ -70,6 +72,7 @@ if(MODE == "IATA"){
 if(! dir.exists(opt$out)){dir.create(opt$out)}
 
 source(opt$r_functions)
+source(opt$phyloseq_functions)
 
 restaurar <- restauraropt_mk(opt)
 # Read OTUs
@@ -85,6 +88,7 @@ source(opt$create_phyloseq_script)
 source(opt$plot_reads_script)
 
 # Alpha and Beta diversity. Descriptive 
+source(opt$ternary_plots_functions)
 source(opt$alpha_beta_script)
 
 # DESeq 4 each
