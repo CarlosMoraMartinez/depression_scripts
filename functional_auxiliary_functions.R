@@ -1,8 +1,8 @@
 
-readFunctionalMatrix <- function(opt, fname){
+readFunctionalMatrix <- function(opt, fname, sample_substring_index=1){
   #ftab <- read.table(paste0(opt$input_funcional, fname), comment.char = "", sep="\t", head=T)
   ftab <- read_delim(paste0(opt$input_funcional, fname), delim="\t")
-  names(ftab) <- sapply(names(ftab), function(x)strsplit(x, "_")[[1]][1]) %>% gsub("G4M0", "G4M", .)
+  names(ftab) <- sapply(names(ftab), function(x)strsplit(x, "_")[[1]][sample_substring_index]) %>% gsub("G4M0", "G4M", .)
   names(ftab)[1] <- "Pathway"
   return(ftab)
 }
@@ -36,14 +36,21 @@ getCazyClass <- function(cazy_tt){
 
 limma4functional <- function(df2, metad2, interestvar = "Condition", covars=c()){
   library(limma)
+  metad2 <- metad2 %>% filter(!is.na(!!sym(interestvar)))
+  covars <- janitor::make_clean_names(covars)
+  interestvar <- janitor::make_clean_names(interestvar)
   for(covar in covars){
     metad2 <- metad2 %>% dplyr::filter(!is.na(metad2[, covar]))
   }
+  names(metad2) <- janitor::make_clean_names(names(metad2))
+  
   rownames(df2) <- NULL
   expr <- df2 %>% column_to_rownames("Pathway") %>% as.matrix
-  expr <- expr[, metad2$sampleID]
+  expr <- expr[, metad2$sample_id]
   expr <- log(expr+1)
-  metad2[, interestvar] <- as.factor(metad2[, interestvar])
+  if(class(metad2[, interestvar]) == "character"){
+    metad2[, interestvar] <- as.factor((metad2[, interestvar] %>% gsub(" ", "_", .)))
+  }
   if(length(covars) > 0){
     form <- paste("~0 ", interestvar, paste(covars, collapse = ' + '), 
                   sep = ' + ', collapse=" + ") %>% 
@@ -52,13 +59,24 @@ limma4functional <- function(df2, metad2, interestvar = "Condition", covars=c())
     form <- paste0("~0 + ", interestvar) %>% as.formula()
   }
   print(form)
+  
   design <- model.matrix(form, metad2)
   colnames(design) <- gsub(interestvar, "", colnames(design), perl=F)
   #colnames(design) <- gsub("metad2\\$Condition", "", colnames(design), perl=F)
   fit <- lmFit(expr, design)
-  cont.matrix <- makeContrasts(case_vs_control = Depression - Control,
-                               levels = design)
-  fit2 <- contrasts.fit(fit, cont.matrix)
+  
+  if(class(metad2[, interestvar]) == "factor"){
+      levs <- unique(metad2[, interestvar])
+      contrname <- paste0(levs[2], "_vs_", levs[1])
+      contrfor <- paste0(contrname, " = ", levs[2], " - ", levs[1])
+      texpr <- paste0("makeContrasts(", contrfor, ", levels = design)")
+      cont.matrix <- eval(parse(text=texpr))
+      #cont.matrix <- makeContrasts(contrfor,
+      #                             levels = design)
+      fit2 <- contrasts.fit(fit, cont.matrix)
+  }else{
+    fit2 <- fit
+  }
   fit2 <- eBayes(fit2)
   tt <- topTable(fit2, n=Inf, sort.by = "P", adjust.method = "BH")
   names(tt) <- c("log2FoldChange", "AveExpr", "t", "pvalue", "padj", "B") 

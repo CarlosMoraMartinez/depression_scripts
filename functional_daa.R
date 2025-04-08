@@ -2,14 +2,14 @@
 source(opt$functional_functions)
 
 opt <- restaurar(opt)
-load(paste0(opt$out, "DeSEQ2/DESEQ2_all.RData"))
-opt$out <- paste0(opt$out, "Functional_bmi00/")
+load(paste0(opt$out, "DeSEQ2_v8/DESEQ2_all.RData"))
+opt$out <- paste0(opt$out, "Functional/")
 if(!dir.exists(opt$out)) dir.create(opt$out)
 
 
 
-samples2keep <- sample_data(all_phyloseq$remove_tanda2) %>% data.frame %>% pull(sampleID)
-metacyc_ab <-  readFunctionalMatrix(opt, "humann3_merged_abundances_CPM.renamed.tsv") %>% dplyr::select(all_of(c("Pathway",samples2keep)))
+samples2keep <- sample_data(all_phyloseq$MGBC_plus_NRA_raw) %>% data.frame %>% pull(sampleID)
+metacyc_ab <-  readFunctionalMatrix(opt, "humann3_merged_abundances_CPM_named.tsv", sample_substring_index=2) #%>% dplyr::select(all_of(c("Pathway",samples2keep)))
 #metacyc_rxn <- readFunctionalMatrix(opt, "humann3_merged_genetables_RXN_CPM.renamed.tsv") %>% dplyr::select(all_of(c("Pathway",samples2keep)))
 #ko <- readFunctionalMatrix(opt, "humann3_merged_genetables_KO_CPM.renamed.tsv") %>% dplyr::select(all_of(c("Pathway",samples2keep)))
 #go <- readFunctionalMatrix(opt, "humann3_merged_genetables_GO_CPM.renamed.tsv") %>% dplyr::select(all_of(c("Pathway",samples2keep)))

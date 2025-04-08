@@ -39,6 +39,10 @@ if(MODE == "IATA"){
               plot_reads_script = paste0(BASEDIR, "/code/depression_scripts/plot_reads.R"),
               ternary_plots_functions = paste0(BASEDIR, "/code/depression_scripts/triangle_plot_functions.R"),
               
+              functional_script =  paste0(BASEDIR, "/code/depression_scripts/functional_daa.R"),
+              functional_functions =paste0(BASEDIR, "/code/depression_scripts/functional_auxiliary_functions.R"),
+              input_funcional = "/home/carlos/projects/EvaMouse_Otcubre2024/Results_cluster/Results1/mg15_translateHumann/",
+              
               make_permanova_script = paste0(BASEDIR, "/code/depression_scripts/make_permanova.R"),
               daa_include_single_covariate = paste0(BASEDIR, "/code/depression_scripts/daa_include_single_covariate.R"),
               daa_only_covariates = paste0(BASEDIR, "/code/depression_scripts/daa_include_only_covariate.R"),
@@ -75,6 +79,7 @@ source(opt$r_functions)
 source(opt$phyloseq_functions)
 
 restaurar <- restauraropt_mk(opt)
+
 # Read OTUs
 source(opt$read_otutable_script)
 
@@ -94,6 +99,10 @@ source(opt$alpha_beta_script)
 # DESeq 4 each
 source(opt$daa_main_condition)
 #load(paste0(opt$out, "DeSEQ2/DESEQ2_all.RData"))
+
+# Functional
+source(opt$functional_script)
+
 
 # #  Predict
 # source(opt$predict_2groups)
