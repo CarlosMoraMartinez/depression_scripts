@@ -50,14 +50,13 @@ save(pre_phyloseq_filt, file = filtered_phyloseq_filename)
 
 #Reads before rarefeact
 nreads <- otu_table(pre_phyloseq_filt) %>% colSums()
-meta3$nreads_filt <- nreads[meta3$sample]
+s_meta$nreads_filt <- nreads[s_meta$sample]
 write_tsv(meta3, paste0(input_tabs_dir, "/full_metadata2.tsv"))
 
-(greads <- ggplot(meta3, aes(x=Treatment,
+(greads <- ggplot(s_meta, aes(x=Group,
                             y = log10(nreads), 
-                            fill=Treatment,
-                            col=Treatment))+
-    facet_grid(Stress ~ Region_sequenced) +
+                            fill=Group,
+                            col=Group))+
   #geom_violin(alpha=0.6)+
   geom_boxplot(width=0.7, fill="white")+
   geom_point() +
@@ -70,40 +69,66 @@ write_tsv(meta3, paste0(input_tabs_dir, "/full_metadata2.tsv"))
 ggsave(filename = paste0(opt$out, "/reads_per_hospital_filtPhylum.pdf"), greads, width = 7, height = 4)
 
 sample_data(pre_phyloseq_filt)$nreads_filt <- nreads[sample_data(pre_phyloseq_filt)$sampleID]
-## Rarefaction min
-raref_min_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt', as.character(100*opt$minfreq), '_rarefMin.RData')
-if(!file.exists(raref_min_filename) | opt$rewrite){
-  pre_phyloseq_rarefied <-rarefy_even_depth(pre_phyloseq_filt, rngseed = SEED)
-  save(pre_phyloseq_rarefied, file =raref_min_filename)
-}else{
-  load(raref_min_filename)
+
+#### ONLY TRIBIOME
+## Calculate prevalence
+phseq_only_tribiome <- phyloseq::subset_samples(pre_phyloseq1, Group == "Control")
+
+ottmp2 <- phyloseq::otu_table(phseq_only_tribiome)
+pre_prevalence2 <- apply(X = ottmp2,
+                        MARGIN = ifelse(taxa_are_rows(phseq_only_tribiome), yes = 1, no = 2),
+                        FUN = function(x){sum(x > opt$mincountspersample)})
+pre_prevalence2 = data.frame(Prevalence = pre_prevalence2,
+                            TotalAbundance = phyloseq::taxa_sums(phseq_only_tribiome),
+                            tax_table(phseq_only_tribiome), 
+                            relative_prevalence = pre_prevalence2/ nsamples(phseq_only_tribiome)
+)
+write_tsv(pre_prevalence2, paste0(opt$out, "/raw_prevalence_onlyTribiome.tsv"))
+prevalenceThreshold2 = opt$minfreq * nsamples(phseq_only_tribiome)
+keepTaxa = rownames(pre_prevalence2)[(pre_prevalence2$Prevalence >= prevalenceThreshold2)]
+(phseq_only_tribiome_filt = prune_taxa(keepTaxa, phseq_only_tribiome))
+ 
+## Sibo + Tbm thin
+phseq_only_sibonormw <- phyloseq::subset_samples(pre_phyloseq1, Weight != "Overweight")
+
+ottmp2 <- phyloseq::otu_table(phseq_only_sibonormw)
+pre_prevalence2 <- apply(X = ottmp2,
+                         MARGIN = ifelse(taxa_are_rows(phseq_only_sibonormw), yes = 1, no = 2),
+                         FUN = function(x){sum(x > opt$mincountspersample)})
+pre_prevalence2 = data.frame(Prevalence = pre_prevalence2,
+                             TotalAbundance = phyloseq::taxa_sums(phseq_only_sibonormw),
+                             tax_table(phseq_only_sibonormw), 
+                             relative_prevalence = pre_prevalence2/ nsamples(phseq_only_sibonormw)
+)
+write_tsv(pre_prevalence2, paste0(opt$out, "/raw_prevalence_onlySiboAndTribiomeNormalWeight.tsv"))
+prevalenceThreshold2 = opt$minfreq * nsamples(phseq_only_sibonormw)
+keepTaxa = rownames(pre_prevalence2)[(pre_prevalence2$Prevalence >= prevalenceThreshold2)]
+(phseq_only_sibonormw_filt = prune_taxa(keepTaxa, phseq_only_sibonormw))
+
+
+## Aggregated:
+
+
+all_phyloseq <- list(all_raw = pre_phyloseq1, 
+                     all_filt = pre_phyloseq_filt, 
+                     tribiome_raw = phseq_only_tribiome, 
+                     tribiome_filt = phseq_only_tribiome_filt,
+                     normalw_raw = phseq_only_sibonormw,
+                     normalw_raw_filt = phseq_only_sibonormw_filt
+                     )
+
+
+for(lev in c("Phylum", "Genus", "Species")){
+  cat(lev, "\n")
+  all_phyloseq[[paste0("all_raw_", lev)]] <- tax_glom_custom(pre_phyloseq1, taxrank = lev)
+  all_phyloseq[[paste0("tribiome_raw_", lev)]] <- tax_glom_custom(phseq_only_tribiome, taxrank = lev)
+  all_phyloseq[[paste0("normalw_raw_", lev)]] <- tax_glom_custom(phseq_only_sibonormw, taxrank = lev)
 }
 
-## Rarefaction 0.15
-min_depth <- otu_table(pre_phyloseq_filt) %>% colSums() %>% quantile(opt$raref_quant)
-raref_quant_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt_raref_quant', as.character(100*opt$raref_quant), '.RData')
-if(!file.exists(raref_quant_filename) | opt$rewrite){
-  pre_phyloseq_rarefied2 <-rarefy_even_depth(pre_phyloseq_filt, sample.size = min_depth, rngseed = SEED)
-  save(pre_phyloseq_rarefied2, file =raref_quant_filename)
-}else{
-  load(raref_quant_filename)
+for(nn in names(all_phyloseq)){
+  all_phyloseq[[paste0(nn, "_rarefied_min")]] <- rarefy_even_depth(all_phyloseq[[nn]], rngseed = SEED)
 }
-muestras_eliminadas <- sample_names(pre_phyloseq_filt)[!sample_names(pre_phyloseq_filt) %in% sample_names(pre_phyloseq_rarefied2)] 
-
-eliminadas_df <- meta3 %>% 
-  dplyr::filter(sampleID %in% muestras_eliminadas) %>% 
-  dplyr::arrange(nreads_filt)
-eliminadas_df %>% write_tsv(file=paste0(path_phyloseq, "/muestras_eliminadas_raref", as.character(opt$raref_quant), ".tsv"))
 
 
 allphyloseqlist_fname <- paste0(path_phyloseq, "/phyloseq_all_list.RData")
-if(!file.exists(allphyloseqlist_fname) | opt$rewrite){
-  all_phyloseq <- list(#raw = pre_phyloseq1, 
-    filt = pre_phyloseq_filt, 
-    rarefied_min = pre_phyloseq_rarefied, 
-    rarefied_quant = pre_phyloseq_rarefied2
-  )
-  save(all_phyloseq, file=allphyloseqlist_fname)
-}else{
-  load(allphyloseqlist_fname)
-}
+save(all_phyloseq, file=allphyloseqlist_fname)

@@ -20,6 +20,8 @@ C_WHITE= "#DDDDDD"
 C_NS =  "#A5ABBD" #"rgba(224, 224, 224, 0.8)"
 C_OTHER = "gray30"
 
+signif_codes <- list(cutpoints = c(0, 0.001, 0.01, 0.05, Inf), symbols = c("***", "**", "*", "ns"))
+
 options(ggplot2.continuous.fill="viridis")
 options(ggplot2.continuous.colour="viridis")
 
@@ -52,6 +54,7 @@ mystyle <- theme_classic() +
 thin_barplot_lines <- theme(panel.grid.major.y = element_line(color = "lightgray",
                                                               size = 0.05,
                                                               linetype = 2))
+
 
 restauraropt_mk <- function(opt){
   output <- opt$out
@@ -394,8 +397,10 @@ getAlphaDiversity <- function(phseq_obj, vars, qvars= c(),
   
   #Get Alpha Diversity values
   divtab <- calculateAlphaDiversityTable(phseq_obj, outdir, indices, name)
-  vars <-  map_vec(divtab[, vars], \(x)length(unique(x[!is.na(x)]))) %>% 
-    base::subset(. > 1) %>% names
+  if(length(vars)>1){
+    vars <-  map_vec(divtab[, vars], \(x)length(unique(x[!is.na(x)]))) %>% 
+      base::subset(. > 1) %>% names
+  }
   # Get statistical tests (not used later)
   alphadif <- testDiversityDifferences(divtab, indices, vars, outdir, name)
   plots <- list()
@@ -411,11 +416,16 @@ getAlphaDiversity <- function(phseq_obj, vars, qvars= c(),
     divtab2[, v] <- as.character(divtab2[, v])
     
     comp <- combn(unique(divtab2[, v]), 2, simplify = F)
-    num_comparisons <- alphadif %>% 
-      filter(comparison != "all" & 
+    
+    if(length(comp) > 1){
+      num_comparisons <- alphadif %>% 
+        filter(comparison != "all" & 
                groups == v & 
                variable == "Observed") %>% 
       nrow
+    }else{
+      num_comparisons <- 1
+    }
     if(correct_pvalues & num_comparisons*length(indices)>1){
       signif_levels_bonferroni <- c(signif_levels[1:3]/(num_comparisons*length(indices)), signif_levels[4])
     }else{
@@ -435,7 +445,7 @@ getAlphaDiversity <- function(phseq_obj, vars, qvars= c(),
       #scale_color_manual(values = c("#ffafcc", "#90DBF4")) + 
       #scale_fill_manual(values = c("#ffafcc", "#90DBF4")) +
       #scale_color_lancet() + 
-      scale_color_npg() +
+      scale_color_d3() +
       labs(title = v, x = '') +
       theme_pubclean() +
       mytheme +
@@ -453,8 +463,11 @@ getAlphaDiversity <- function(phseq_obj, vars, qvars= c(),
     #theme(axis.text.x = element_text(angle = 360, hjust = 0.5, size = 10))
   } #Plots qualitative variables
   
-  regressions <- testDiversityWithQuantVars(divtab, indices, qvars, outdir, paste0(name, "QuantVarsRegression"))
-  
+  if(length(qvars) > 0){
+    regressions <- testDiversityWithQuantVars(divtab, indices, qvars, outdir, paste0(name, "QuantVarsRegression"))
+  }else{
+    regressions <- list()
+  }
   for(v in qvars){
     auxtext <- regressions %>% filter(predictor == v) %>% 
       dplyr::mutate(text = paste0("R^2=", as.character(round(r.squared, 2)), ", p=", as.character(round(p.value, 3)) ))
@@ -2008,6 +2021,8 @@ makeHeatmap <- function(resdf, dds, df2plot,
   }
   w <- if(ncol(mat)>10) w+0.05*ncol(mat) else 7
   h <- if(nrow(mat)>10) h+0.05*nrow(mat) else 7
+  max_chars <- max(nchar(rownames(mat))) 
+  if(max_chars >20) w <- w + 1.5*max_chars/20
   pdf(outname, width = w, height = h)
   print(hm)
   tmp <- dev.off()
