@@ -34,7 +34,7 @@ getCazyClass <- function(cazy_tt){
   return(cazy_class)
 }
 
-limma4functional <- function(df2, metad2, interestvar = "Condition", covars=c()){
+limma4functional <- function(df2, metad2, interestvar = "Condition", covars=c(), levs2compare=c()){
   library(limma)
   metad2 <- metad2 %>% filter(!is.na(!!sym(interestvar)))
   covars <- janitor::make_clean_names(covars)
@@ -66,7 +66,11 @@ limma4functional <- function(df2, metad2, interestvar = "Condition", covars=c())
   fit <- lmFit(expr, design)
   
   if(class(metad2[, interestvar]) == "factor"){
+    if(length(levs2compare) == 0){
       levs <- unique(metad2[, interestvar])
+    }else{
+      levs <- levs2compare
+    }
       contrname <- paste0(levs[2], "_vs_", levs[1])
       contrfor <- paste0(contrname, " = ", levs[2], " - ", levs[1])
       texpr <- paste0("makeContrasts(", contrfor, ", levels = design)")

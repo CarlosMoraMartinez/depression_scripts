@@ -41,7 +41,7 @@ if(MODE == "IATA"){
               
               functional_script =  paste0(BASEDIR, "/code/depression_scripts/functional_daa.R"),
               functional_functions =paste0(BASEDIR, "/code/depression_scripts/functional_auxiliary_functions.R"),
-              input_funcional = "/home/carlos/projects/EvaMouse_Otcubre2024/Results_cluster/Results1/mg15_translateHumann/",
+              input_funcional = "/home/carlos/projects/EvaMouse_Otcubre2024/Results_cluster/Results_20_newTrim/krakendb3_humann/mg15_translateHumann/",
               
               make_permanova_script = paste0(BASEDIR, "/code/depression_scripts/make_permanova.R"),
               daa_include_single_covariate = paste0(BASEDIR, "/code/depression_scripts/daa_include_single_covariate.R"),

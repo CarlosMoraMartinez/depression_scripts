@@ -4,7 +4,7 @@
 library(omixerRpm)
 library(stringr)
 
-dat <- read.table("/home/ccarlos/Documentos/202309_DEPRESION/results_cluster/mg13_humann3_all/merge2/humann3_merged_genetables_KO_CPM.tsv",
+dat <- read.table("/home/carlos/projects/EvaMouse_Otcubre2024/Results_cluster/Results_20_newTrim/krakendb3_humann/mg15_translateHumann/humann3_merged_genetables_KO_CPM.tsv",
                   sep = "\t",
                   header = TRUE,
                   comment.char = "")

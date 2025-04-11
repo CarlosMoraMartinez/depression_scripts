@@ -50,7 +50,7 @@ vars2heatmap <- c("Treatment", "Region_sequenced", "Stress", "flowcell")
 opt$mincount <- 10
 opt$minsampleswithcount <- 3
 phseq_to_use <- names(all_phyloseq)[10]
-deseqname = "DeSEQ2_v8/"
+deseqname = "DeSEQ2_v9/"
 
 for(phname in phseq_to_use){
   # cat("Doing DESeq2 Analysys for: ", phname, "\n")
@@ -73,13 +73,14 @@ for(phname in phseq_to_use){
   
 }
 opt <- restaurar(opt)
-save(daa_all, file = paste0(opt$out, deseqname, "DESEQ2_all.RData"))
+#save(daa_all, file = paste0(opt$out, deseqname, "DESEQ2_all.RData"))
 
 load(paste0(opt$out, deseqname, "DESEQ2_all.RData"))
 
 combs_cp <- ALL_COMBINS
 names(combs_cp) <- sapply(combs_cp, \(x) paste(x[1], x[3], "vs", x[2], sep="_"))
 vars2heatmap2 <- vars2heatmap[1:2]
+
 
 for(phname in phseq_to_use){
   phobj <- all_phyloseq[[phname]] 
