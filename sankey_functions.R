@@ -11,7 +11,8 @@ library(reticulate)
 # virtualenv_install("r-reticulate", "plotly")
 # use_virtualenv("r-reticulate")
 
-use_python("/usr/bin/python")
+#use_python("/usr/bin/python")
+use_python("/home/carlos/miniforge3/bin/python")
 
 C_CASE = "#FD8B2F" #"rgba(200, 44, 44, 0.8)"
 C_CASE_LINK = "#fBd895" #"#f9c784"

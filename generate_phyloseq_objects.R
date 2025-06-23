@@ -1,5 +1,5 @@
 ########################################
-# Generate all Phyloseqs 
+# Generate all Phyloseqs
 ########################################
 
 ########################################
@@ -33,7 +33,7 @@ pre_prevalence <- apply(X = ottmp,
                         FUN = function(x){sum(x > opt$mincountspersample)})
 pre_prevalence = data.frame(Prevalence = pre_prevalence,
                             TotalAbundance = phyloseq::taxa_sums(pre_phyloseq1),
-                            tax_table(pre_phyloseq1), 
+                            tax_table(pre_phyloseq1),
                             relative_prevalence = pre_prevalence/ nsamples(pre_phyloseq1)
 )
 write_tsv(pre_prevalence, paste0(opt$out, "/raw_prevalence.tsv"))
@@ -44,6 +44,14 @@ keepTaxa = rownames(pre_prevalence)[(pre_prevalence$Prevalence >= prevalenceThre
 (pre_phyloseq_filt = prune_taxa(keepTaxa, pre_phyloseq1))
 filtered_phyloseq_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt', as.character(100*opt$minfreq), '.RData')
 save(pre_phyloseq_filt, file = filtered_phyloseq_filename)
+
+# raref curve:
+#otu.rarecurve = rarecurve(otu_table(pre_phyloseq_filt) %>% t %>% as.data.frame(), step = 10000, label = T)
+grar <- makeRarefactionCurve(pre_phyloseq_filt, opt, add_hlines=FALSE)
+ggsave(paste0(opt$out, "/00_plot_rarecurve2d.pdf"), grar$plot, width = 8, height =6)
+save(grar, file=paste0(opt$out, "/00_plot_rarecurve2d.RData"))
+
+grar2 <- makeRarefactionCurve(pre_phyloseq1, opt, add_hlines=FALSE, name="unfilt")
 
 ## Rarefaction min
 raref_min_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt', as.character(100*opt$minfreq), '_rarefMin.RData')
@@ -66,10 +74,10 @@ if(!file.exists(raref_quant_filename) | opt$rewrite){
 muestras_eliminadas <- sample_names(pre_phyloseq_filt)[!sample_names(pre_phyloseq_filt) %in% sample_names(pre_phyloseq_rarefied2)]
 nreads <- otu_table(pre_phyloseq_filt) %>% colSums()
 
-eliminadas_df <- metadata %>% 
-  dplyr::filter(sampleID %in% muestras_eliminadas) %>% 
-  dplyr::select(sampleID, PROCEDENCIA, Tanda, CP, Sexo, obesidad) %>% 
-  dplyr::mutate(reads = nreads[as.character(sampleID)]) %>% 
+eliminadas_df <- metadata %>%
+  dplyr::filter(sampleID %in% muestras_eliminadas) %>%
+  dplyr::select(sampleID, PROCEDENCIA, Tanda, CP, Sexo, obesidad) %>%
+  dplyr::mutate(reads = nreads[as.character(sampleID)]) %>%
   dplyr::arrange(reads)
 eliminadas_df %>% write_tsv(file=paste0(opt$out, "/muestras_eliminadas_raref", as.character(opt$raref_quant), ".tsv"))
 
@@ -77,7 +85,7 @@ eliminadas_df %>% write_tsv(file=paste0(opt$out, "/muestras_eliminadas_raref", a
 rmtanda2_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTanda2.RData')
 standa1 <- metadata %>% dplyr::filter(Tanda==1) %>% pull(sampleID) %>% as.character()
 if(!file.exists(rmtanda2_fname) | opt$rewrite){
-  pre_phyloseq_removet2 <- phyloseq::prune_samples(standa1, pre_phyloseq_filt) 
+  pre_phyloseq_removet2 <- phyloseq::prune_samples(standa1, pre_phyloseq_filt)
   save(pre_phyloseq_removet2, file = rmtanda2_fname)
 }else{load(rmtanda2_fname)}
 
@@ -102,8 +110,8 @@ if(!file.exists(phseq_batch_tanda_fname) | opt$rewrite){
   phseq_batch_tanda <- phyloseq(sample_data(data_matrix),
                                 otu_table(adjusted, taxa_are_rows = TRUE),
                                 tax_table(as.matrix(classification)))
-  
-  
+
+
   save(phseq_batch_tanda, file =phseq_batch_tanda_fname)
 }else{
   load(phseq_batch_tanda_fname)
@@ -133,37 +141,37 @@ if(!file.exists(phseq_batch_tanda_raref_fname) | opt$rewrite){
 
 ## Remove batch effect with biological covariates --> DOES NOT WORK
 # data_matrix2 <- data_matrix %>% dplyr::select(Sexo, Edad, IMC, Condition) %>% as.matrix
-# s2remove <- is.na(data_matrix2) %>% rowSums 
+# s2remove <- is.na(data_matrix2) %>% rowSums
 # s2remove <- names(s2remove)[s2remove>0]
 # data_matrix2 <- data_matrix2[! rownames(data_matrix2) %in% s2remove, ]
 # data_matrix2 <- data_matrix2[! rownames(data_matrix2) %in% s2remove, ]
 # count_matrix2 <- count_matrix[, !colnames(count_matrix) %in% s2remove]
 # tanda2 <- data_matrix$Tanda[!data_matrix$sampleID %in% s2remove]
-# 
+#
 # adjusted2 <- ComBat_seq(count_matrix2, batch=tanda2, group=data_matrix2)
 
 # Rm samples with co-morbidities
 rmdisease_fname <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTanda2_noDisease.RData')
 standa1 <- metadata %>% dplyr::filter(Tanda==1 & is.na(COMORBILIDADES)) %>% pull(sampleID) %>% as.character()
 if(!file.exists(rmdisease_fname) | opt$rewrite){
-  pre_phyloseq_removet2_and_comor <- phyloseq::prune_samples(standa1, pre_phyloseq_filt) 
+  pre_phyloseq_removet2_and_comor <- phyloseq::prune_samples(standa1, pre_phyloseq_filt)
   save(pre_phyloseq_removet2_and_comor, file = rmdisease_fname)
 }else{load(rmdisease_fname)}
 
 
 allphyloseqlist_fname <- paste0(path_phyloseq, "/phyloseq_all_list.RData")
 if(!file.exists(allphyloseqlist_fname) | opt$rewrite){
-  all_phyloseq <- list(#raw = pre_phyloseq1, 
-    filt = pre_phyloseq_filt, 
-    rarefied_min = pre_phyloseq_rarefied, 
-    rarefied_quant = pre_phyloseq_rarefied2, 
-    remove_tanda2 = pre_phyloseq_removet2, 
+  all_phyloseq <- list(#raw = pre_phyloseq1,
+    filt = pre_phyloseq_filt,
+    rarefied_min = pre_phyloseq_rarefied,
+    rarefied_quant = pre_phyloseq_rarefied2,
+    remove_tanda2 = pre_phyloseq_removet2,
     remove_tanda2_rarefied_min = pre_phyloseq_rarefied_not2,
     remove_t2_and_comorb = pre_phyloseq_removet2_and_comor,
     rmbatch_tanda =phseq_batch_tanda,
     rmbatch_tanda_shrink = phseq_batch_tanda_shrink,
     rmbatch_tanda_raref =phseq_batch_tanda_raref
-    
+
   )
   save(all_phyloseq, file=allphyloseqlist_fname)
 }else{

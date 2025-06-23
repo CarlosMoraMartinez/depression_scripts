@@ -573,8 +573,8 @@ makeLinePlotComparingPhobjs <- function(all_model_results, opt, models_name1="pa
 }
 
 makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
-                                                w=8, h=12, get_pcnames_from="padj_taxa_res"){
-  outdir <- paste0(opt$out, phname)
+                                                w=8, h=12, get_pcnames_from="padj_taxa_res", plot_extra=FALSE){
+  outdir <- paste0(opt$out, "/", phname)
   
   resph <- all_model_results[[phname]]
   pcnames <- resph[[get_pcnames_from]]$varnames
@@ -585,6 +585,15 @@ makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
       resph$padj_taxa_res_indiv$allmodsum
     )
   }
+  if("padj_taxa_res05linda" %in% names(resph) & plot_extra){
+    linda_pcnames <- resph[["padj_taxa_res05linda"]]$varnames
+    aux <- resph[["padj_taxa_res05linda"]]$modummary %>% dplyr::mutate(sel_method = "PCA LinDA", varsused = paste(linda_pcnames, collapse="|"))
+    tabs <- rbind(
+      tabs, 
+      aux
+    )
+  }
+  
   write_tsv(tabs, file = paste0(outdir, phname, "_modelSummariesWithIndividualSpecies.tsv"))
   tabs2plot <- tabs %>% 
     dplyr::filter(!grepl("\\+", sel_method)) %>% 
@@ -714,7 +723,7 @@ makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
        width = 6, height = 3)
 
   cw <- cowplot::plot_grid(plotlist=list(g2, g3, g4), ncol = 1)
-  pdf(paste0(outdir, "/", phname, "_all_model_combined.pdf"), width = w, height = h)
+  pdf(paste0(outdir, "/", phname, ifelse(plot_extra, "_LinDA_", "") , "_all_model_combined.pdf"), width = w, height = h)
   print(cw)
   dev.off()
 
@@ -724,7 +733,7 @@ makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
   dev.off()
 
   cw <- cowplot::plot_grid(plotlist=list(g2, g5, g3, g4), ncol = 1)
-  pdf(paste0(outdir, "/", phname, "_all_model_combined3.pdf"), width = w, height = w*1.7)
+  pdf(paste0(outdir, "/", phname,ifelse(plot_extra, "_LinDA_", "") , "_all_model_combined3.pdf"), width = w, height = w*1.7)
   print(cw)
   dev.off()
 

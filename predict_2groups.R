@@ -1,5 +1,9 @@
 # Predict  
 source(opt$predictive_functions)
+load("/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/results_rstudio_10/DeSEQ2/DESEQ2_all.RData")
+load("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/phyloseq_original/phyloseq_all_list.RData")
+load("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/DAA_linda/lindalist.RData")
+
 #opt$out <- "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_1/"
 vars2pca <- c("Condition", "Sexo", "Edad")
 phseq_to_use <- c("remove_tanda2")
@@ -22,33 +26,46 @@ for(i in phseq_to_use){
     pull(taxon)
   taxa_praw <- daa_all[[i]]$resdf %>% dplyr::filter(pvalue <= opt$pval & abs(log2FoldChangeShrink) >= log2(opt$fc) ) %>% 
     pull(taxon)
+  
+  taxa_linda_padj <- lindalist$firstContrast$resdf %>% dplyr::filter(padj <= opt$pval & abs(log2FoldChangeShrink) >= log2(opt$fc) ) %>% 
+    pull(taxon)
+  
   df2pca <- if(is.null(daa_all[[i]]$vst_counts_df)){ daa_all[[i]]$norm_counts_df}else{ daa_all[[i]]$vst_counts_df }
   all_pcas_adj <- makeAllPCAs(phobj, df2pca, taxa_padj, vars2pca, opt, "DiffTaxaPadj")
   all_pcas_praw <- makeAllPCAs(phobj, df2pca, taxa_praw, vars2pca, opt, "DiffTaxaPraw")
+  all_pcas_linda_padj <- makeAllPCAs(phobj, df2pca, taxa_linda_padj, vars2pca, opt, "DiffTaxaLindaPadj")
   
   taxa_padj01 <- daa_all[[i]]$resdf %>% dplyr::filter(padj <= 0.01 & abs(log2FoldChangeShrink) >= log2(opt$fc) ) %>% 
     pull(taxon)
   taxa_padj001 <- daa_all[[i]]$resdf %>% dplyr::filter(padj <= 0.001 & abs(log2FoldChangeShrink) >= log2(opt$fc) ) %>% 
     pull(taxon)
+  taxa_padj01_linda <- lindalist$firstContrast$resdf %>% dplyr::filter(padj <= 0.01 & abs(log2FoldChangeShrink) >= log2(opt$fc) ) %>% 
+    pull(taxon)
   all_pcas_adj01 <- makeAllPCAs(phobj, df2pca, taxa_padj01, vars2pca, opt, "DiffTaxaPadj01")
   all_pcas_adj001 <- makeAllPCAs(phobj, df2pca, taxa_padj001, vars2pca, opt, "DiffTaxaPadj001")
+  all_pcas_adj01_linda <- makeAllPCAs(phobj, df2pca, taxa_padj01_linda, vars2pca, opt, "DiffTaxaLindaPadj01")
   
   this_metadata <- sample_data(phobj) %>% data.frame
   all_model_results[[i]][["padj_taxa_taxa"]] <- taxa_padj
   all_model_results[[i]][["praw_taxa_taxa"]] <- taxa_praw
+  all_model_results[[i]][["padjlinda_taxa_taxa"]] <- taxa_linda_padj
   all_model_results[[i]][["padj_taxa_pcas"]] <- all_pcas_adj
   all_model_results[[i]][["praw_taxa_pcas"]] <- all_pcas_praw
+  all_model_results[[i]][["padjlinda_taxa_pcas"]] <- all_pcas_linda_padj
   all_model_results[[i]][["padj_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadj"), metadata=this_metadata, vars2pca=c("Condition"))
   all_model_results[[i]][["praw_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPraw"), metadata=this_metadata, vars2pca=c("Condition"))
   all_model_results[[i]][["padj_taxa_res01"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01, name=paste0(i, "ConditionPadj01"), metadata=this_metadata, vars2pca=c("Condition"))
   all_model_results[[i]][["padj_taxa_res001"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj001, name=paste0(i, "ConditionPadj001"), metadata=this_metadata, vars2pca=c("Condition"))
+  all_model_results[[i]][["padj_taxa_res05linda"]] <- callDoAllModelsFromALLPCAs(all_pcas_linda_padj, name=paste0(i, "ConditionPadjLinda05"), metadata=this_metadata, vars2pca=c("Condition"))
+  all_model_results[[i]][["padj_taxa_res01linda"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01_linda, name=paste0(i, "ConditionPadjLinda01"), metadata=this_metadata, vars2pca=c("Condition"))
+  
   
   PCs <- all_model_results[[i]][["padj_taxa_res"]]$varnames
   modelo_svm <- all_model_results[[i]][["padj_taxa_res"]]$models$`SVM-linear`$mod_noscale
   all_model_results[[i]][["padj_taxa_res_indiv"]] <- callDoAllModelsFromALLPCAsOriginalVars(all_pcas_adj, PCs, modelo_svm, 
                                                                                             df2pca, 
                                                                                             paste0(i, "_ConditionPadjIndiv"), 
-                                                                                            vars2pca=c("Condition"), s_meta,
+                                                                                            vars2pca=c("Condition"), this_metadata,
                                                                                             daa_all[[i]]$resdf, 
                                                                                             topns = c(5, 10, 20))
   

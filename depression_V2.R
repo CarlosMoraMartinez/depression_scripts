@@ -22,7 +22,7 @@ MODE = "LOCAL"
 
 if(MODE == "IATA"){
   opt <- list(out ="/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_v2_3/",
-            indir = "/home/ccarlos/Documentos/202309_DEPRESION/results_cluster/mg09_combinempa/" ,
+            indir = "/home/ccarlos/Documentos/202311_DEPRESION/202311_DEPRESION/mg09_combinempa/" ,
             r_functions="/home/ccarlos/repos/depression_analysis/metagenomics_core_functions.R",
             predictive_functions="/home/ccarlos/repos/depression_analysis/predictive_functions.R",
             metadata = "/home/ccarlos/Documentos/202309_DEPRESION/metadatos_MC_AL 12042023_CMcopy.xlsx",
@@ -32,42 +32,42 @@ if(MODE == "IATA"){
             mincount= 1,
             minsampleswithcount = 0,
             raref_quant = 0.15,
-            fc=1, 
-            pval=0.05, 
-            ptype="adjusted", 
+            fc=1,
+            pval=0.05,
+            ptype="adjusted",
             fctype="shrunk",
             num_genes_default=5
             )
 }else{
-  opt <- list(out ="/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_10/",
-              indir = "/home/carmoma/Desktop/202311_DEPRESION/mg09_combinempa/" ,
-              r_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/metagenomics_core_functions.R",
-              predictive_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/predictive_functions.R",
-              read_metadata_script = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/read_metadata.R",
-              create_phyloseq_script = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/generate_phyloseq_objects.R",
-              read_otutable_script = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/read_otu_table.R",
-              alpha_beta_script = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/alpha_beta_abund.R",
-              daa_main_condition = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_main_condition.R",
-              make_permanova_script = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/make_permanova.R",
-              daa_include_single_covariate = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_include_single_covariate.R",
-              daa_only_covariates = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_include_only_covariate.R",
-              daa_many_covariates = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_include_several_covariates.R",
-              metadata = "/home/carmoma/Desktop/202311_DEPRESION/metadatos_MC_AL12042023_CM_corrected.xlsx",
-              predict_2groups = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/predict_2groups.R",
-              daa_sep_by_group = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_sep_by_group.R",
-              daa_with_scales = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_with_scales.R",
-              daa_integrate_with_and_without_correction = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_integrate_with_and_without_correction.R",
-              daa_integrate_all_contrasts = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/daa_integrate_all_contrasts.R",
-              predict_4groups = "/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/predict_4groups",
+  opt <- list(out ="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/",
+              indir = "/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/mg09_combinempa/" ,
+              r_functions="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/metagenomics_core_functions.R",
+              predictive_functions="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/predictive_functions.R",
+              read_metadata_script = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/read_metadata.R",
+              create_phyloseq_script = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/generate_phyloseq_objects.R",
+              read_otutable_script = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/read_otu_table.R",
+              alpha_beta_script = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/alpha_beta_abund.R",
+              daa_main_condition = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/daa_main_condition.R",
+              make_permanova_script = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/make_permanova.R",
+              daa_include_single_covariate = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/daa_include_single_covariate.R",
+              daa_only_covariates = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/daa_include_only_covariate.R",
+              daa_many_covariates = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/daa_include_several_covariates.R",
+              metadata = "/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/metadatos_MC_AL12042023_CM_corrected.xlsx",
+              predict_2groups = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/predict_2groups.R",
+              daa_sep_by_group = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/daa_sep_by_group.R",
+              daa_with_scales = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/daa_with_scales.R",
+              daa_integrate_with_and_without_correction = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/daa_integrate_with_and_without_correction.R",
+              daa_integrate_all_contrasts = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/daa_integrate_all_contrasts.R",
+              predict_4groups = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/predict_4groups.R",
               rewrite=FALSE,
               minfreq = 0.05,
               mincountspersample = 0,
               mincount= 1,
               minsampleswithcount = 0,
               raref_quant = 0.15,
-              fc=1, 
-              pval=0.05, 
-              ptype="adjusted", 
+              fc=1,
+              pval=0.05,
+              ptype="adjusted",
               fctype="shrunk",
               num_genes_default=5
   )
@@ -84,7 +84,7 @@ source(opt$read_otutable_script)
 source(opt$read_metadata_script)
 # Create phyloseq objects
 source(opt$create_phyloseq_script)
-# Alpha and Beta diversity. Descriptive 
+# Alpha and Beta diversity. Descriptive
 source(opt$alpha_beta_script)
 
 # DESeq 4 each
@@ -117,7 +117,7 @@ source(opt$daa_with_scales)
 
 #Integrate all contrasts
 source(opt$daa_integrate_with_and_without_correction)
-#load("/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_4/DeSEQ2/remove_tanda2/DESEQ2_all_results_remove_tanda2.R")
+#load("/home/carlos/Escritorio/202311_DEPRESION/results_rstudio_v2_4/DeSEQ2/remove_tanda2/DESEQ2_all_results_remove_tanda2.R")
 source(opt$daa_integrate_all_contrasts)
 
 #####################################

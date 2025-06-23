@@ -1,4 +1,6 @@
 
+load(paste0(opt$out, "/phyloseq_original/phyloseq_all_list.RData"))
+
 exclude_vars <- c("sampleID", "CODIGO", "CP")
 dtypes <- c("bray", "jaccard")
 
@@ -6,7 +8,8 @@ outdir <- paste0(opt$out, "PERMANOVA/")
 if(!dir.exists(outdir)) dir.create(outdir)
 permaresults <- list()
 
-for(i in names(all_phyloseq)){
+phseq2use <- "remove_tanda2_rarefied_min"
+for(i in phseq2use){
   cat("Doing PERMANOVA of: ", i)
   phobj <- all_phyloseq[[i]]
   permaresults[[i]] <- lapply(dtypes, FUN=function(dd, phobj, exclude_vars, SEED){
@@ -19,7 +22,7 @@ for(i in names(all_phyloseq)){
   names(permaresults[[i]]) <- dtypes
 }
 
-
+permaresults$remove_tanda2_rarefied_min$bray %>% filter(variable %in% c("Condition", "Edad", "Sexo", "IMC"))
 ### ADONIS with multiple variables
 permaformulas <- c(
   "braydist ~ Condition + Sexo",
@@ -34,7 +37,7 @@ permaformulas <- c(
 )
 
 permaresults_mult <- list()
-for(i in names(all_phyloseq)){
+for(i in phseq2use){
   cat("Doing PERMANOVA of: ", i)
   phobj <- all_phyloseq[[i]]
   phobj <- updatePsWithLogs(phobj, c("Edad", "BMI"))
