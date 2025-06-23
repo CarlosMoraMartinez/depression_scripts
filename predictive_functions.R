@@ -21,6 +21,10 @@ makeKmeans_l1o <- function(datasc, levs, varnames, SEED=123, folds=c()){
   set.seed(SEED)
   train_df_all <- datasc %>% dplyr::select(-class, -sample)  %>% dplyr::select(all_of(varnames))
   
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
+  
   preds <- c()
   for(i in folds){
     train_df <- train_df_all[-i, ]
@@ -569,7 +573,7 @@ callDoAllModelsFromALLPCAs <- function(all_pcas, name, metadata, vars2pca=c("Con
     dplyr::filter(!is.na(class)) %>% 
     dplyr::mutate(class=factor(class))
   if(length(meta_vars) > 0){
-    meta_filt <- metadata %>% select(sampleID, all_of(meta_vars))
+    meta_filt <- metadata %>% dplyr::select(sampleID, all_of(meta_vars))
     byy <- join_by(sample == sampleID)
     datasc <- datasc %>% inner_join(meta_filt, by=byy)
     
