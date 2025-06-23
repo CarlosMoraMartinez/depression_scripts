@@ -1,8 +1,10 @@
+
+
 library(tidyverse)
 library(caret)
 library(pROC)
 
-makeKmeans <- function(datasc, levs, varnames, SEED=123){
+makeKmeans <- function(datasc, levs, varnames, SEED=123, folds=c()){
   library(stats)
   library(caret)
   set.seed(SEED)
@@ -13,7 +15,51 @@ makeKmeans <- function(datasc, levs, varnames, SEED=123){
   return(list(confmat_no_l1o=confmat_kmeans, mod=mod_kmeans, predicted=predict_kmeans))
 }
 
-makeKnn_l1o <- function(datasc, levs, varnames, different_ks=c(1, 3, 5, 7, 9, 11, 13)){
+makeKmeans_l1o <- function(datasc, levs, varnames, SEED=123, folds=c()){
+  library(stats)
+  library(caret)
+  set.seed(SEED)
+  train_df_all <- datasc %>% dplyr::select(-class, -sample)  %>% dplyr::select(all_of(varnames))
+  
+  preds <- c()
+  for(i in folds){
+    train_df <- train_df_all[-i, ]
+    test_df <- train_df_all[i, ]
+    # Separar clases
+    train_labels <- datasc$class[-i]
+    test_labels <- datasc$class[i]
+    
+    mod_kmeans <- kmeans(train_df, centers=length(levs), iter.max = 100, nstart=100)
+    
+    assign_class <- table(mod_kmeans$cluster, train_labels)
+    assign_class <- colnames(assign_class)[assign_class %>% apply(MAR=1, which.max)]
+    cents <- mod_kmeans$centers
+    rownames(cents) <- assign_class[as.numeric(rownames(cents))]
+    
+    dists <- dist(rbind(cents, test_df)) %>% as.matrix
+    
+    if(length(i)> 1){
+      pred_i <- apply(dists[rownames(test_df),  assign_class], MAR=1, \(x) assign_class[which.min(x)])
+    }else{
+      pred_i <- assign_class[which.min(dists[rownames(test_df),  assign_class])]
+    }
+    preds  <- c(preds, pred_i )
+  }
+  preds <- factor(preds, levels=levels(datasc$class))
+  confmat_kmeans <- confusionMatrix(preds, datasc$class, positive = levs[2])
+  
+  mod_kmeans_all <- kmeans(train_df_all, centers=length(levs), iter.max = 100, nstart=100)
+  predict_kmeans_nol1o <-levels(datasc$class)[mod_kmeans_all$cluster] %>% factor(levels=levs)
+  confmat_kmeans_nol1o <- confusionMatrix(predict_kmeans_nol1o, datasc$class, positive = levs[2])
+  
+  return(list(confmat = confmat_kmeans, 
+              confmat_no_l1o=confmat_kmeans_nol1o, 
+              preds=preds,
+              preds_no_l1o=predict_kmeans_nol1o, 
+              mod=mod_kmeans_all))
+}
+
+makeKnn_l1o <- function(datasc, levs, varnames, different_ks=c(1, 3, 5, 7, 9, 11, 13), folds=c()){
   library(class)
   #library(gmodels)
   
@@ -22,11 +68,15 @@ makeKnn_l1o <- function(datasc, levs, varnames, different_ks=c(1, 3, 5, 7, 9, 11
   train_df_all <- datasc %>% 
     dplyr::select(-class, -sample) %>% 
     dplyr::select(all_of(varnames))
+  
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
   for(k in  different_ks){
     kname = paste("K=", as.character(k), sep="", collapse="")
     results[[kname]] <- list()
     preds <- c()
-    for(i in 1:nrow(datasc)){
+    for(i in folds){
       train_df <- train_df_all[-i, ]
       test_df <- train_df_all[i, ]
       # Separar clases
@@ -59,6 +109,7 @@ makeKnn <- function(datasc, levs, nvars, different_ks=c(1, 3, 5, 7, 9, 11, 13)){
   conf_matrices_knn <- list()
   train_df <- datasc %>% dplyr::select(-class, -sample) %>% dplyr::select(all_of(varnames))
   train_labels <- datasc$class %>% factor(levels=levs)
+  
   for(k in  different_ks){
     kname = paste("K=", as.character(k), sep="", collapse="")
     test_pred[[kname]] <- knn(train_df, train_df, train_labels, k = k, prob = T)
@@ -70,13 +121,16 @@ makeKnn <- function(datasc, levs, nvars, different_ks=c(1, 3, 5, 7, 9, 11, 13)){
   return(list(confmats=conf_matrices_knn, mods=test_pred))
 }
 
-makeNaiveBayes_l1o <- function(datasc, levs, varnames, SEED=123){
+makeNaiveBayes_l1o <- function(datasc, levs, varnames, SEED=123, folds=c()){
   library(e1071)
   set.seed(SEED)
   
   predict_bayes1 <- factor()
   df <- datasc %>% dplyr::select(-class, -sample) %>% dplyr::select(all_of(varnames))
-  for(i in 1:nrow(datasc)){
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
+  for(i in folds){
     # Separar datos
     train_df <- df[-i, ]
     test_df <- df[i, ]
@@ -94,15 +148,21 @@ makeNaiveBayes_l1o <- function(datasc, levs, varnames, SEED=123){
   predict_bayes2 <- predict(modwithall, df)
   confMatrix_bayes2_nol1o <- confusionMatrix(predict_bayes2, datasc$class, 
                                              positive = levs[2])
-  return(list(confmat=confusionMatrix_bayes1, confmat_no_l1o=confMatrix_bayes2_nol1o,
-              preds=predict_bayes1, preds_no_l1o=predict_bayes2, mod=modwithall))
+  return(list(confmat=confusionMatrix_bayes1, 
+              confmat_no_l1o=confMatrix_bayes2_nol1o,
+              preds=predict_bayes1, 
+              preds_no_l1o=predict_bayes2, 
+              mod=modwithall))
 }
 
-make_classifTree_l1o <- function(datasc, levs, varnames){
+make_classifTree_l1o <- function(datasc, levs, varnames, folds=c()){
   library(C50)
   predict_tree1 <- factor()
   df <- datasc %>% dplyr::select(-class, -sample)  %>% dplyr::select(all_of(varnames))
-  for(i in 1:nrow(datasc)){
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
+  for(i in folds){
     # Separar datos
     train_df <- df[-i, ]
     test_df <- df[i, ]
@@ -128,14 +188,17 @@ make_classifTree_l1o <- function(datasc, levs, varnames){
               roc_auc_no_l1o=NULL,
               roc_obj=NULL,
               roc_auc=NULL
-              ))
+  ))
 }
 
-make_randomForest_l1o <- function(datasc, levs, varnames){
+make_randomForest_l1o <- function(datasc, levs, varnames, folds=folds()){
   library(randomForest)
   df <- datasc %>% dplyr::select(-class, -sample)  %>% dplyr::select(all_of(varnames))
   predict_tree1 <- factor()
-  for(i in 1:nrow(datasc)){
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
+  for(i in folds){
     # Separar datos
     train_df <- df[-i, ]
     test_df <- df[i, ]
@@ -162,13 +225,16 @@ make_randomForest_l1o <- function(datasc, levs, varnames){
 }
 
 
-make_svm_l1o <- function(datasc, levs, varnames, kernel="linear", SEED=123){
+make_svm_l1o <- function(datasc, levs, varnames, kernel="linear", SEED=123, folds=c()){
   library(e1071)
   datasc$class <- factor(datasc$class)
   df <- datasc %>% dplyr::select(-class, -sample)  %>% dplyr::select(all_of(varnames))
   predict1 <- factor(levels = levs)
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
   set.seed(SEED)
-  for(i in 1:nrow(datasc)){
+  for(i in folds){
     # Separar datos
     train_df <- df[-i, ]
     test_df <- df[i, ]
@@ -206,11 +272,16 @@ make_svm_l1o <- function(datasc, levs, varnames, kernel="linear", SEED=123){
               roc_auc=NULL))
 }
 
-make_glm_l1o <- function(datasc, levs, varnames){
+make_glm_l1o <- function(datasc, levs, varnames, folds= c()){
   predict_glm1 <- c()
   df <- datasc %>% dplyr::select(-sample) 
   formula <- paste0("class ~ ", paste(varnames, sep="+", collapse="+")) %>% as.formula()
-  for(i in 1:nrow(datasc)){
+  
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
+  
+  for(i in folds){
     # Separar datos
     train_df <- df[-i, ]
     test_df <- df[i, ]
@@ -230,12 +301,17 @@ make_glm_l1o <- function(datasc, levs, varnames){
 }
 
 
-make_glm_l1o_multiclass <- function(datasc, levs, varnames){
+make_glm_l1o_multiclass <- function(datasc, levs, varnames, folds=c()){
   library(nnet)
   predict_glm1 <- c()
   df <- datasc %>% dplyr::select(-sample) 
   formula <- paste0("class ~ ", paste(varnames, sep="+", collapse="+")) %>% as.formula()
-  for(i in 1:nrow(datasc)){
+  
+  if(length(folds)==0){
+    folds <- 1:nrow(datasc)
+  }
+  
+  for(i in folds){
     # Separar datos
     train_df <- df[-i, ]
     test_df <- df[i, ]
@@ -267,9 +343,8 @@ make_glm_l1o_multiclass <- function(datasc, levs, varnames){
               roc_auc_no_l1o=roc_auc_fullmod,
               roc_obj=roc_obj,
               roc_auc=roc_auc
-              ))
+  ))
 }
-
 get_signif_components <- function(datasc, levs){
   df <- datasc %>% dplyr::select(-sample) 
   varnames <- names(df)[names(df)!="class"]
@@ -371,7 +446,7 @@ getTableFromConfmatrices_multiclass <- function(modlist){
   rownames(res) <- NULL
   return(res)
 }
-makeAllModels <- function(datasc, plim=0.01, opt, name="Condition"){
+makeAllModels <- function(datasc, plim=0.01, opt, name="Condition", nfolds=0){
   levs <- datasc %>% pull(class) %>% as.factor %>% levels
   # Select features
   if(length(levs)==2){
@@ -379,25 +454,35 @@ makeAllModels <- function(datasc, plim=0.01, opt, name="Condition"){
   }else{
     compsig <- get_signif_components_multiclass(datasc, levs)
   }
-  write_tsv(compsig, file=paste0(opt$out, "significant_PCAcomponents_", name,".tsv"))
+  
+  tryCatch({readr::write_tsv(compsig, file=paste0(opt$out, "significant_PCAcomponents_", name,".tsv"))},
+           error = function(x){print("ERROR writting sig Components")})
+  
   varnames <- c(compsig$var[compsig$pval <= plim])
   if(length(varnames) < 2){
     varnames <- compsig %>% arrange(pval) %>% head(2) %>% pull(var)
   }
   
-  if(length(levs)==2){
-    res_glms <- make_glm_l1o(datasc, levs, varnames)
+  if(nfolds == 0){
+    folds <- c() ## leave 1 out
   }else{
-    res_glms <- make_glm_l1o_multiclass(datasc, levs, varnames)
+    folds <- createFolds(datasc$class, k = nfolds, list = TRUE, returnTrain = FALSE)
   }
-  res_svm_lin <- make_svm_l1o(datasc, levs, varnames, kernel="linear")
-  res_svm_rad <- make_svm_l1o(datasc, levs, varnames, kernel="radial")
-  res_randfor <- make_randomForest_l1o(datasc, levs, varnames)
-  res_tree <- make_classifTree_l1o(datasc, levs, varnames)
-  res_naivebayes <- makeNaiveBayes_l1o(datasc, levs, varnames, SEED=SEED)
-  res_knn_l1o <- makeKnn_l1o(datasc, levs, varnames, different_ks=seq(1,13, by=2))
+  
+  
+  if(length(levs)==2){
+    res_glms <- make_glm_l1o(datasc, levs, varnames, folds = folds)
+  }else{
+    res_glms <- make_glm_l1o_multiclass(datasc, levs, varnames, folds = folds)
+  }
+  res_svm_lin <- make_svm_l1o(datasc, levs, varnames, kernel="linear", folds = folds)
+  res_svm_rad <- make_svm_l1o(datasc, levs, varnames, kernel="radial", folds = folds)
+  res_randfor <- make_randomForest_l1o(datasc, levs, varnames, folds = folds)
+  res_tree <- make_classifTree_l1o(datasc, levs, varnames, folds = folds)
+  res_naivebayes <- makeNaiveBayes_l1o(datasc, levs, varnames, SEED=SEED, folds = folds)
+  res_knn_l1o <- makeKnn_l1o(datasc, levs, varnames, different_ks=seq(1,13, by=2), folds = folds)
   #res_knn_no_l1o <- makeKnn(datasc, levs, varnames, different_ks=seq(1,13, by=2))
-  res_kmeans <- makeKmeans(datasc, levs, varnames, SEED=SEED)
+  res_kmeans_l1o <- makeKmeans_l1o(datasc, levs, varnames, SEED=SEED, folds = folds)
   
   modlist <- list("logistic_regression" = res_glms, 
                   "SVM-linear"=res_svm_lin, 
@@ -405,7 +490,7 @@ makeAllModels <- function(datasc, plim=0.01, opt, name="Condition"){
                   "RandomForest"=res_randfor,
                   "Tree" = res_tree,
                   "NaiveBayes"=res_naivebayes,
-                  "KMeans"=res_kmeans)
+                  "KMeans"=res_kmeans_l1o)
   if(length(levs)>2)names(modlist)[[1]] <- "Multinom"
   for(k in names(res_knn_l1o)) modlist[[paste0("KNN-", k)]] <- res_knn_l1o[[k]]
   save(modlist, file=paste0(opt$out, "all_models_", name, ".RData"))
@@ -418,6 +503,7 @@ makeAllModels <- function(datasc, plim=0.01, opt, name="Condition"){
   write_tsv(model_res, file=paste0(opt$out,"summary_all_models", name, ".tsv"))
   return(list(models=modlist, modummary=model_res, component_pvals=compsig, varnames=varnames))
 }
+
 
 plotSVM<-function(modelo_svm, datasc, varnames, opt, name){
   #Sacado de: https://rpubs.com/Joaquin_AR/267926
@@ -472,14 +558,23 @@ plotSVM<-function(modelo_svm, datasc, varnames, opt, name){
   return(g1)
 }
 
-callDoAllModelsFromALLPCAs <- function(all_pcas, name, metadata, vars2pca=c("Condition")){
+callDoAllModelsFromALLPCAs <- function(all_pcas, name, metadata, vars2pca=c("Condition"), 
+                                       variable_plim=0.01, 
+                                       meta_vars = c() ,
+                                       nfolds = 0){
   datasc <- all_pcas[[1]]$pca$x %>% 
     as.data.frame %>% 
     rownames_to_column("sample") %>% 
     dplyr::mutate(class=unlist(metadata[match(sample, metadata$sampleID), vars2pca[1]])) %>% 
     dplyr::filter(!is.na(class)) %>% 
     dplyr::mutate(class=factor(class))
-  allmodssumm <- makeAllModels(datasc, plim=0.01, opt, name= name)
+  if(length(meta_vars) > 0){
+    meta_filt <- metadata %>% select(sampleID, all_of(meta_vars))
+    byy <- join_by(sample == sampleID)
+    datasc <- datasc %>% inner_join(meta_filt, by=byy)
+    
+  }
+  allmodssumm <- makeAllModels(datasc, plim=variable_plim, opt, name= name, nfolds = nfolds)
   
   modelo_svm <- allmodssumm$models$`SVM-linear`$mod_noscale
   allmodssumm$plot_svm_rad <-plotSVM(modelo_svm, datasc, allmodssumm$varnames, opt, paste0(name, "_linear"))
@@ -492,7 +587,11 @@ callDoAllModelsFromALLPCAs <- function(all_pcas, name, metadata, vars2pca=c("Con
 
 
 callDoAllModelsFromALLPCAsOriginalVars <- function(all_pcas, PCs, modelo_svm, vstdf, 
-                                                name, vars2pca=c("Condition"), metadata, daares, topns = c(5, 10, 20)){
+                                                   name, vars2pca=c("Condition"), metadata, 
+                                                   daares, topns = c(5, 10, 20),
+                                                   variable_plim=0.01, 
+                                                   meta_vars = c() ,
+                                                   nfolds = 0){
   
   pcts <- summary(all_pcas[[1]]$pca)$importance[2, PCs]
   pcslope <- pcts[1]/pcts[2]
@@ -502,20 +601,20 @@ callDoAllModelsFromALLPCAsOriginalVars <- function(all_pcas, PCs, modelo_svm, vs
   rotvals <- all_pcas[[1]]$pca$rotation %>% as.data.frame %>% dplyr::select(all_of(PCs)) %>% 
     rownames_to_column("taxon") %>% 
     dplyr::mutate(
-           score1 = abs(all_pcas[[1]]$pca$rotation[, PCs[1]]),
-           score2 = abs(all_pcas[[1]]$pca$rotation[, PCs[2]]), 
-           score3 = abs(all_pcas[[1]]$pca$rotation[, PCs[1]]) + abs(all_pcas[[1]]$pca$rotation[, PCs[2]]),
-           score4 = pcslope*abs(all_pcas[[1]]$pca$rotation[, PCs[1]]) + abs(all_pcas[[1]]$pca$rotation[, PCs[2]]),
-           score5 = bslope*abs(all_pcas[[1]]$pca$rotation[, PCs[1]]) + abs(all_pcas[[1]]$pca$rotation[, PCs[2]]),
-           daa_pval  = -10*log10(daares$padj[match(taxon, daares$taxon)])
-           )
+      score1 = abs(all_pcas[[1]]$pca$rotation[, PCs[1]]),
+      score2 = abs(all_pcas[[1]]$pca$rotation[, PCs[2]]), 
+      score3 = abs(all_pcas[[1]]$pca$rotation[, PCs[1]]) + abs(all_pcas[[1]]$pca$rotation[, PCs[2]]),
+      score4 = pcslope*abs(all_pcas[[1]]$pca$rotation[, PCs[1]]) + abs(all_pcas[[1]]$pca$rotation[, PCs[2]]),
+      score5 = bslope*abs(all_pcas[[1]]$pca$rotation[, PCs[1]]) + abs(all_pcas[[1]]$pca$rotation[, PCs[2]]),
+      daa_pval  = -10*log10(daares$padj[match(taxon, daares$taxon)])
+    )
   names(rotvals)[!names(rotvals) %in% c("taxon", PCs)] <- c(paste0(PCs[1], " score"), 
                                                             paste0(PCs[2], " score"), 
                                                             paste0(PCs, collapse="+"),
                                                             paste0(PCs[1], " and ", PCs[2], " combined 2"),
                                                             paste0(PCs[1], " and ", PCs[2], " combined "),
                                                             "DESeq pval"
-                                                            )
+  )
   modresults <- list()
   for(score in names(rotvals)[!names(rotvals) %in% c("taxon", PCs)]){
     for(topn in topns){
@@ -525,7 +624,8 @@ callDoAllModelsFromALLPCAsOriginalVars <- function(all_pcas, PCs, modelo_svm, vs
         as.data.frame() %>% rownames_to_column("sample") %>% 
         dplyr::mutate(class=unlist(metadata[match(sample, metadata$sampleID), vars2pca[1]]))
       names(df2pred) <- gsub("[\\.\\-\\[\\]()]", "", names(df2pred), perl=T)
-      modresults[[paste0(score, ' top ', as.character(topn))]] <- makeAllModels(df2pred, plim=1, opt, name= paste0(name, "_modsIndBacs_", score, "_top", topn))
+      modresults[[paste0(score, ' top ', as.character(topn))]] <- makeAllModels(df2pred, plim=1, opt, name= paste0(name, "_modsIndBacs_", score, "_top", topn), 
+                                                                                nfolds = nfolds)
       modresults[[paste0(score, ' top ', as.character(topn))]]$taxa <- toptaxa
       
     }
@@ -540,6 +640,7 @@ callDoAllModelsFromALLPCAsOriginalVars <- function(all_pcas, PCs, modelo_svm, vs
   
   return(list(fullresults=modresults, allmodsum=modall_table))
 }
+
 
 makeLinePlotComparingPhobjs <- function(all_model_results, opt, models_name1="padj_taxa_res", models_name2="praw_taxa_res"){
   

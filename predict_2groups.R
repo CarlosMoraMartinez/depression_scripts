@@ -7,8 +7,10 @@ load("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/re
 #opt$out <- "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_1/"
 vars2pca <- c("Condition", "Sexo", "Edad")
 phseq_to_use <- c("remove_tanda2")
-                  
-opt$out <- paste0(opt$out, "PredictDAA")
+       
+opt <- restaurar(opt)           
+OUTDNAME <- "PredictDAA_10Fold"
+opt$out <- paste0(opt$out, OUTDNAME)
 if(!dir.exists(opt$out)) dir.create(opt$out)
 opt <- restaurar(opt)
 
@@ -17,7 +19,7 @@ for(i in phseq_to_use){
   cat("Doing Predictive models for: ", i, "\n")
   all_model_results[[i]] <- list()
   phobj <- all_phyloseq[[i]]
-  outdir <- paste0(opt$out, "PredictDAA/", i, "/")
+  outdir <- paste0(opt$out, OUTDNAME, "/", i, "/")
   opt$reserva <- opt$out
   opt$out <- outdir
   if(!dir.exists(opt$out)) dir.create(opt$out)
@@ -52,12 +54,18 @@ for(i in phseq_to_use){
   all_model_results[[i]][["padj_taxa_pcas"]] <- all_pcas_adj
   all_model_results[[i]][["praw_taxa_pcas"]] <- all_pcas_praw
   all_model_results[[i]][["padjlinda_taxa_pcas"]] <- all_pcas_linda_padj
-  all_model_results[[i]][["padj_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadj"), metadata=this_metadata, vars2pca=c("Condition"))
-  all_model_results[[i]][["praw_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPraw"), metadata=this_metadata, vars2pca=c("Condition"))
-  all_model_results[[i]][["padj_taxa_res01"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01, name=paste0(i, "ConditionPadj01"), metadata=this_metadata, vars2pca=c("Condition"))
-  all_model_results[[i]][["padj_taxa_res001"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj001, name=paste0(i, "ConditionPadj001"), metadata=this_metadata, vars2pca=c("Condition"))
-  all_model_results[[i]][["padj_taxa_res05linda"]] <- callDoAllModelsFromALLPCAs(all_pcas_linda_padj, name=paste0(i, "ConditionPadjLinda05"), metadata=this_metadata, vars2pca=c("Condition"))
-  all_model_results[[i]][["padj_taxa_res01linda"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01_linda, name=paste0(i, "ConditionPadjLinda01"), metadata=this_metadata, vars2pca=c("Condition"))
+  all_model_results[[i]][["padj_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadj"), 
+                                                                          metadata=this_metadata, vars2pca=c("Condition"), nfolds = 0)
+  all_model_results[[i]][["praw_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPraw"), 
+                                                                          metadata=this_metadata, vars2pca=c("Condition"), nfolds = 0)
+  all_model_results[[i]][["padj_taxa_res01"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01, name=paste0(i, "ConditionPadj01"), 
+                                                                            metadata=this_metadata, vars2pca=c("Condition"), nfolds = 0)
+  all_model_results[[i]][["padj_taxa_res001"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj001, name=paste0(i, "ConditionPadj001"), 
+                                                                             metadata=this_metadata, vars2pca=c("Condition"), nfolds = 0)
+  all_model_results[[i]][["padj_taxa_res05linda"]] <- callDoAllModelsFromALLPCAs(all_pcas_linda_padj, name=paste0(i, "ConditionPadjLinda05"), 
+                                                                                 metadata=this_metadata, vars2pca=c("Condition"), nfolds = 0)
+  all_model_results[[i]][["padj_taxa_res01linda"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01_linda, name=paste0(i, "ConditionPadjLinda01"), 
+                                                                                 metadata=this_metadata, vars2pca=c("Condition"), nfolds = 0)
   
   
   PCs <- all_model_results[[i]][["padj_taxa_res"]]$varnames
@@ -67,17 +75,17 @@ for(i in phseq_to_use){
                                                                                             paste0(i, "_ConditionPadjIndiv"), 
                                                                                             vars2pca=c("Condition"), this_metadata,
                                                                                             daa_all[[i]]$resdf, 
-                                                                                            topns = c(5, 10, 20))
+                                                                                            topns = c(5, 10, 20), nfolds = 10)
   
   all_model_results[[i]]$metadata <- sample_data(phobj) %>% data.frame
   opt <- restaurar(opt)
 }
 opt <- restaurar(opt)
-save(all_model_results, file=paste0(opt$out, "PredictDAA/all_model_results.RData"))
+save(all_model_results, file=paste0(opt$out, OUTDNAME, "/all_model_results_10xCV.RData"))
 #load(file=paste0(opt$out, "PredictDAA/all_model_results.RData"))
 
 #Integrate
-opt$out <- paste0(opt$out, "PredictDAA/")
+opt$out <- paste0(opt$out, OUTDNAME, "/")
 makeLinePlotComparingPhobjs(all_model_results, opt)
 ## Compare with Bacteria in componets
 
@@ -101,7 +109,7 @@ predplots <- map(names(all_model_results), plotAllModelPredictions, all_model_re
 opt <- restaurar(opt)
 
 library(VennDiagram)
-outdir <- paste0(opt$out, "PredictDAA/VennDiagrams/")
+outdir <- paste0(opt$out, OUTDNAME, "/VennDiagrams/")
 if(!dir.exists(outdir)) dir.create(outdir)
 fname <- paste0(outdir, "/venndiagram_3noraref_padj.png")
 genes2compare <- list(filtered=all_model_results$filt$padj_taxa_taxa,
