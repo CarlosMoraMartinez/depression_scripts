@@ -2,6 +2,7 @@ library(tidyverse)
 library(ggsci)
 library(phyloseq)
 library(ggvenn)
+library(wesanderson)
 ## GGPLOT THEMES
 
 #options(ggplot2.discrete.fill = c("#1E90FF", "#00AA5A", "#F75A3F", "#8E7BFF","#00D1EE", "#00E6BB", "#F9F871", "#F45680", "#A5ABBD", "#B60E50"))
@@ -986,7 +987,8 @@ plotRelativeAbnBarsPhylum <- function(phobj, variable="Condition",
 plotRelativeAbnBarsGenus <- function(phobj, variable="Condition", topn = 15,
                                      outname="phylumBarplot.pdf", height=8,
                                      width=12, ocluster=T,
-                                     oldlevs=c("Control", "Depression")){
+                                     oldlevs=c("Control", "Depression"), 
+                                     wespalette="Darjeeling2"){
   library(RColorBrewer)
 
   df_prevalence <- getRelAbundancesByGenusAndVariable(phobj, variable, outname="", oldlevs=oldlevs)
@@ -1042,7 +1044,8 @@ plotRelativeAbnBarsGenus <- function(phobj, variable="Condition", topn = 15,
   df_merged <- df_merged %>% dplyr::mutate(sampleID = factor(sampleID, levels=ranked_samples))
 
   #cols <- brewer.pal(n=nrow(ranked_genera), name="Set2") # No more colors than those in palette
-  mycolors <- colorRampPalette(brewer.pal(8, "Spectral"))(nrow(ranked_genera))
+  #mycolors <- colorRampPalette(brewer.pal(8, "Spectral"))(nrow(ranked_genera))
+  mycolors <- colorRampPalette(wes_palette(wespalette))(nrow(ranked_genera))
   facet_form <- paste0( ". ~ ", variable) %>% as.formula
 
   g1 <-ggplot(df_merged, aes(x=sampleID, y=Abundance, color = Genus,
@@ -1168,11 +1171,13 @@ plotRelativeAbnBarsSpecies_ColByGenus <- function(phobj, variable="Condition", t
 
 plotRelativeAbnBars_Fantaxtic <- function(phobj, variable="Condition", topn = 15,
                                                tax_level = "Genus",
-                                     outname="GenusBarplotFx.pdf", height=7, width=12){
+                                     outname="GenusBarplotFx.pdf", height=7, width=12, 
+                                     wespalette="AsteroidCity1"){
   library(fantaxtic)
   topntx <- get_top_taxa(physeq_obj = phobj, n = topn, relative = T,
                         discard_other = T, other_label = "Other")
-
+  
+  mycolors <- colorRampPalette(wes_palette(wespalette))(topn)
   topntx <- name_taxa(topntx, label = "", species = F, other_label = "Other")
   topntx <- fantaxtic_bar(topntx, color_by = tax_level, label_by = tax_level,
                         facet_by = variable, grid_by = NULL,
@@ -1180,7 +1185,8 @@ plotRelativeAbnBars_Fantaxtic <- function(phobj, variable="Condition", topn = 15
     mytheme +
     theme(axis.text.x = element_text(size = 10,
                                      colour = "black", angle = 90,
-                                     face = "plain", hjust=1, vjust=1))
+                                     face = "plain", hjust=1, vjust=1)) +
+    scale_fill_manual(values = mycolors)
     #theme(strip =element_rect(fill="white"))+
   ggsave(filename = outname, topntx, height = height, width = width)
   return(topntx)

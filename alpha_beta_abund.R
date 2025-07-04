@@ -269,7 +269,8 @@ for(phname in phseq_to_use){
     }}}
 
 # Composition 4 each
-
+load("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/phyloseq_original/phyloseq_all_list.RData")
+phseq_to_use <- c("remove_tanda2_rarefied_min")
 outdir <- paste0(opt$out, "/DescriptiveAbundances/")
 if(!dir.exists(outdir)) dir.create(outdir)
 tops <- c(5, 10)

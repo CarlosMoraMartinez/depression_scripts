@@ -5,17 +5,56 @@ load("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/re
 load("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/DAA_linda/lindalist.RData")
 
 #opt$out <- "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_1/"
+
+OUTDNAME <- "PredictDAA_L1O_1"
 vars2pca <- c("Condition", "Sexo", "Edad")
 phseq_to_use <- c("remove_tanda2")
-       
+
+NFOLDS = 0
+
+randomforest_params = list(ntree = 500, 
+                           mtry = 1, 
+                           nodesize = 1, 
+                           balance_weights = TRUE)
+
+xgboost_params =  list(learning_rate=0.3,
+                       max_depth=2,
+                       nrounds =50,
+                       min_child_weight=1, 
+                       subsample =0.6,
+                       colsample_bytree =1,
+                       reg_lambda =3,
+                       reg_alpha =0,
+                       nthread=1,
+                       objective= "binary:logistic",
+                       balance_weights = TRUE
+)
+catboost_params <- list(
+  iterations = 50,
+  learning_rate = 0.02,
+  depth = 2,
+  loss_function = "Logloss",
+  eval_metric = "AUC",
+  random_seed = 123,   
+  use_best_model = TRUE,
+  od_type = "Iter",
+  od_wait = 20,
+  verbose = FALSE,
+  thread_count = 1,
+  balance_weights = TRUE
+)
+
+smote_params = list(K=5, dup_size="balance")
+  
+  
 opt <- restaurar(opt)           
-OUTDNAME <- "PredictDAA_10Fold"
 opt$out <- paste0(opt$out, OUTDNAME)
 if(!dir.exists(opt$out)) dir.create(opt$out)
 opt <- restaurar(opt)
 
 all_model_results <- list()
-for(i in phseq_to_use){
+#for(i in phseq_to_use){
+i <- phseq_to_use
   cat("Doing Predictive models for: ", i, "\n")
   all_model_results[[i]] <- list()
   phobj <- all_phyloseq[[i]]
@@ -55,18 +94,65 @@ for(i in phseq_to_use){
   all_model_results[[i]][["praw_taxa_pcas"]] <- all_pcas_praw
   all_model_results[[i]][["padjlinda_taxa_pcas"]] <- all_pcas_linda_padj
   all_model_results[[i]][["padj_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadj"), 
-                                                                          metadata=this_metadata, vars2pca=c("Condition"), nfolds = 0)
-  all_model_results[[i]][["praw_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPraw"), 
-                                                                          metadata=this_metadata, vars2pca=c("Condition"), nfolds = 0)
-  all_model_results[[i]][["padj_taxa_res01"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01, name=paste0(i, "ConditionPadj01"), 
-                                                                            metadata=this_metadata, vars2pca=c("Condition"), nfolds = 0)
-  all_model_results[[i]][["padj_taxa_res001"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj001, name=paste0(i, "ConditionPadj001"), 
-                                                                             metadata=this_metadata, vars2pca=c("Condition"), nfolds = 0)
-  all_model_results[[i]][["padj_taxa_res05linda"]] <- callDoAllModelsFromALLPCAs(all_pcas_linda_padj, name=paste0(i, "ConditionPadjLinda05"), 
-                                                                                 metadata=this_metadata, vars2pca=c("Condition"), nfolds = 0)
-  all_model_results[[i]][["padj_taxa_res01linda"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01_linda, name=paste0(i, "ConditionPadjLinda01"), 
-                                                                                 metadata=this_metadata, vars2pca=c("Condition"), nfolds = 0)
+                                                                          metadata=this_metadata, vars2pca=c("Condition"), nfolds = NFOLDS, 
+                                                                          xgboost_params = xgboost_params, catboost_params = catboost_params, 
+                                                                          randomforest_params = randomforest_params)
   
+  all_model_results[[i]][["padj_taxa_res_SMOTE"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadjSMOTE"), 
+                                                                          metadata=this_metadata, vars2pca=c("Condition"), nfolds = NFOLDS, 
+                                                                          xgboost_params = xgboost_params, , catboost_params = catboost_params, 
+                                                                          randomforest_params = randomforest_params,
+                                                                          do_smote = TRUE, smote_params = smote_params)
+  
+  all_model_results[[i]][["praw_taxa_res"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPraw"), 
+                                                                          metadata=this_metadata, vars2pca=c("Condition"), nfolds = NFOLDS, 
+                                                                          xgboost_params = xgboost_params, catboost_params = catboost_params, 
+                                                                          randomforest_params = randomforest_params)
+  
+  all_model_results[[i]][["praw_taxa_res_SMOTE"]] <- callDoAllModelsFromALLPCAs(all_pcas_praw, name=paste0(i, "ConditionPrawSMOTE"), 
+                                                                          metadata=this_metadata, vars2pca=c("Condition"), nfolds = NFOLDS, 
+                                                                          xgboost_params = xgboost_params, catboost_params = catboost_params, 
+                                                                          randomforest_params = randomforest_params,
+                                                                          do_smote = TRUE, smote_params = smote_params)
+  
+  all_model_results[[i]][["padj_taxa_res01"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01, name=paste0(i, "ConditionPadj01"), 
+                                                                            metadata=this_metadata, vars2pca=c("Condition"), nfolds = NFOLDS, 
+                                                                            xgboost_params = xgboost_params, catboost_params = catboost_params, 
+                                                                            randomforest_params = randomforest_params)
+  
+  all_model_results[[i]][["padj_taxa_res001"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj001, name=paste0(i, "ConditionPadj001"), 
+                                                                             metadata=this_metadata, vars2pca=c("Condition"), nfolds = NFOLDS, 
+                                                                             xgboost_params = xgboost_params, catboost_params = catboost_params, 
+                                                                             randomforest_params = randomforest_params)
+  
+  all_model_results[[i]][["padj_taxa_resAll"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj, name=paste0(i, "ConditionPadjAllPCs"), 
+                                                                          metadata=this_metadata, vars2pca=c("Condition"), nfolds = NFOLDS, 
+                                                                          variable_plim = 1,
+                                                                          xgboost_params = xgboost_params, catboost_params = catboost_params, 
+                                                                          randomforest_params = randomforest_params)
+  
+  
+  all_model_results[[i]][["padj_taxa_res05linda"]] <- callDoAllModelsFromALLPCAs(all_pcas_linda_padj, name=paste0(i, "ConditionPadjLinda05"), 
+                                                                                 metadata=this_metadata, vars2pca=c("Condition"), nfolds = NFOLDS, 
+                                                                                 xgboost_params = xgboost_params, catboost_params = catboost_params, 
+                                                                                 randomforest_params = randomforest_params)
+  
+  all_model_results[[i]][["padj_taxa_res01linda"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01_linda, name=paste0(i, "ConditionPadjLinda01"), 
+                                                                                 metadata=this_metadata, vars2pca=c("Condition"), nfolds = NFOLDS, 
+                                                                                 xgboost_params = xgboost_params, catboost_params = catboost_params, 
+                                                                                 randomforest_params = randomforest_params)
+  
+  all_model_results[[i]][["padj_taxa_res05linda_SMOTE"]] <- callDoAllModelsFromALLPCAs(all_pcas_linda_padj, name=paste0(i, "ConditionPadjLinda05SMOTE"), 
+                                                                                 metadata=this_metadata, vars2pca=c("Condition"), nfolds = NFOLDS, 
+                                                                                 xgboost_params = xgboost_params, catboost_params = catboost_params, 
+                                                                                 randomforest_params = randomforest_params, 
+                                                                                 do_smote = TRUE, smote_params = smote_params)
+  
+  all_model_results[[i]][["padj_taxa_res01linda_SMOTE"]] <- callDoAllModelsFromALLPCAs(all_pcas_adj01_linda, name=paste0(i, "ConditionPadjLinda01SMOTE"), 
+                                                                                 metadata=this_metadata, vars2pca=c("Condition"), nfolds = NFOLDS, 
+                                                                                 xgboost_params = xgboost_params, catboost_params = catboost_params, 
+                                                                                 randomforest_params = randomforest_params, 
+                                                                                 do_smote = TRUE, smote_params = smote_params)
   
   PCs <- all_model_results[[i]][["padj_taxa_res"]]$varnames
   modelo_svm <- all_model_results[[i]][["padj_taxa_res"]]$models$`SVM-linear`$mod_noscale
@@ -75,23 +161,76 @@ for(i in phseq_to_use){
                                                                                             paste0(i, "_ConditionPadjIndiv"), 
                                                                                             vars2pca=c("Condition"), this_metadata,
                                                                                             daa_all[[i]]$resdf, 
-                                                                                            topns = c(5, 10, 20), nfolds = 10)
+                                                                                            topns = c(5, 10, 20), nfolds = NFOLDS, 
+                                                                                            xgboost_params = xgboost_params, catboost_params = catboost_params, 
+                                                                                            randomforest_params = randomforest_params)
+  
+  all_model_results[[i]][["padj_taxa_res_indiv_SMOTE"]] <- callDoAllModelsFromALLPCAsOriginalVars(all_pcas_adj, PCs, modelo_svm, 
+                                                                                            df2pca, 
+                                                                                            paste0(i, "_ConditionPadjIndivSMOTE"), 
+                                                                                            vars2pca=c("Condition"), this_metadata,
+                                                                                            daa_all[[i]]$resdf, 
+                                                                                            topns = c(5, 10, 20), nfolds = NFOLDS, 
+                                                                                            xgboost_params = xgboost_params, catboost_params = catboost_params, 
+                                                                                            randomforest_params = randomforest_params, 
+                                                                                            do_smote = TRUE, smote_params = smote_params)
   
   all_model_results[[i]]$metadata <- sample_data(phobj) %>% data.frame
   opt <- restaurar(opt)
-}
+#}
 opt <- restaurar(opt)
-save(all_model_results, file=paste0(opt$out, OUTDNAME, "/all_model_results_10xCV.RData"))
+save(all_model_results, file=paste0(opt$out, OUTDNAME, "/all_model_results_L1O.RData"))
 #load(file=paste0(opt$out, "PredictDAA/all_model_results.RData"))
 
 #Integrate
 opt$out <- paste0(opt$out, OUTDNAME, "/")
 makeLinePlotComparingPhobjs(all_model_results, opt)
+
+
 ## Compare with Bacteria in componets
 
-walk(names(all_model_results), makeLinePlotComparingSamePhobjModels, 
-     all_model_results, opt)
+for(orderby in c("Accuracy_l1out", "Kappa_l1out", "BalancedAccuracy_l1out", "AUC_l1out")){
+  
+  cat(orderby, "\n\n")
+  walk(names(all_model_results), makeLinePlotComparingSamePhobjModels, 
+       all_model_results, opt, plot_extra=FALSE, name=paste0("orderBy_", orderby, "_normal"), 
+       order_by_measure = orderby,
+       sel_method_name="PCA")
+  
+  walk(names(all_model_results), makeLinePlotComparingSamePhobjModels, 
+       get_pcnames_from = "padj_taxa_res_SMOTE",
+       all_model_results, opt, plot_extra=FALSE, name=paste0("orderBy_", orderby, "_SMOTEonly"), 
+       from_smote=TRUE, 
+       order_by_measure = orderby,
+       sel_method_name="PCA")
+  
+  walk(names(all_model_results), makeLinePlotComparingSamePhobjModels, 
+       all_model_results, opt, plot_extra=FALSE, name=paste0("orderBy_", orderby, "_SMOTEComp"), 
+       plot_normal_with_smote=TRUE, from_smote=FALSE, plot_indiv = FALSE,
+       order_by_measure = orderby,
+       sel_method_name="PCA")
+  
+  walk(names(all_model_results), makeLinePlotComparingSamePhobjModels, 
+       get_pcnames_from="padj_taxa_res05linda",
+       all_model_results, opt, plot_extra=FALSE, name= paste0("orderBy_", orderby, "_LinDA05_SMOTEComp"), 
+       plot_normal_with_smote=TRUE, from_smote=FALSE, plot_indiv = FALSE,
+       order_by_measure = orderby,
+       sel_method_name= "PCA LinDA")
+  
+  walk(names(all_model_results), makeLinePlotComparingSamePhobjModels, 
+       get_pcnames_from="padj_taxa_res01linda",
+       all_model_results, opt, plot_extra=FALSE, name=paste0("orderBy_", orderby, "_LinDA01_SMOTEComp"), 
+       plot_normal_with_smote=TRUE, from_smote=FALSE, plot_indiv = FALSE,
+       order_by_measure = orderby,
+       sel_method_name= "PCA LinDA")
+}
 
+makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
+                                                w=8, h=12, get_pcnames_from="padj_taxa_res", plot_extra=FALSE, 
+                                                plot_indiv = TRUE, plot_normal_with_smote=FALSE,
+                                                filter_out = c("Ensemble2"),
+                                                order_by_measure = "Accuracy_l1out", from_smote=FALSE, name="", 
+                                                sel_method_name="PCA DESeq")
 ## Plot boxplot PCs
 pcBoxplots <- map(names(all_model_results), makePCsBoxplot, all_model_results, opt)
 names(pcBoxplots) <- names(all_model_results)

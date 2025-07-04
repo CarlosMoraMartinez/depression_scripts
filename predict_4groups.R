@@ -2,6 +2,11 @@
 ## Predict DEPR + OBESITY
 
 source(opt$predictive_functions)
+load("/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/results_rstudio_10/DeSEQ2/DESEQ2_all.RData")
+load("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/phyloseq_original/phyloseq_all_list.RData")
+load("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/DAA_linda/lindalist.RData")
+load("/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/results_rstudio_10/DESeq2_ControlVarsAlone/DESEQ2_controlVarsAlone_all.RData")
+load("/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/results_rstudio_10/DESeq2_ControlVars/DESEQ2_controlVars_all.RData")
 
 editObesity <- function(vec){
   return(ifelse(is.na(vec), NA, ifelse(vec == "Normopeso", "normal weight", "overweight")))
@@ -26,6 +31,7 @@ if(!dir.exists(opt$out)) dir.create(opt$out)
 opt <- restaurar(opt)
 
 all_model_multi_results <- list()
+i <- phseq_to_use
 for(i in phseq_to_use){
   cat("Doing Predictive models for: ", i, "\n")
   all_model_multi_results[[i]] <- list()
@@ -57,7 +63,9 @@ for(i in phseq_to_use){
   taxa_padj_corr <- daa_all_corrected[[i]]$BMI_log %>% filter_taxa_padj 
   taxa_padj_corr_01 <- daa_all_corrected[[i]]$BMI_log %>% filter_taxa_padj(plim=0.01)
   taxa_padj_corr_001 <- daa_all_corrected[[i]]$BMI_log %>% filter_taxa_padj(plim=0.001)
-  imcfname <- paste0(opt$reserva, "DESeq2_ControlVars/DeSEQ2/", i, "_BMI_log/",i, "_BMI_log_BMI_log_DAAshrinkNormal.tsv" )
+  #imcfname <- paste0(opt$reserva, "DESeq2_ControlVars/DeSEQ2/", i, "_BMI_log/",i, "_BMI_log_BMI_log_DAAshrinkNormal.tsv" )
+  imcfname <- paste0("/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/results_rstudio_10/DESeq2_ControlVars/DeSEQ2/", i, "_BMI_log/",i, "_BMI_log_BMI_log_DAAshrinkNormal.tsv" )
+  
   imctab <- read_tsv(imcfname)
   taxa_padj_cov_corr <- imctab %>% filter_taxa_padj
   taxa_padj_cov_corr_01 <- imctab %>% filter_taxa_padj(plim = 0.01)
@@ -96,7 +104,10 @@ for(i in phseq_to_use){
   all_models_this <- map2(all_pcalists, names(taxa_list),
                           \(x, y)callDoAllModelsFromALLPCAs(x, name=paste0(i, y), 
                                                             metadata=this_metadata, 
-                                                            vars2pca=c("Depr_and_Ob")))
+                                                            vars2pca=c("Depr_and_Ob"), 
+                                                            xgboost_params= list(max.depth = 4, learning_rate = 0.1, nrounds = 200,
+                                                                                 nthread = 1, objective = "multi:softprob"),
+                                                            do_smote=FALSE))
   names(all_models_this) <- names(taxa_list)
   names(taxa_list) <- paste0("taxa_", names(taxa_list))
   
