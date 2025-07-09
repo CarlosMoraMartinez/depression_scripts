@@ -6,7 +6,7 @@ load("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/re
 
 #opt$out <- "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_v2_1/"
 
-OUTDNAME <- "PredictDAA_L1O_1"
+OUTDNAME <- "PredictDAA_L1O_3"
 vars2pca <- c("Condition", "Sexo", "Edad")
 phseq_to_use <- c("remove_tanda2")
 
@@ -30,8 +30,8 @@ xgboost_params =  list(learning_rate=0.3,
                        balance_weights = TRUE
 )
 catboost_params <- list(
-  iterations = 50,
-  learning_rate = 0.02,
+  iterations = 100,
+  learning_rate = 0.05,
   depth = 2,
   loss_function = "Logloss",
   eval_metric = "AUC",
@@ -41,7 +41,12 @@ catboost_params <- list(
   od_wait = 20,
   verbose = FALSE,
   thread_count = 1,
-  balance_weights = TRUE
+  balance_weights = TRUE,
+  bootstrap_type = "Bayesian",
+  l2_leaf_reg = 3,
+  subsample = 0.6,  # only used if bootstrap type ="Bernouilli"
+  grow_policy = "Depthwise",
+  auto_class_weights = "Balanced"
 )
 
 smote_params = list(K=5, dup_size="balance")
@@ -224,6 +229,31 @@ for(orderby in c("Accuracy_l1out", "Kappa_l1out", "BalancedAccuracy_l1out", "AUC
        order_by_measure = orderby,
        sel_method_name= "PCA LinDA")
 }
+
+
+
+outdir <- paste0(opt$out, "/all_performances/")
+if(!dir.exists(outdir)) dir.create(outdir)
+
+
+ns2 <- names(all_model_results$remove_tanda2)
+ns2 <- ns2[grepl("_res", ns2, perl=T)]
+for(n2 in ns2){
+  
+  if("allmodsum" %in% names(all_model_results$remove_tanda2[[n2]])){
+  mmsum <- all_model_results$remove_tanda2[[n2]]$allmodsum %>% 
+    arrange(desc(BalancedAccuracy_l1out))
+  }else{
+    mmsum <- all_model_results$remove_tanda2[[n2]]$modummary %>% 
+      arrange(desc(BalancedAccuracy_l1out))
+  }
+  mname <- paste0(outdir, "remove_tanda2_", n2, "_modsummary.tsv")
+  write_tsv(mmsum, file = mname)
+}
+
+
+
+## fins aci
 
 makeLinePlotComparingSamePhobjModels<- function(phname, all_model_results, opt,
                                                 w=8, h=12, get_pcnames_from="padj_taxa_res", plot_extra=FALSE, 

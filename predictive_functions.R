@@ -6,6 +6,23 @@ library(pROC)
 library(smotefamily)
 library(UBL)
 
+library(wesanderson)
+
+mycols <- colorRampPalette(wes_palette("Royal1"))(5)
+
+options(ggplot2.discrete.fill = mycols)
+options(ggplot2.discrete.colour = mycols)
+
+
+
+## GGPLOT THEMES
+
+#options(ggplot2.discrete.fill = c("#1E90FF", "#00AA5A", "#F75A3F", "#8E7BFF","#00D1EE", "#00E6BB", "#F9F871", "#F45680", "#A5ABBD", "#B60E50"))
+#options(ggplot2.discrete.colour = c("#1E90FF","#00AA5A", "#F75A3F",  "#8E7BFF","#00D1EE", "#00E6BB", "#F9F871", "#F45680", "#A5ABBD", "#B60E50"))
+
+#options(ggplot2.discrete.fill = c("#A1C6EA","#FD8B2F", "#00AA5A", "#8E7BFF","#00D1EE", "#00E6BB", "#F9F871", "#F45680", "#A5ABBD", "#B60E50"))
+#options(ggplot2.discrete.colour = c("#A1C6EA","#FD8B2F","#00AA5A",   "#8E7BFF","#00D1EE", "#00E6BB", "#F9F871", "#F45680", "#A5ABBD", "#B60E50"))
+
 
 randomforest_params = list(ntree = 500, 
                            mtry = 1, 
@@ -31,8 +48,13 @@ catboost_params <- list(
   od_wait = 20,                  # Rounds to wait before stopping
   verbose = FALSE,               
   thread_count = 1,              
-  balance_weights = TRUE         
+  balance_weights = TRUE,  
+  bootstrap_type = "Bayesian",
+  l2_leaf_reg = 1,
+  subsample = 1,  # only if bootstrap type ="Bernouilli"
+  grow_policy = "SymmetricTree"
 )
+
 smote_params=list(K=5, dup_size="balance")
 
 makeKmeans <- function(datasc, levs, varnames, SEED=123, folds=c()){
@@ -124,12 +146,12 @@ makeKmeans_l1o <- function(datasc, levs, varnames, SEED=123, folds=c(),
   confmat_kmeans <- confusionMatrix(preds, datasc$class, positive = levs[2])
   if(length(levs) == 2){
     all_dists <- all_dists %>% bind_rows
-    probs <- (all_dists %>% pull(!!sym(levs[2])))/rowSums(all_dists)
+    probs <- 1 - (all_dists %>% pull(!!sym(levs[2])))/rowSums(all_dists)
     roc1 <- roc(response=as.numeric(datasc$class)-1, predictor=probs)
   }else{
-    probs <- NULL
-    roc1 <- NULL
-    
+    probs <- all_dists %>% bind_rows %>% 
+      dplyr::mutate_all(\(x) 1 - x/rowSums(.))
+    roc1 <- multiclass.roc(response=datasc$class, predictor=as.matrix(probs))
   }
   
   mod_kmeans_all <- kmeans(train_df_all, centers=length(levs), iter.max = 100, nstart=100)
@@ -202,10 +224,11 @@ makeKnn_l1o <- function(datasc, levs, varnames,
       results[[kname]][["roc_obj"]] <- roc1
       results[[kname]][["roc_auc"]] <- as.numeric(roc1$auc)
     }else{
-      results[[kname]][["roc_obj"]] <- NULL
-      results[[kname]][["roc_auc"]] <- NULL
+      prob_vec <- map_vec(pred_probs, \(x){ifelse(x==levs[1], 1-attr(x, "prob"), attr(x, "prob"))})
+      roc1 <- multiclass.roc(response=datasc$class, predictor=prob_vec)
+      results[[kname]][["roc_obj"]] <- roc1
+      results[[kname]][["roc_auc"]] <- as.numeric(roc1$auc)
     }
-    
     
     results[[kname]][["preds"]] <- levs[preds] %>% factor(levels=levs)
     results[[kname]][["confmat"]] <- confusionMatrix(results[[kname]][["preds"]], 
@@ -291,6 +314,12 @@ makeNaiveBayes_l1o <- function(datasc, levs, varnames,
     probs_vector <- map(predict_bayes1_probs, \(xx) xx %>% as.data.frame) %>% 
       bind_rows %>% pull(!!sym(levs[2]))
     roc1 <- roc(response=as.numeric(datasc$class)-1, predictor=probs_vector)
+  }else{
+    probs_vector <- map(predict_bayes1_probs, \(xx) xx %>% as.data.frame) %>% 
+      bind_rows 
+    #probs_vector2 <- map(predict1_probs, \(xx) attr(xx, "probabilities") %>% as.data.frame) %>% 
+    #   map2(datasc$class, \(x, nn) x[as.character(nn)]) %>% unlist
+    roc1 <- multiclass.roc(response=datasc$class, predictor=probs_vector)
   }
   modwithall <- naiveBayes(df, datasc$class, laplace = 0)
   predict_bayes2 <- predict(modwithall, df)
@@ -332,7 +361,7 @@ make_classifTree_l1o <- function(datasc, levs, varnames,
     # Separar datos
     train_df <- df[-i, ]
     test_df <- df[i, ]
-    train_weighs <- sweights[-i]
+    #train_weighs <- sweights[-i]
     
     # Separar clases
     train_labels <- datasc$class[-i]
@@ -361,6 +390,10 @@ make_classifTree_l1o <- function(datasc, levs, varnames,
     probs_vector <- map(predict_probs, \(xx) xx %>% as.data.frame) %>% 
       bind_rows %>% pull(!!sym(levs[2]))
     roc1 <- roc(response=as.numeric(datasc$class)-1, predictor=probs_vector)
+  }else{
+    probs_vector <- map(predict_probs, \(xx) xx %>% as.data.frame) %>% 
+      bind_rows #%>% pull(!!sym(levs[2]))
+    roc1 <- multiclass.roc(response=datasc$class, predictor=probs_vector)
   }
   mod_all <- C5.0(df, datasc$class, trials = 20) # , weights=sweighs
   predict_tree2 <- predict(mod_all, df)
@@ -439,6 +472,10 @@ make_randomForest_l1o <- function(datasc, levs, varnames,
     probs_vector <- map(predict_tree1_probs, \(xx) xx %>% as.data.frame) %>% 
       bind_rows %>% pull(!!sym(levs[2]))
     roc1 <- roc(response=as.numeric(datasc$class)-1, predictor=probs_vector)
+  }else{
+    probs_vector <- predict_tree1_probs %>% map(as.data.frame) %>% bind_rows
+    roc1 <- multiclass.roc(response=datasc$class, predictor=probs_vector)
+    roc_auc <- as.numeric(roc1$auc)
   }
   
   mod_tree1 <- randomForest(x=df, y=datasc$class, levels=levs, 
@@ -477,13 +514,26 @@ make_xgboost_l1o <- function(datasc, levs, varnames,
   predict_probs = numeric(0)
   
   if(xgboost_params$balance_weights){
-    class_weights <- table(datasc$class)
+    
     #class_weights <- class_weights/min(class_weights)
     #weights <- class_weights[datasc$class]
-    posweight <- class_weights[levs[1]]/class_weights[levs != levs[1]]
+    
+    class_weights <- 1/table(datasc$class)
+    if(length(levs)==2){
+      posweight <- class_weights[levs[1]]/class_weights[levs != levs[1]]
+    } else{
+      posweight <- as.vector(class_weights)
+      names(posweight) <- names(class_weights)
+    }
+    
   }else{
-    weights <- NULL
-    posweight <- 1
+    class_weights <- NULL
+    if(length(levs)==2){
+      posweight <- 1
+    }else{
+      posweight <- rep(1, length(levs))
+      names(posweight) <- levs
+    }
   } 
   
   for(i in folds){
@@ -541,7 +591,8 @@ make_xgboost_l1o <- function(datasc, levs, varnames,
     predict_tree1 <- factor(levs[as.integer(round(predict_probs))+1], levels=levs)
     roc1 <- roc(response=as.numeric(datasc$class)-1, predictor=predict_probs)
   }else{
-    predict_tree1 <- factor(levs[apply(predict_probs, MAR=1, which.max)], levels=levs)
+    predict_tree1 <- factor(colnames(predict_probs)[apply(predict_probs, MAR=1, which.max)], levels=levs)
+    roc1 <- multiclass.roc(response=datasc$class, predictor=predict_probs)
   }
   confmat_tree1 <- confusionMatrix(predict_tree1, datasc$class, positive = levs[2])
   
@@ -590,6 +641,7 @@ make_catboost_l1o <- function(datasc, levs, varnames,
                              smote_params=list(K=5, dup_size="balance")
 ){
   library(catboost)
+  datasc$class <- factor(datasc$class, levels=levs)
   df <- datasc %>% dplyr::select(-class, -sample)  %>% dplyr::select(all_of(varnames))
   if(length(folds)==0){
     folds <- 1:nrow(datasc)
@@ -599,6 +651,7 @@ make_catboost_l1o <- function(datasc, levs, varnames,
   if(catboost_params$balance_weights & ! do_smote){
     class_weights <- table(datasc$class)
     class_weights_vec <- max(class_weights)/class_weights %>% as.vector
+    names(class_weights_vec) <- levs
   } else {
     class_weights_vec <- rep(1, length(levs))
   }
@@ -634,19 +687,46 @@ make_catboost_l1o <- function(datasc, levs, varnames,
     }else{
       smoteData = NULL
     }
-    train_pool <- catboost.load_pool(data = train_df, label = as.integer(train_labels == levs[2]))
+    if(length(levs) == 2){
+      train_pool <- catboost.load_pool(data = train_df, label = as.integer(train_labels == levs[2]))
+    }else{
+      train_pool <- catboost.load_pool(data = train_df, label = as.integer(train_labels)-1)
+    }
     test_pool <- catboost.load_pool(data = test_df)
     
-    model <- catboost.train(learn_pool = train_pool, params = list(
-      depth = catboost_params$depth,
-      learning_rate = catboost_params$learning_rate,
-      iterations = catboost_params$iterations,
-      loss_function = catboost_params$loss_function,
-      thread_count = catboost_params$thread_count,
-      #class_weights = class_weights_vec,
-      logging_level = "Silent"
-    ))
-    
+    if(catboost_params$bootstrap_type == "Bernoulli"){
+      model <- catboost.train(learn_pool = train_pool, params = list(
+        depth = catboost_params$depth,
+        learning_rate = catboost_params$learning_rate,
+        iterations = catboost_params$iterations,
+        loss_function = catboost_params$loss_function,
+        eval_metric = catboost_params$eval_metric,
+        bootstrap_type = catboost_params$bootstrap_type,
+        l2_leaf_reg = catboost_params$l2_leaf_reg,
+        subsample = catboost_params$subsample,
+        grow_policy = catboost_params$grow_policy,
+        auto_class_weights= catboost_params$auto_class_weights,
+        thread_count = catboost_params$thread_count,
+        #class_weights = class_weights_vec,
+        logging_level = "Silent"
+      ))
+    }else{
+      model <- catboost.train(learn_pool = train_pool, params = list(
+        depth = catboost_params$depth,
+        learning_rate = catboost_params$learning_rate,
+        iterations = catboost_params$iterations,
+        loss_function = catboost_params$loss_function,
+        eval_metric = catboost_params$eval_metric,
+        bootstrap_type = catboost_params$bootstrap_type,
+        l2_leaf_reg = catboost_params$l2_leaf_reg,
+        #subsample = catboost_params$subsample,
+        grow_policy = catboost_params$grow_policy,
+        auto_class_weights= catboost_params$auto_class_weights,
+        thread_count = catboost_params$thread_count,
+        #class_weights = class_weights_vec,
+        logging_level = "Silent"
+      ))
+    }
     pred_prob <- catboost.predict(model, test_pool, prediction_type = "Probability")
     
     if(length(levs) == 2){
@@ -661,22 +741,47 @@ make_catboost_l1o <- function(datasc, levs, varnames,
     roc1 <- roc(response=as.numeric(datasc$class)-1, predictor=predict_probs)
   }else{
     predict_tree1 <- factor(levs[apply(predict_probs, MAR=1, which.max)], levels=levs)
+    colnames(predict_probs) <- as.character(levels(datasc$class))
+    roc1 <- multiclass.roc(response=datasc$class, predictor=predict_probs)
   }
   confmat_tree1 <- confusionMatrix(predict_tree1, datasc$class, positive = levs[2])
   
   train_pool <- catboost.load_pool(data = df, label = as.integer(datasc$class == levs[2]))
   test_pool <- catboost.load_pool(data = df)
   
-  model2 <- catboost.train(learn_pool = train_pool, params = list(
-    depth = catboost_params$depth,
-    learning_rate = catboost_params$learning_rate,
-    iterations = catboost_params$iterations,
-    loss_function = catboost_params$loss_function,
-    thread_count = catboost_params$thread_count,
-    #class_weights = class_weights_list,
-    logging_level = "Silent"
+  if(catboost_params$bootstrap_type == "Bernoulli"){
+   model2 <- catboost.train(learn_pool = train_pool, params = list(
+     depth = catboost_params$depth,
+     learning_rate = catboost_params$learning_rate,
+     iterations = catboost_params$iterations,
+     loss_function = catboost_params$loss_function,
+     eval_metric = catboost_params$eval_metric,
+     bootstrap_type = catboost_params$bootstrap_type,
+     l2_leaf_reg = catboost_params$l2_leaf_reg,
+     subsample = catboost_params$subsample,
+     grow_policy = catboost_params$grow_policy,
+     auto_class_weights= catboost_params$auto_class_weights,
+     thread_count = catboost_params$thread_count,
+     #class_weights = class_weights_list,
+     logging_level = "Silent"
   ))
-  
+  }else{
+    model2 <- catboost.train(learn_pool = train_pool, params = list(
+      depth = catboost_params$depth,
+      learning_rate = catboost_params$learning_rate,
+      iterations = catboost_params$iterations,
+      loss_function = catboost_params$loss_function,
+      eval_metric = catboost_params$eval_metric,
+      bootstrap_type = catboost_params$bootstrap_type,
+      l2_leaf_reg = catboost_params$l2_leaf_reg,
+      #subsample = catboost_params$subsample,
+      grow_policy = catboost_params$grow_policy,
+      auto_class_weights= catboost_params$auto_class_weights,
+      thread_count = catboost_params$thread_count,
+      #class_weights = class_weights_list,
+      logging_level = "Silent"
+    ))
+  }
   predict_tree2 <- catboost.predict(model2, test_pool, prediction_type = "Probability")
   if(length(levs) == 2){
     predict_tree2 <- factor(levs[as.integer(round(predict_tree2))+1], levels=levs)
@@ -695,7 +800,7 @@ make_catboost_l1o <- function(datasc, levs, varnames,
               roc_auc_no_l1o=NULL,
               roc_obj=roc1,
               roc_auc=as.numeric(roc1$auc),
-              xgboost_params = xgboost_params,
+              xgboost_params = catboost_params,
               smoteData=smoteData))
 }
 
@@ -756,6 +861,11 @@ make_svm_l1o <- function(datasc, levs, varnames, kernel="linear", SEED=123, fold
     probs_vector <- map(predict1_probs, \(xx) attr(xx, "probabilities") %>% as.data.frame) %>% 
       bind_rows %>% pull(!!sym(levs[2]))
     roc1 <- roc(response=as.numeric(datasc$class)-1, predictor=probs_vector)
+  }else{
+    probs_vector <- map(predict1_probs, \(xx) attr(xx, "probabilities") %>% as.data.frame) %>% 
+      bind_rows #%>% pull(!!sym(levs[2]))
+    roc1 <- multiclass.roc(response=datasc$class, predictor=probs_vector)
+    roc_auc <- as.numeric(roc1$auc)
   }
   
   mod_all <- e1071::svm(x = df, y = datasc$class, scale=TRUE, kernel=kernel, 
@@ -877,10 +987,12 @@ make_glm_l1o_multiclass <- function(datasc, levs, varnames, folds=c(),
     
   }
   
-  predict1<- colnames(predict_glm1)[apply(predict_glm1, MAR=1, \(x)which(x==max(x)))] %>% factor
+  predict1<- colnames(predict_glm1)[apply(predict_glm1, MAR=1, which.max)] %>% factor
   confmat1 <- confusionMatrix(predict1, factor(datasc$class))
-  roc_obj <- apply(predict_glm1, MAR=2, \(x) multiclass.roc(datasc$class, x))
-  roc_auc <- sapply(roc_obj, \(x)x$auc) %>% mean
+  
+  assertthat::assert_that(all(colnames(predict_glm1) == levels(datasc$class)))
+  roc1 <- multiclass.roc(response=datasc$class, predictor=predict_glm1)
+  roc_auc <- as.numeric(roc1$auc)
   
   mod_all <- multinom(formula, data=datasc, family = binomial)
   predict2 <- predict(mod_all, df, type="probs")
@@ -896,7 +1008,7 @@ make_glm_l1o_multiclass <- function(datasc, levs, varnames, folds=c(),
               preds_no_l1o=classes2,
               roc_obj_no_l1o=roc_obj_fullmod,
               roc_auc_no_l1o=roc_auc_fullmod,
-              roc_obj=roc_obj,
+              roc_obj=roc1,
               roc_auc=roc_auc
   ))
 }
@@ -989,6 +1101,7 @@ getTableFromConfmatrices_multiclass <- function(modlist){
       Precision_l1out = if(is.null(mod$confmat)) NA else mod$confmat$byClass[, "Precision"] %>% mean,
       Recall_l1out = if(is.null(mod$confmat)) NA else mod$confmat$byClass[, "Recall"] %>% mean,
       BalancedAccuracy_l1out = if(is.null(mod$confmat)) NA else mod$confmat$byClass[, "Balanced Accuracy"] %>% mean,
+      AUC_l1out = if(is.null(mod$roc_auc)) NA else mod$roc_auc,
       Accuracy=if(is.null(mod$confmat_no_l1o)) NA else mod$confmat_no_l1o$overall["Accuracy"] %>% mean,
       Kappa=if(is.null(mod$confmat_no_l1o)) NA else mod$confmat_no_l1o$overall["Kappa"] %>% mean,
       Sensitivity = if(is.null(mod$confmat_no_l1o)) NA else mod$confmat_no_l1o$byClass[, "Sensitivity"] %>% mean,
@@ -1018,8 +1131,8 @@ make_ensemble_votes <- function(datasc, levs, modlist, model_res, param="Kappa_l
     dplyr::filter(!!sym(param) >= min_val) %>% 
     dplyr::filter(! (model %in% remove_knn & only_1_knn)) %>%  
     pull(model)
-  preddf <- map(m2use, \(x) modlist[[x]]$preds)  %>% bind_cols()
-  names(preddf) <- m2use
+  preddf <- map(m2use, \(x) tibble( !!x := modlist[[x]]$preds))  %>% bind_cols()
+  #names(preddf) <- m2use
   if(prop){
     ponderfac <- model_res[match(m2use, model_res$model), param]
     ponderfac <- (ponderfac - min(ponderfac))/(max(ponderfac) - min(ponderfac)) + 0.1
@@ -1031,7 +1144,10 @@ make_ensemble_votes <- function(datasc, levs, modlist, model_res, param="Kappa_l
   for(i in 1:nrow(preddf)){
     classcore <- map_vec(levs, \(ll) sum(ponderfac[preddf[i, ] == ll]))
     names(classcore) <- levs
+    l1 <- length(preds)
     preds <- c(preds, levs[which.max(classcore)] )
+    l2 <- length(preds)
+    cat(i, ": L1=", l1, ", L2=", l2, ifelse(l1==l2, " --WARNING--", ""),  "\n")
     votes[[i]] <- classcore
   }
   preds <- factor(preds, levels=levs)
@@ -1041,8 +1157,9 @@ make_ensemble_votes <- function(datasc, levs, modlist, model_res, param="Kappa_l
     probs <- map_vec(votes, \(x)x[levs[2]]/sum(x) )
     roc1 <- roc(response=as.numeric(datasc$class)-1, predictor=probs)
   }else{
-    probs <- NULL
-    roc1 <- NULL
+    probs <- purrr::map(votes, .f = \(x) x/sum(x)) %>% 
+      bind_rows %>% as.matrix #%>% pull(!!sym(levs[2]))
+    roc1 <- multiclass.roc(response=datasc$class, predictor=probs)
   }
   return(list(confmat=confmat1, 
               confmat_no_l1o=NULL,
@@ -1141,16 +1258,25 @@ makeAllModels <- function(datasc, plim=0.01, opt, name="Condition", nfolds=0,
   }else{
     res_glms <- make_glm_l1o_multiclass(datasc, levs, varnames, folds = folds, do_smote = do_smote, smote_params = smote_params)
   }
+  cat("-- GLM finished\n")
   res_svm_lin <- make_svm_l1o(datasc, levs, varnames, kernel="linear", folds = folds, do_smote = do_smote, smote_params = smote_params, balance_classes = TRUE)
   res_svm_rad <- make_svm_l1o(datasc, levs, varnames, kernel="radial", folds = folds, do_smote = do_smote, smote_params = smote_params, balance_classes = FALSE)
+  cat("-- SVMs finished\n")
   res_randfor <- make_randomForest_l1o(datasc, levs, varnames, folds = folds, do_smote = do_smote, smote_params = smote_params, randomforest_params = randomforest_params)
+  cat("-- RandomForest finished\n")
   res_tree <- make_classifTree_l1o(datasc, levs, varnames, folds = folds, do_smote = do_smote, smote_params = smote_params, balance_weights = TRUE)
+  cat("-- C5.0 Tree finished\n")
   res_naivebayes <- makeNaiveBayes_l1o(datasc, levs, varnames, SEED=SEED, folds = folds, do_smote = do_smote, smote_params = smote_params)
+  cat("-- NaiveBayes finished\n")
   res_knn_l1o <- makeKnn_l1o(datasc, levs, varnames, different_ks=seq(3,11, by=2), folds = folds, do_smote = do_smote, smote_params = smote_params)
   #res_knn_no_l1o <- makeKnn(datasc, levs, varnames, different_ks=seq(1,13, by=2))
+  cat("-- KNN finished\n")
   res_kmeans_l1o <- makeKmeans_l1o(datasc, levs, varnames, SEED=SEED, folds = folds, do_smote = do_smote, smote_params = smote_params)
+  cat("-- K-Means finished\n")
   res_xgboost <- make_xgboost_l1o(datasc, levs, varnames, xgboost_params = xgboost_params, folds = folds, do_smote = do_smote, smote_params = smote_params)
+  cat("-- XGBoost finished\n")
   res_catboost <- make_catboost_l1o(datasc, levs, varnames, catboost_params = catboost_params, folds = folds, do_smote = do_smote, smote_params = smote_params)
+  cat("-- CatBoost finished\n")
   
   modlist <- list("logistic_regression" = res_glms, 
                   "SVM-linear"=res_svm_lin, 
@@ -1175,6 +1301,7 @@ makeAllModels <- function(datasc, plim=0.01, opt, name="Condition", nfolds=0,
                                           param = ensemble_param, 
                                           min_val = ensemble_minval, 
                                           only_1_knn = ensemble_1knn)
+  cat("-- Ensemble finished\n")
   if(do_ensemble_probs){
     modlist$Ensemble2 <- make_ensemble_probs(datasc, levs, modlist, model_res, param = ensemble_param, min_val = ensemble_minval, only_1_knn = ensemble_1knn)
   }
