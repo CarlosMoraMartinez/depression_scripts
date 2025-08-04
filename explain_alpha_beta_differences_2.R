@@ -18,7 +18,7 @@ options(ggplot2.discrete.colour = c("#A1C6EA","#FD8B2F","#00AA5A",
 
 load("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/phyloseq/pre_phyloseq_filt5.RData")
 
-outdir <- paste0("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/why_alpha_diversity/")
+outdir <- paste0("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/why_alpha_diversity_Harmon/")
 if(!dir.exists(outdir)) dir.create(outdir)
 
 s_meta <- sample_data(pre_phyloseq_filt) %>% data.frame
@@ -44,26 +44,40 @@ divcalc <- estimate_richness(
 s_meta <- s_meta %>% merge(divcalc, by.x="sampleID", by.y="sample")
 
 # test fit
+
+#Get N0
+summm <- otus %>% group_by(sample) %>% 
+  dplyr::summarise(median = median(prop_norm),
+                   mean = mean(prop_norm))
+
 B = 0.5
+N0 = 0.01
 
 aux <- otus %>% filter(sample=="1")
-nls(prop_norm ~ exp(- (a * order)^B),
+xx <- summary(nls(prop_norm ~ exp(- (a * order)^B),
     data = aux,
-    start = list(a = 0.1))
+    start = list(a = 0.1)))
 
 
 otus_exp <-  otus %>%
   group_by(sample) %>%
-  group_modify( .f=~ .x %>%
-                  dplyr::mutate(fit_exp = summary(nls(prop_norm ~ exp(- (a * order)^B),
-                     data = .x,
-                     start = list(a = 0.1)))$coefficients[1, 1])
+  group_modify( .f=~ {
+              fitmod <- summary(nls(prop_norm ~ exp(- (a * order)^B),
+                                    data = .x,
+                                    start = list(a = 0.1)))
+              .x %>%
+                  dplyr::mutate(fit_exp = fitmod$coefficients[1, 1],
+                                finTol = fitmod$convInfo$finTol,
+                                finIter = fitmod$convInfo$finIter,
+                                RSE = fitmod$sigma,
+                                stopMessage = fitmod$convInfo$stopMessage)
+  }
   ) %>%
   dplyr::mutate(predicted = exp(- (fit_exp*order)^B))
 
-aux <- otus_exp %>% dplyr::select(sample, taxon, Condition, fit_exp, order, predicted)
+aux <- otus_exp %>% select(sample, Condition, fit_exp, order, predicted)
 write_tsv(aux, file = paste0(outdir, "exponential_predicted_by_sample.tsv"))
-aux <- aux %>% dplyr::select(-taxon)
+
 exp_sum <- otus_exp %>%
   group_by(sample) %>%
   dplyr::summarise(
@@ -94,17 +108,16 @@ all_preds <- exp_sum %>%
                             prop=exp(-.x$value*levs)) %>%
                  dplyr::mutate(prop_norm = prop/max(prop)))
 
-preds2use <- all_preds %>%  
-  dplyr::filter(measure %in% c("q25", "q75", "median")) %>%
-  dplyr::select(-prop) %>%
+preds2use <- all_preds %>%  filter(measure %in% c("q25", "q75", "median")) %>%
+  select(-prop) %>%
   #pivot_wider(names_from = measure, values_from = prop_norm) %>%
   spread(measure, prop_norm) %>%
-  dplyr::select(Cond, order, q25, median, q75)
+  select(Cond, order, q25, median, q75)
 
 
 max_order <- max(otus_exp$order)
-a_control=exp_sum %>% dplyr::filter(Cond == "Control" & measure == "median") %>% pull(value)%>% round(3)
-a_depr=exp_sum %>% dplyr::filter(Cond == "Depression" & measure == "median") %>% pull(value) %>% round(3)
+a_control=exp_sum %>% filter(Cond == "Control" & measure == "median") %>% pull(value)%>% round(3)
+a_depr=exp_sum %>% filter(Cond == "Depression" & measure == "median") %>% pull(value) %>% round(3)
 
 
 (ggp <- ggplot(otus_exp, aes(x=order, y=prop_norm, group=sample, col=Condition)) +
@@ -213,11 +226,11 @@ cowplot::plot_grid(plotlist=list(ggp, gsim), ncol=1,
                    align = "v", rel_widths = c(1, 1))
 
 panelplot <- ggp + gsim +
-  plot_layout(widths = c(2, 1.2)) + # 2, 1.4
-  plot_annotation(tag_levels = 'a')
+  plot_layout(widths = c(2, 1.2)) +
+  plot_annotation(tag_levels = 'A')
 panelplot
 
-ggsave(filename = paste0(outdir, "exponential_panel_min.pdf"), panelplot, width = 12, height = 4) # w=10
+ggsave(filename = paste0(outdir, "exponential_panel.pdf"), panelplot, width = 12, height = 4)
 
 # finally, get most abundant taxa:
 

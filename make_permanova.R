@@ -54,3 +54,18 @@ for(i in phseq2use){
 save(permaresults_mult, file = paste0(outdir, "PERMANOVA_MULT.RData"))
 
 mm <- permaresults_mult$remove_tanda2_rarefied_min$bray$modelos
+
+### get variables with significant dispersion tests
+
+xx<- read_tsv(paste0(outdir, "/permanova_results_remove_tanda2_rarefied_min_bray.tsv"))
+
+permanova_useful <- xx %>% arrange(perm_disp_P) %>% 
+  filter(variable %in% c("Condition", "Sexo", "BMI", 
+                         "Edad", "Edad_log", 
+                         "IPAQ", "Mediterranean_diet_adherence2", 
+                         "IPAQ_act_fisica", "Mediterranean_diet_adherence", 
+                         "ob_o_sobrepeso",
+                         "Smoking_status")) %>% 
+  select(variable, DF_var, DF_Residual, DF_Total, R2_var, R2_Residual, F_statistic, P, perm_disp_P) %>% 
+  dplyr::mutate(perm_disp_Padj = p.adjust(perm_disp_P, method = "BH"))
+write_tsv(permanova_useful, file = paste0(outdir, "permanova_results_filtered_useful.tsv"))

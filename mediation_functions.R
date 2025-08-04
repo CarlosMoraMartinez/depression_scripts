@@ -172,7 +172,7 @@ makeMediationSimplePowerCurveLavaan <- function(df, xname, yname, medname, med_r
       res <- data.frame()
       for(numrep in 1:nrep){
         X <- sample(valsX, ssize, replace=TRUE)
-        M = med_res["a", "Estimate"]*X + rnorm(n = ssize , mean = 0, sd = sd(mod1res))
+        #M = med_res["a", "Estimate"]*X + rnorm(n = ssize , mean = 0, sd = sd(mod1res))
         M = med_res["a", "Estimate"]*X + sample(mod1res, ssize, replace=TRUE)
 
         logit_Y <- med_res["cp", "Estimate"] * X + med_res["b", "Estimate"] * M

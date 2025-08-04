@@ -32,6 +32,12 @@ linda.obj_bmi <- linda(otu.tab, meta, formula = '~BMI_log',
                    lib.cut = 1000, 
                    winsor.quan = 0.97)
 
+linda.obj_bmi_nolog <- linda(otu.tab, meta, formula = '~BMI', 
+                       alpha = 0.05,
+                       prev.cut = 0.05, 
+                       lib.cut = 1000, 
+                       winsor.quan = 0.97)
+
 linda.obj_bmiAdj <- linda(otu.tab, meta, formula = '~BMI_log + Sex*Age_log', 
                    alpha = 0.05,
                    prev.cut = 0.05, 
