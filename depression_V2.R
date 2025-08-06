@@ -1,48 +1,20 @@
 #library(plyr)
 library(tidyverse)
-library(gt)
 library(phyloseq)
-library(fantaxtic)
 library(readxl)
-library(ggpubr)
-library(dendextend)
-library(DESeq2)
-library(EnhancedVolcano)
-library(gridExtra)
-library(cowplot)
-library(pheatmap)
-library(HMP)
-library(knitr)
-library(vegan)
-library(janitor)
-library(plyr)
+
+library(devtools)
+devtools::load_all("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/G4Micro")
+
 
 SEED <- 123
 MODE = "LOCAL"
 
 if(MODE == "IATA"){
-  opt <- list(out ="/home/ccarlos/Documentos/202309_DEPRESION/results_rstudio_v2_3/",
-            indir = "/home/ccarlos/Documentos/202311_DEPRESION/202311_DEPRESION/mg09_combinempa/" ,
-            r_functions="/home/ccarlos/repos/depression_analysis/metagenomics_core_functions.R",
-            predictive_functions="/home/ccarlos/repos/depression_analysis/predictive_functions.R",
-            metadata = "/home/ccarlos/Documentos/202309_DEPRESION/metadatos_MC_AL 12042023_CMcopy.xlsx",
-            rewrite=TRUE,
-            minfreq = 0.05,
-            mincountspersample = 0,
-            mincount= 1,
-            minsampleswithcount = 0,
-            raref_quant = 0.15,
-            fc=1,
-            pval=0.05,
-            ptype="adjusted",
-            fctype="shrunk",
-            num_genes_default=5
-            )
+  opt <- list()
 }else{
-  opt <- list(out ="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/",
+  opt <- list(out ="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results3_pckg/",
               indir = "/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/mg09_combinempa/" ,
-              r_functions="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/metagenomics_core_functions.R",
-              predictive_functions="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/predictive_functions.R",
               read_metadata_script = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/read_metadata.R",
               create_phyloseq_script = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/generate_phyloseq_objects.R",
               read_otutable_script = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/read_otu_table.R",
@@ -69,12 +41,10 @@ if(MODE == "IATA"){
               pval=0.05,
               ptype="adjusted",
               fctype="shrunk",
-              num_genes_default=5
+              num_genes_default=5 # meaning genes or taxa, depending on the context
   )
 }
 if(! dir.exists(opt$out)){dir.create(opt$out)}
-
-source(opt$r_functions)
 
 restaurar <- restauraropt_mk(opt)
 

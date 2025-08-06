@@ -166,11 +166,11 @@ if(!file.exists(allphyloseqlist_fname) | opt$rewrite){
     rarefied_min = pre_phyloseq_rarefied,
     rarefied_quant = pre_phyloseq_rarefied2,
     remove_tanda2 = pre_phyloseq_removet2,
-    remove_tanda2_rarefied_min = pre_phyloseq_rarefied_not2,
-    remove_t2_and_comorb = pre_phyloseq_removet2_and_comor,
-    rmbatch_tanda =phseq_batch_tanda,
-    rmbatch_tanda_shrink = phseq_batch_tanda_shrink,
-    rmbatch_tanda_raref =phseq_batch_tanda_raref
+    remove_tanda2_rarefied_min = pre_phyloseq_rarefied_not2
+    #remove_t2_and_comorb = pre_phyloseq_removet2_and_comor,
+    #rmbatch_tanda =phseq_batch_tanda,
+    #rmbatch_tanda_shrink = phseq_batch_tanda_shrink,
+    #rmbatch_tanda_raref =phseq_batch_tanda_raref
 
   )
   save(all_phyloseq, file=allphyloseqlist_fname)
