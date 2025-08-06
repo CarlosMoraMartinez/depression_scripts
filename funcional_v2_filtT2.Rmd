@@ -95,7 +95,7 @@ if(exists("input")){
             fctype="shrunk", 
             mincount= 1,
             minsampleswithcount= 6,
-            out= "/home/ccarlos/Documentos/202309_DEPRESION/funcional2_filtT2/", #"/home/carmoma/projects/Psoriasis_20231005/results2/",  
+            out= "/home/ccarlos/Documentos/202309_DEPRESION/funcional3_filtT2/", #"/home/carmoma/projects/Psoriasis_20231005/results2/",  
             modules_path=  "/home/ccarlos/Documentos/202309_DEPRESION/funcional1/kegg_modules/", #"/home/carmoma/projects/Psoriasis_20231005/Psoriasis/results/04_phyloseq/",
             cazy="/home/ccarlos/data/resources/cazy/",
             r_functions= "/home/ccarlos/repos/depression_analysis/metagenomics_core_functions.R", #"/home/carmoma/projects/Psoriasis_20231005/Psoriasis/Analysis_code/metagenomics_core_functions.R",
@@ -116,7 +116,7 @@ if(exists("input")){
             fctype="shrunk", 
             mincount= 1,
             minsampleswithcount= 6,
-            out= "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/funcional_v1/", #"/home/carmoma/projects/Psoriasis_20231005/results2/",
+            out= "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/funcional_v2/", #"/home/carmoma/projects/Psoriasis_20231005/results2/",
             input=  "/home/carlos/Escritorio/202311_DEPRESION/mg09_combinempa",
             modules_path=  "/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/funcional1/kegg_modules/",
             cazy="/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/cazy/",#"/home/carmoma/projects/Psoriasis_20231005/Psoriasis/results/04_phyloseq/",
@@ -1218,7 +1218,7 @@ plots_kn <- lapply(1:length(limmares_bysp), function(i){
 
 ```{r}
 
-plims <- c(0.015, 0.0005, 0.005, 0.001, 0.05, 0.05)
+plims <- c(0.05, 0.0005, 0.005, 0.001, 0.05, 0.05)
 names(plims) <- names(limmares_byproc)
 plims_sp <- c(0.05, 0.01, 0.01, 0.01, 0.05, 0.05)
 names(plims_sp) <- names(limmares_byproc)
@@ -1321,7 +1321,7 @@ volcanos_limma_padj <- lapply(names(limmares_byproc),
                            make_volcano(res = limmares_byproc[[name]], opt=opt, name=fname, pcol="padj")}
                          )
 
-plims <- c(0.01, 0.01, 0.001, 0.01, 0.05, 0.05)
+plims <- c(0.05, 0.01, 0.001, 0.01, 0.05, 0.05)
 names(plims) <- names(limmares_byproc)
 barplots_limma <- lapply(names(limmares_byproc_annot), \(x){
   tab <- limmares_byproc_annot[[x]]
@@ -1494,9 +1494,10 @@ plots_kn <- lapply(1:length(limmares_bysp), function(i){
 
 ```{r}
 
-plims <- c(0.025, 0.0005, 0.005, 0.001, 0.05, 0.05)
+plims <- c(0.05, 0.0005, 0.005, 0.001, 0.05, 0.1)
 names(plims) <- names(limmares_byproc)
-plims_sp <- c(0.1, 0.01, 0.01, 0.01, 0.05, 0.05)
+plims_sp <- c(0.05, 0.01, 0.01, 0.01, 0.05, 0.1)
+max_top_processes=30
 names(plims_sp) <- names(limmares_byproc)
 
 INCLUDE_OTHERS = FALSE
@@ -1521,7 +1522,10 @@ for(functType in names(limmares_byproc)){
 
   fname <- gsub(" ", "_", paste0("Sankey_", functType, 
                                                      "_ppr", as.character(plims[functType]), 
-                                                     "_psp", as.character(plims_sp[functType]), collapse=""))
+                                                     "_psp", as.character(plims_sp[functType]), collapse="",
+                                                      "_top", as.character(max_top_processes)
+                                 
+                                 ))
   if(functType == "CAZy"){
     include_longnames <- FALSE
     rownames(daa_proc_all) <- paste(getCazyClass(rownames(daa_proc_all)), rownames(daa_proc_all), sep=" - ")
@@ -1542,7 +1546,8 @@ for(functType in names(limmares_byproc)){
                               case_name = case_name, 
                               control_name = control_name, 
                               outdir = outdir, 
-                              name = fname)
+                              name = fname, 
+                              ntop = max_top_processes)
   figs[[functType]] <- makeSankeyPlot(nodelist = sankeydata$nodelist, 
                                       linklist = sankeydata$linklist, 
                                       name = paste0("Functional Analysis - ", functType, " terms"), 
@@ -1570,5 +1575,46 @@ plots_kn <- lapply(1:length(limmares_bysp), function(i){
 
 `r knitr::knit(text = unlist(plots_kn))`
 
+```{r}
+outdir <- paste0(opt$out, "tabs2use/")
+if(!dir.exists(outdir)) dir.create(outdir)
+
+for(nn in names(limmares_byproc_IMC_annot)){
+  write_tsv(limmares_byproc_IMC_annot[[nn]]%>% rownames_to_column("process"), 
+            file=paste0(outdir, nn, "_processes_daaIMC_adjDeprSexIntAge.tsv") )
+}
+
+for(nn in names(limmares_byproc_annot)){
+  write_tsv(limmares_byproc_annot[[nn]] %>% rownames_to_column("process"), 
+            file=paste0(outdir, nn, "_processes_daaDepr_adjIMCSexIntAge.tsv") )
+}
+
+
+for(nn in names(limmares_bysp)){
+  write_tsv(limmares_bysp[[nn]] %>% rownames_to_column("process"),
+            file=paste0(outdir, nn, "_bySpecies_daaDepr_adjIMCSexIntAge.tsv"))
+}
+
+
+library(openxlsx)
+files <- list.files(outdir, pattern = "\\.tsv$", full.names = TRUE)
+files <- files[grepl("MetaCyc_p|GOmixerModules", basename(files), perl=T) ]
+
+wb <- createWorkbook()
+
+for (file in files) {
+  sheet_name <- tools::file_path_sans_ext(basename(file))
+  if(nchar(sheet_name) > 31) sheet_name <- paste(strsplit(sheet_name, "")[[1]][1:31], sep="", collapse="")
+  
+  data <- read_tsv(file)
+
+  addWorksheet(wb, sheet_name)
+  writeData(wb, sheet_name, data)
+}
+
+saveWorkbook(wb, file = file.path(outdir, "functional_results.xlsx"), overwrite = TRUE)
+
+
+ ```
 
 
