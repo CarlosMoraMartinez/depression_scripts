@@ -3,6 +3,7 @@ library(DESeq2)
 library(phyloseq)
 library(janitor)
 library(ggvenn)
+library(ggVennDiagram)
 
 ## Mediation analysis based on tutorials:
 ## https://advstats.psychstat.org/book/mediation/index.php
@@ -35,16 +36,18 @@ MODE = "LOCAL"
 if(MODE == "IATA"){
   opt <- list()
 }else{
-  opt <- list(out ="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/mediation_analysis8/",
-              indir = "/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/results_rstudio_10/",
-              phyloseq_list = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/phyloseq_original//phyloseq_all_list.RData",
+  opt <- list(out ="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/mediation_analysis11_SexIntAge_noLog/",
+              indir = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/",
+              #phyloseq_list = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/phyloseq_original//phyloseq_all_list.RData",
+              phyloseq_obj = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/DESeq2_AgeSexInteraction/Integrate1/phyloseq_used_remove_tanda2.RData",
               phyloseq_name = "remove_tanda2",
+              alphadiv_tab = "/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/results_rstudio_10/AlphaDiversity/remove_tanda2_rarefied_min_AlphaDiv.tsv",
               r_functions="//home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/metagenomics_core_functions.R",
               r_functions_mediation="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/mediation_functions.R",
               metadata = "/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/metadatos_MC_AL12042023_CM_corrected.xlsx",
               rewrite=TRUE,
               fc=1,
-              pval=0.05,
+              pval=0.01,
               adjust_pvals = TRUE
   )
 }
@@ -54,103 +57,201 @@ AJUST_PVALS = opt$adjust_pvals
 source(opt$r_functions)
 source(opt$r_functions_mediation)
 restaurar <- restauraropt_mk(opt)
+plim <- opt$pval
 
-load(opt$phyloseq_list)
-phobj <- all_phyloseq[[opt$phyloseq_name]]
-phobj <- updatePsWithLogs(phobj, c("Edad", "IMC"))
+#load(opt$phyloseq_list)
+#phobj <- all_phyloseq[[opt$phyloseq_name]]
+#phobj <- updatePsWithLogs(phobj, c("Edad", "IMC"))
+
+load(opt$phyloseq_obj)
+
 metadata <- sample_data(phobj) %>% data.frame
 
-alphadiv <- read_tsv(paste0(opt$indir, "AlphaDiversity/remove_tanda2_rarefied_min_AlphaDiv.tsv")) %>%
+alphadiv <- read_tsv(opt$alphadiv_tab) %>%
   dplyr::select(sampleID, Observed, Chao1, Shannon, InvSimpson)
 
 metadata2 <- merge(metadata, alphadiv, by="sampleID")
 
 #load(paste0(opt$indir, "DESeq2_ControlVars/DeSEQ2/remove_tanda2_IMC_log/DESEQ2_all_results_remove_tanda2_IMC_log.R"))
 #load(paste0(opt$indir, "DESeq2_ControlVarsMany/LFC_Comparison_AgeAndBMI_allCombos.RData"))
-load(paste0(opt$indir, "IntegrateWithAndWithoutCorrection/LFC_Comparison_AgeAndBMI_allCombos.RData"))
-vstdf <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_vst_counts.tsv"))
-normdf <- read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_norm_counts.tsv"))
+load(paste0(opt$indir, "DESeq2_AgeSexInteraction_noLogPoscounts/Integrate1/LFC_Comparison_AgeISex_BMI_allCombos.RData"))
+load(paste0(opt$indir, "DESeq2_AgeSexInteraction_noLogPoscounts/all_DESeq2.RData"))
+
+vstdf <- dds_all$CondBMISexIAge$vst_counts_df  #read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_vst_counts.tsv"))
+normdf <- dds_all$CondBMISexIAge$norm_counts_df #read_tsv(paste0(opt$indir, "DeSEQ2/remove_tanda2/remove_tanda2_norm_counts.tsv"))
 
 ### Do tests
 #first do a small Venn diagram
 
+## Venn diagram of MDD related bacteria
+
 vars2venn <- list(
-  "D vs C" = dea2contrasts$firstContrast$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon),
-  #"D vs C adj. BMI" = summary_df %>% dplyr::filter(depr_adjimc_padj < plim) %>% pull(variable),
-  "adj BMI" = dea2contrasts$contrastlist2$Condition_corrBMI$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon),
-  #"adj BMI" = dea2contrasts$contrastlist2$Condition_corrIMC$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon), #old versions
-  "adj Age" = dea2contrasts$contrastlist2$Condition_corrAge$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon),
-  "adj both" = dea2contrasts$contrastlist2$Condition_corr2$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon)
+  "D vs C" = dea2contrasts$firstContrast$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon),
+  "D vs C\nadj Sex*Age" = dea2contrasts$contrastlist2$`D_vs_C_adj.Age*Sex`$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon),
+  "D vs C\nadj Sex*Age+BMI" = dea2contrasts$contrastlist2$`D_vs_C_adj.Age*Sex+BMI`$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon)
 )
 gv <- ggvenn(
   vars2venn, columns = names(vars2venn),
   stroke_size = 0.5,
   stroke_color = C_NS,
   fill_color = c(C_CASE, C_CTRL2, C_CTRL, C_CASE2),show_elements = F
-)
-ggsave(filename = paste0(opt$out, "VennDiagram_CvsD_control.pdf"), gv, width = 8, height = 8)
+)+
+  theme(
+    plot.margin = margin(t = 20, r = 20, b = 20, l = 20),  # top, right, bottom, left
+    text = element_text(size = 12)  # optional: tweak font size
+  )
+ggsave(filename = paste0(opt$out, "VennDiagram_CvsD_controlSexIntAgeBMI_p", as.character(plim), ".pdf"), gv, width = 8, height = 8)
 
+(gv <- ggVennDiagram(vars2venn) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  theme(
+    plot.margin = margin(100, 100, 100, 100),
+    text = element_text(size=12),
+    legend.position = "none"
+  )
+)
+  #venn_data <- process_data(Venn(vars2venn))
+
+
+ggsave(filename = paste0(opt$out, "VennDiagram_CvsD_controlSexIntAgeBMI_p", as.character(plim), "_2.pdf"), gv, width = 8, height = 8)
+
+## Venn diagram of BMI related bacteria
 vars2venn <- list(
-  "D vs C" = dea2contrasts$firstContrast$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon),
-  #"D vs C adj. BMI" = summary_df %>% dplyr::filter(depr_adjimc_padj < plim) %>% pull(variable),
-  "D vs C, adj BMI+Age" = dea2contrasts$contrastlist2$Condition_corr2$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon)
+  "BMI" = dea2contrasts$contrastlist2$BMI_alone$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon),
+  "BMI\nadj Sex*Age" = dea2contrasts$contrastlist2$`BMI_adj.Age*Sex`$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon),
+  "BMI\nadj Sex*Age+MDD" = dea2contrasts$contrastlist2$`BMI_adj.Age*Sex+Depr`$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon)
 )
 gv <- ggvenn(
   vars2venn, columns = names(vars2venn),
   stroke_size = 0.5,
   stroke_color = C_NS,
   fill_color = c(C_CASE, C_CTRL2, C_CTRL, C_CASE2),show_elements = F
+)+
+  theme(
+    plot.margin = margin(t = 20, r = 20, b = 20, l = 20),  # top, right, bottom, left
+    text = element_text(size = 12)  # optional: tweak font size
+  )
+ggsave(filename = paste0(opt$out, "VennDiagram_BMI_controlSexIntAgeCond_p", as.character(plim), ".pdf"), gv, width = 8, height = 8)
+
+(gv <- ggVennDiagram(vars2venn) +
+    scale_fill_gradient(low = "white", high = "steelblue") +
+    theme(
+      plot.margin = margin(100, 100, 100, 100),
+      text = element_text(size=12),
+      legend.position = "none"
+    )
 )
-ggsave(filename = paste0(opt$out, "VennDiagram_CvsD_control2.pdf"), gv, width = 6, height = 6)
+#venn_data <- process_data(Venn(vars2venn))
 
+ggsave(filename = paste0(opt$out, "VennDiagram_BMI_controlSexIntAgeCond_p", as.character(plim), "_2.pdf"), gv, width = 8, height = 8)
 
+#####
+
+## Venn diagram of MDD vs BMI related bacteria, uncorrected
 vars2venn <- list(
-  "D vs C" = dea2contrasts$firstContrast$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon),
-  #"D vs C, adj BMI" = dea2contrasts$contrastlist2$Condition_corrIMC$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon)
-  "D vs C, adj BMI" = dea2contrasts$contrastlist2$Condition_corrBMI$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon)
+  "D vs C" = dea2contrasts$firstContrast$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon),
+  #"D vs C\nadj Sex*Age" = dea2contrasts$contrastlist2$`D_vs_C_adj.Age*Sex`$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon),
+  "D vs C\nadj Sex*Age+BMI" = dea2contrasts$contrastlist2$`D_vs_C_adj.Age*Sex+BMI`$resdf %>% dplyr::filter(padj <plim) %>% pull(taxon),
+
+  "BMI" = dea2contrasts$contrastlist2$BMI_alone$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon),
+  #"BMI\nadj Sex*Age" = dea2contrasts$contrastlist2$`BMI_adj.Age*Sex`$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon),
+  "BMI\nadj Sex*Age+MDD" = dea2contrasts$contrastlist2$`BMI_adj.Age*Sex+Depr`$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon)
 )
 gv <- ggvenn(
   vars2venn, columns = names(vars2venn),
   stroke_size = 0.5,
   stroke_color = C_NS,
   fill_color = c(C_CASE, C_CTRL2, C_CTRL, C_CASE2),show_elements = F
-)
-ggsave(filename = paste0(opt$out, "VennDiagram_CvsD_adjBMI.pdf"), gv, width = 6, height = 6)
+)+
+  theme(
+    plot.margin = margin(t = 20, r = 20, b = 20, l = 20),  # top, right, bottom, left
+    text = element_text(size = 12)  # optional: tweak font size
+  )
+ggsave(filename = paste0(opt$out, "VennDiagram_BMICond_alone_and_all_p", as.character(plim), ".pdf"), gv, width = 8, height = 8)
 
+(gv <- ggVennDiagram(vars2venn) +
+    scale_fill_gradient(low = "white", high = "steelblue") +
+    theme(
+      plot.margin = margin(100, 100, 100, 100),
+      text = element_text(size=12),
+      legend.position = "none"
+    )
+)
+#venn_data <- process_data(Venn(vars2venn))
+ggsave(filename = paste0(opt$out, "VennDiagram_BMICond_alone_and_all_2_p", as.character(plim), ".pdf"), gv, width = 8, height = 8)
+
+######
+
+## Venn diagram of MDD vs BMI related bacteria, uncorrected
 vars2venn <- list(
-  "D vs C" = dea2contrasts$firstContrast$resdf %>% dplyr::filter(padj <= 0.05) %>% pull(taxon),
-  #"D vs C adj. BMI" = summary_df %>% dplyr::filter(depr_adjimc_padj < plim) %>% pull(variable),
-  "D vs C, adj Age" = dea2contrasts$contrastlist2$Condition_corrAge$resdf %>%
-    dplyr::filter(padj <= 0.05) %>% pull(taxon)
+  #"D vs C" = dea2contrasts$firstContrast$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon),
+  "D vs C\nadj Sex*Age" = dea2contrasts$contrastlist2$`D_vs_C_adj.Age*Sex`$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon),
+  "D vs C\nadj Sex*Age+BMI" = dea2contrasts$contrastlist2$`D_vs_C_adj.Age*Sex+BMI`$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon),
+
+  #"BMI" = dea2contrasts$contrastlist2$BMI_alone$resdf %>% dplyr::filter(padj < 0.05) %>% pull(taxon),
+  "BMI\nadj Sex*Age" = dea2contrasts$contrastlist2$`BMI_adj.Age*Sex`$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon),
+  "BMI\nadj Sex*Age+MDD" = dea2contrasts$contrastlist2$`BMI_adj.Age*Sex+Depr`$resdf %>% dplyr::filter(padj < plim) %>% pull(taxon)
 )
 gv <- ggvenn(
   vars2venn, columns = names(vars2venn),
   stroke_size = 0.5,
   stroke_color = C_NS,
   fill_color = c(C_CASE, C_CTRL2, C_CTRL, C_CASE2),show_elements = F
+)+
+  theme(
+    plot.margin = margin(t = 20, r = 20, b = 20, l = 20),  # top, right, bottom, left
+    text = element_text(size = 12)  # optional: tweak font size
+  )
+ggsave(filename = paste0(opt$out, "VennDiagram_BMICond_adjInt_and_all_p", as.character(plim), ".pdf"), gv, width = 8, height = 8)
+
+(gv <- ggVennDiagram(vars2venn) +
+    scale_fill_gradient(low = "white", high = "steelblue") +
+    theme(
+      plot.margin = margin(100, 100, 100, 100),
+      text = element_text(size=12),
+      legend.position = "none"
+    )
 )
-ggsave(filename = paste0(opt$out, "VennDiagram_CvsD_adjAge.pdf"), gv, width = 6, height = 6)
+#venn_data <- process_data(Venn(vars2venn))
+ggsave(filename = paste0(opt$out, "VennDiagram_BMICond_adjInt_and_all_p", as.character(plim), "_2.pdf"), gv, width = 8, height = 8)
+
+######
+
 
 ### Plot bars of DEA contrasts
 daalist <- list(
   "D_vs_C" = dea2contrasts$firstContrast$resdf,
-  "D_vs_C_adj_BMIplusAge" = dea2contrasts$contrastlist2$Condition_corr2$resdf,
-  "BMI_adj_DeprplusAge" = dea2contrasts$contrastlist2$BMI_corr2$resdf,
-  "Age_adj_DeprplusBMI" = dea2contrasts$contrastlist2$Age_corr2$resdf
+  #"D_vs_C_adj_SexIAge" = dea2contrasts$contrastlist2$`D_vs_C_adj.Age*Sex`$resdf,
+  "D_vs_C_adj_SexInterAge_plus_BMI" = dea2contrasts$contrastlist2$`D_vs_C_adj.Age*Sex+BMI`$resdf,
+
+  "BMI" = dea2contrasts$contrastlist2$BMI_alone$resdf,
+  #"BMI_adj_SexIAge" = dea2contrasts$contrastlist2$`BMI_adj.Age*Sex`$resdf,
+  "BMI_adj_SexInterAge_plus_MDD" = dea2contrasts$contrastlist2$`BMI_adj.Age*Sex+Depr`$resdf
+
 )
 
-batplotsdaa <- makeBarplotDAA(daalist, opt$out, plim=0.05, name="corrAgeIMC")
+batplotsdaa <- makeBarplotDAA3_Int(daalist, opt$out, plim=0.05, name="corrSexIAgeBMI_b")
+batplotsdaa <- makeBarplotDAA3_Int(daalist, opt$out, plim=0.01, name="corrSexIAgeBMIp01_b")
 
 daalist <- list(
-  "D_vs_C" = dea2contrasts$firstContrast$resdf,
-  "D_vs_C_adj_BMI" = dea2contrasts$contrastlist2$Condition_corrBMI$resdf,
-  #"D_vs_C_adj_BMI" = dea2contrasts$contrastlist2$Condition_corrIMC$resdf,
-  "BMI" = dea2contrasts$contrastlist2$BMI_alone$resdf,
-  "BMI_adj_Depr" = dea2contrasts$contrastlist2$BMI_corrCond$resdf
+  "D_vs_C" =dea2contrasts$contrastlist2$`D_vs_C_adj.Age*Sex`$resdf,
+  #"D_vs_C_adj_SexIAge" = dea2contrasts$contrastlist2$`D_vs_C_adj.Age*Sex`$resdf,
+  "D_vs_C_adj_SexInterAge_plus_BMI" = dea2contrasts$contrastlist2$`D_vs_C_adj.Age*Sex+BMI`$resdf,
+
+  "BMI" = dea2contrasts$contrastlist2$`BMI_adj.Age*Sex`$resdf,
+  #"BMI_adj_SexIAge" = dea2contrasts$contrastlist2$`BMI_adj.Age*Sex`$resdf,
+  "BMI_adj_SexInterAge_plus_MDD" = dea2contrasts$contrastlist2$`BMI_adj.Age*Sex+Depr`$resdf
+
 )
-batplotsdaa2 <- makeBarplotDAA2(daalist, opt$out, plim=0.05, name="corrIMC")
-batplotsdaa2 <- makeBarplotDAA2(daalist, opt$out, plim=0.01, name="corrIMC01")
+
+batplotsdaa <- makeBarplotDAA3_Int(daalist, opt$out, plim=0.05, name="corrSexIAgeBMIAllAdj")
+batplotsdaa <- makeBarplotDAA3_Int(daalist, opt$out, plim=0.01, name="corrSexIAgeBMIp01AllAdj")
+
+######## hasta aqui 150612
+
 #### Read data
+metadata2 <- metadata2 %>% dplyr::mutate(IMC_log = BMI,
+                                         Edad_log = Age_log)
 
 expr_df <- vstdf %>% column_to_rownames("gene") %>%
   as.matrix() %>% t %>% data.frame %>%
@@ -261,47 +362,156 @@ getvars_funcs <- list(
 heights <- list(
   main_mediation_BMI_separate=10,
   main_mediation_BMI_separate2=10,
-  mixed_mediation_BMI_CondSigBeforeAndAfterAdj=10,
+  mixed_mediation_BMI_CondSigBeforeAndAfterAdj=6,
   opos_mediation_BMI_OnlySigAfterAdjust_separate=10,
   indir_onlySigBeforeAdj=10,
   dir_onlyNotIMC=15
+)
+
+list2merge <- list(
+  depr_only_padj = dea2contrasts$firstContrast$resdf,
+  imc_only_padj = dea2contrasts$contrastlist2$BMI_alone$resdf,
+  depr_adjimc_padj = dea2contrasts$contrastlist2$`D_vs_C_adj.Age*Sex+BMI`$resdf,
+  #depr_adjimc_padj = dea2contrasts$contrastlist2$Condition_corrIMC$resdf,
+  imc_adjdepr_padj = dea2contrasts$contrastlist2$`BMI_adj.Age*Sex+Depr`$resdf
 )
 
 allMedPlots <- map(c(0.1, 0.05),\(plim_plot){
   map(names(getvars_funcs), \(x){
     opt <- restaurar(opt)
     opt$out <- paste0(opt$out, "/", x, "/")
+    
+    w2 = ifelse(x == names(getvars_funcs)[6], 15, 12)
+    h2 = ifelse(x == names(getvars_funcs)[6], 14, 6)
     if(!dir.exists(opt$out)) dir.create(opt$out)
-    makeFullMediationAnalysisIMC(opt,
+    makeFullMediationAnalysisIMC(vstdf, df_all, opt,
                              getVarsFunction = getvars_funcs[[x]],
                              mediator_name = mediator_name,
                              y_name = y_name,
                              plim = plim,
                              plim_plot = plim_plot,
-                             name = "analysis_IMC_separateModel_vjust",
+                             name = "analysis_IMC_separateModel_vjust_fixBpLims",
                              wnet=14,
                              hnet=heights[[x]],
                              wbars=8,
                              hbars=10,
-                             wbars2=10,
-                             hbars2=10,
+                             wbars2=w2,  # 15 12
+                             hbars2=h2,  # 14 6
                              use_color_scale = FALSE,
-                             fix_barplot_limits = TRUE, custom_colors=NULL, make_boxplots = TRUE)
+                             fix_barplot_limits = TRUE,
+                             custom_colors=NULL,
+                             make_boxplots = TRUE,
+                             make_power_test = FALSE,
+                             list2merge=list2merge)
     if(plim_plot<1){
-      makeFullMediationAnalysisIMC(opt,
+      makeFullMediationAnalysisIMC(vstdf, df_all, opt,
                                  getVarsFunction = getvars_funcs[[x]],
                                  mediator_name = mediator_name,
                                  y_name = y_name,
                                  plim = plim,
                                  plim_plot = plim_plot,
                                  name = "analysis_IMC_separateModel_vjust",
-                                 wnet=14, hnet=heights[[x]], wbars=8, hbars=10, wbars2=10, hbars2=10, use_color_scale = FALSE,
-                                 fix_barplot_limits = TRUE, custom_colors=custom_cols[[x]], make_boxplots=FALSE)
+                                 wnet=14,
+                                 hnet=heights[[x]],
+                                 wbars=8,
+                                 hbars=10,
+                                 wbars2=w2,
+                                 hbars2=h2,
+                                 use_color_scale = FALSE,
+                                 fix_barplot_limits = TRUE,
+                                 custom_colors=custom_cols[[x]],
+                                 make_boxplots=TRUE,
+                                 list2merge=list2merge)
     }
 })})
 
+x <- names(getvars_funcs)[6]
+opt <- restaurar(opt)
+opt$out <- paste0(opt$out, "/", x, "_PowerAn/")
+if(!dir.exists(opt$out)) dir.create(opt$out)
+aux <- makeFullMediationAnalysisIMC(vstdf, df_all, opt,
+                             getVarsFunction = getvars_funcs[[x]],
+                             mediator_name = mediator_name,
+                             y_name = y_name,
+                             plim = plim,
+                             plim_plot = plim_plot,
+                             name = "analysis_IMC_separateModel_vjust_fixBpLims",
+                             wnet=14,
+                             hnet=heights[[x]],
+                             wbars=8,
+                             hbars=10,
+                             wbars2=12,  # 15 12
+                             hbars2=6,  # 14 6
+                             use_color_scale = FALSE,
+                             fix_barplot_limits = TRUE,
+                             custom_colors=NULL,
+                             make_boxplots = TRUE,
+                             make_power_test = TRUE,
+                             list2merge=list2merge)
+powdf <- aux$power_analysis %>% 
+  dplyr::mutate(taxa = gsub("_", " ", taxa), 
+                taxa = gsub("sp ", "sp. ", taxa))
 
 
+palette16 <- colorRampPalette(wes_palette("AsteroidCity2"))(length(unique(powdf$taxa)))
+
+POWERLEVEL <- 0.9
+pow90 <- powdf %>% 
+  filter(power >= POWERLEVEL) %>% 
+  group_by(taxa, param) %>% 
+  dplyr::summarise(ssize=min(ssize))
+write_tsv(pow90, paste0(opt$out, "power_analysis_curve_minSampleSize_pow",as.character(POWERLEVEL), ".tsv"))
+
+(gpow <- ggplot(powdf, aes(x=ssize, y=power, col=taxa, group=taxa)) +
+    facet_grid( ~ param ) +
+    geom_hline(yintercept = POWERLEVEL, linetype=2, col="gray") +
+    geom_vline(data = pow90, aes(xintercept = ssize, col=taxa),linetype=2) +
+    geom_line() + 
+    geom_point() +
+    theme_bw() + 
+    scale_color_manual(values = palette16) +
+    xlab("sample size") + 
+    theme(strip.background = element_blank(), #element_rect(fill="white")
+          strip.text = element_text(size=16),
+          legend.text = element_text(face="italic", size=12),
+          axis.text = element_text(size=14),
+          axis.title = element_text(size=16),
+          legend.position="bottom",
+          plot.margin = margin(t = 0,  # Top margin
+                               r = 0.5,  # Right margin
+                               b = 0,  # Bottom margin
+                               l = 0.2,  # Left margin
+                               unit = "in")
+          )
+  
+)
+ggsave(filename = paste0(opt$out, "power_analysis_curve_pow",as.character(POWERLEVEL), ".pdf"), gpow, width = 16, height = 6)
+
+(gpow <- ggplot(powdf, aes(x=ssize, y=power, col=taxa, group=taxa)) +
+    facet_grid( taxa ~ param ) +
+    geom_hline(yintercept = POWERLEVEL, linetype=2, col="gray") +
+    geom_vline(data = pow90, aes(xintercept = ssize, col=taxa),linetype=2) +
+    geom_line() + 
+    geom_point() +
+    theme_bw() + 
+    scale_color_manual(values = palette16) +
+    xlab("sample size") + 
+    theme(strip.background = element_blank(), #element_rect(fill="white")
+          strip.text = element_text(size=16),
+          legend.text = element_text(face="italic", size=12),
+          axis.text = element_text(size=8),
+          axis.title = element_text(size=16),
+          legend.position="bottom",
+          plot.margin = margin(t = 0,  # Top margin
+                               r = 0.5,  # Right margin
+                               b = 0,  # Bottom margin
+                               l = 0.2,  # Left margin
+                               unit = "in")
+    ) +
+    theme(legend.position = "none")
+  
+)
+ggsave(filename = paste0(opt$out, "power_analysis_curve_facet_pow",as.character(POWERLEVEL), ".pdf"), gpow, width = 12, height = 46)
 ###########################################################################
 ### MEDIATION WITH IMC, MERGED
 opt <- restaurar(opt)
@@ -417,7 +627,6 @@ summary_df <- cbind(summary_df, merged_pvals)
 
 x_name <- "Edad"
 y_name <- "Condition_bin"
-plim <- 0.05
 
 vars2test <- summary_df %>%
   dplyr::filter(depr_only_padj < plim &

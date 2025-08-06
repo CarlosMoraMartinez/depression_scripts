@@ -11,7 +11,8 @@ library(reticulate)
 # virtualenv_install("r-reticulate", "plotly")
 # use_virtualenv("r-reticulate")
 
-use_python("/usr/bin/python")
+#use_python("/usr/bin/python")
+use_python("/home/carlos/miniforge3/bin/python")
 
 C_CASE = "#FD8B2F" #"rgba(200, 44, 44, 0.8)"
 C_CASE_LINK = "#fBd895" #"#f9c784"
@@ -35,15 +36,21 @@ prepareSankeyPlot <- function(daa_proc_all,
                               case_name = "Depression", 
                               control_name = "Control", 
                               outdir = "~/", 
-                              name = "test"){
+                              name = "test", 
+                              ntop = 0){
   ## Returns a list with 
   ##  1) a data frame of nodes and 
   ##  2) a data frame of links between nodes.
   # Get processes to plot
+
   daa_proc1 <- daa_proc_all %>% 
     dplyr::filter(padj< plim) %>% 
     rownames_to_column("Pathway")
-  
+  if(nrow(daa_proc1) > ntop & ntop > 0){
+    daa_proc1 <- daa_proc_all %>% 
+      slice_min(order_by = padj, n = ntop) %>% 
+      rownames_to_column("Pathway")
+  }
   # Get process-species pairs that are present in selected processes, 
   # with or without aggregating non-significant species
   if(include_others){
@@ -134,7 +141,7 @@ prepareSankeyPlot <- function(daa_proc_all,
                       data.frame(
                         value = {if(include_longnames)paste(daa_proc1$Pathway, daa_proc1$process_name, sep=":") else daa_proc1$Pathway},
                         value2match = daa_proc1$Pathway,
-                        xpos = 0.25,
+                        xpos = 0.15,
                         color = scale_proc(daa_proc1$log2FoldChange),
                         #color = ifelse(daa_proc1$log2FoldChange < 0, C_CASE, C_CTRL), 
                         nodesize = tb_norm[match(daa_proc1$Pathway, tab_quant_all$Pathway)]
@@ -144,9 +151,9 @@ prepareSankeyPlot <- function(daa_proc_all,
               SumExpr = sum(Size)) #%>% 
   # dplyr::mutate(color = ifelse(LFC < 0, C_CASE, C_CTRL))
   scale_species_node = scales::gradient_n_pal(colours=c(C_CTRL, C_WHITE, C_CASE), 
-                                              values=c(min(species$LFC), 
+                                              values=c(min(c(-0.1, min(species$LFC))), 
                                                        0,
-                                                       max(species$LFC)))
+                                                       max(c(0.1, max(species$LFC)))))
   nodelist_3 <- data.frame(
     value = species$node2,
     value2match = species$node2,
@@ -179,6 +186,10 @@ prepareSankeyPlot <- function(daa_proc_all,
 }
 
 makeSankeyPlot <- function(nodelist, linklist, name, fname, outdir, fontsize=18){
+  
+  nodelist <- nodelist %>% 
+    dplyr::mutate(value  = ifelse(nchar(value) > 60, gsub("\\([^)]+\\)", "", value, perl=TRUE), value)
+    )
   # From https://plotly.com/r/sankey-diagram/
   print(head(nodelist))
   fig <- plot_ly(
