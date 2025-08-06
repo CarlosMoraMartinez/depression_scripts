@@ -1,5 +1,6 @@
 library(tidyverse)
-library("wesanderson")
+library(wesanderson)
+library(DESeq2)
 # use this! use without log
 
 pal <- wes_palette("AsteroidCity1", 2)
