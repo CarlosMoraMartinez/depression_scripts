@@ -2,8 +2,9 @@
 library(tidyverse)
 library(phyloseq)
 library(readxl)
-# hola!
+library(janitor)
 library(devtools)
+
 devtools::load_all("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/G4Micro")
 
 
@@ -54,18 +55,25 @@ source(opt$read_otutable_script)
 source(opt$read_metadata_script)
 # Create phyloseq objects
 source(opt$create_phyloseq_script)
+
+#Alternatively, simply load the data:
+data("all_phyloseq")
+
 # Alpha and Beta diversity. Descriptive
 source(opt$alpha_beta_script)
+
+# PERMANOVA
+source(opt$make_permanova_script)
 
 # DESeq 4 each
 source(opt$daa_main_condition)
 #load(paste0(opt$out, "DeSEQ2/DESEQ2_all.RData"))
 
-#  Predict
+#  Predict 2 groups
 source(opt$predict_2groups)
 
-# PERMANOVA
-source(opt$make_permanova_script)
+## Predict DEPR + OBESITY
+source(opt$predict_4groups)
 
 # DAA correcting by covariates
 source(opt$daa_include_single_covariate)
@@ -87,10 +95,9 @@ source(opt$daa_with_scales)
 
 #Integrate all contrasts
 source(opt$daa_integrate_with_and_without_correction)
+
 #load("/home/carlos/Escritorio/202311_DEPRESION/results_rstudio_v2_4/DeSEQ2/remove_tanda2/DESEQ2_all_results_remove_tanda2.R")
 source(opt$daa_integrate_all_contrasts)
 
 #####################################
-## Predict DEPR + OBESITY
 
-source(opt$predict_4groups)
