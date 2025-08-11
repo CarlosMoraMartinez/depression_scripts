@@ -52,31 +52,14 @@ Sys.setlocale("LC_TIME", "C")
 suppressPackageStartupMessages({
  # library(plyr)
   library(tidyverse)
-  library(gt)
   library(phyloseq)
- # library(fantaxtic)
+  library(gt)
   library(readxl)
-  library(ggpubr)
-  #library(dendextend)
-  library(DESeq2)
-  library(EnhancedVolcano)
- # library(gridExtra)
   library(cowplot)
-  library(pheatmap)
- # library(HMP)
   library(knitr)
-  library(vegan)
-  library(ggsignif)
-  library(DT)
-  library(caret)
-  library(randomForest)
- # library(GGally)
- # library(corrgram)
- # library(MuMIn)
- # library(corrplot)
-  #library(CoDaSeq) # dependencias necesitan sudo apt install libgsl-dev. Install with devtools::install_github('ggloor/CoDaSeq/CoDaSeq')
-  #library(zCompositions)
-  library(ggpmisc)
+  #library(DT)
+  library(G4Micro)
+
 })
 
 ```
@@ -88,26 +71,7 @@ if(exists("input")){
     opt <- input
   }else{
     if(MODE == "IATA"){
-    opt <- list(fc=1, 
-            pval=0.05, 
-            num_genes_default=5, 
-            ptype="adjusted", 
-            fctype="shrunk", 
-            mincount= 1,
-            minsampleswithcount= 6,
-            out= "/home/ccarlos/Documentos/202309_DEPRESION/funcional3_filtT2/", #"/home/carmoma/projects/Psoriasis_20231005/results2/",  
-            modules_path=  "/home/ccarlos/Documentos/202309_DEPRESION/funcional1/kegg_modules/", #"/home/carmoma/projects/Psoriasis_20231005/Psoriasis/results/04_phyloseq/",
-            cazy="/home/ccarlos/data/resources/cazy/",
-            r_functions= "/home/ccarlos/repos/depression_analysis/metagenomics_core_functions.R", #"/home/carmoma/projects/Psoriasis_20231005/Psoriasis/Analysis_code/metagenomics_core_functions.R",
-            r_functions2= "/home/ccarlos/repos/depression_analysis/metagenomics_predictive_functions.R",
-            metadata= "/home/carmoma/projects/Psoriasis_20231005/Psoriasis/Biobanco_Psoriasis.xlsx",
-            input_funcional = "/home/ccarlos/Documentos/202309_DEPRESION/results_cluster/mg13_humann3_all/merge2/",
-            dearesult = "/home/ccarlos/Documentos/202309_DEPRESION/202311_DEPRESSION/results_rstudio_v2_4/DeSEQ2/remove_tanda2/DESEQ2_all_results_remove_tanda2.R",
-            metadata =  "/home/ccarlos/Documentos/202309_DEPRESION/metadatos_MC_AL 12042023_CMcopy.xlsx",
-            phobj_raw ="/home/ccarlos/Documentos/202309_DEPRESION/202311_DEPRESSION/results_rstudio_v2_4/phyloseq/pre_phyloseq_filt_noTanda2.RData",
-            phobj_filt ="/home/ccarlos/Documentos/202309_DEPRESION/202311_DEPRESSION/results_rstudio_v2_4/phyloseq/pre_phyloseq_filt_noTanda2_rarefMin.RData",
-            phobj_rare = ""
-            )
+    opt <- list()
   }else{
     opt <- list(fc=1, 
             pval=0.05, 
@@ -116,30 +80,21 @@ if(exists("input")){
             fctype="shrunk", 
             mincount= 1,
             minsampleswithcount= 6,
-            out= "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/funcional_v2/", #"/home/carmoma/projects/Psoriasis_20231005/results2/",
+            out= "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results3_pckg/funcional_v1/",
             input=  "/home/carlos/Escritorio/202311_DEPRESION/mg09_combinempa",
             modules_path=  "/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/funcional1/kegg_modules/",
-            cazy="/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/cazy/",#"/home/carmoma/projects/Psoriasis_20231005/Psoriasis/results/04_phyloseq/",
-            r_functions= "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/metagenomics_core_functions.R", #"/home/carmoma/projects/Psoriasis_20231005/Psoriasis/Analysis_code/metagenomics_core_functions.R",
-            r_functions2= "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/metagenomics_predictive_functions.R",
-            r_functions3= "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/sankey_functions.R",
-            r_functions4= "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/functional_auxiliary_functions.R",
+            cazy="/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/cazy/",
             input_funcional = "/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/mg13_humann3_all/merge2/",
             dearesult = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/DESeq2_AgeSexInteraction_log/all_DESeq2.RData",
             metadata =  "/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/metadatos_MC_AL12042023_CM_corrected.xlsx",
             phobj_raw ="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/phyloseq/phyloseq_object_analysis1.RData",
-            phobj_filt ="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/DESeq2_AgeSexInteraction/Integrate1/phyloseq_used_remove_tanda2.RData",
-            phobj_rare = ""
+            phobj_filt ="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/DESeq2_AgeSexInteraction/Integrate1/phyloseq_used_remove_tanda2.RData"
             )
   }
 }
 ```
 
-```{r FUNCTIONS_PHLYLOSEQ, cache=FALSE}
-source(opt$r_functions)
-source(opt$r_functions2)
-source(opt$r_functions4)
-
+```{r DIST_OPTIONS, cache=FALSE}
 dists <- c("bray", "jaccard", "unifrac", "wunifrac")
 dtitles <- c("Bray-Curtis distances", "Jaccard distances", "UniFrac distances", "Weighted UniFrac distances")
 ```
@@ -431,7 +386,6 @@ plots_kn <- lapply(1:length(limmares_bysp), function(i){
 ## Sankey with plotly {.tabset}
 
 ```{r}
-source(opt$r_functions3)
 plims <- c(0.01, 0.001, 0.001, 0.001, 0.05, 0.05)
 names(plims) <- names(limmares_byproc)
 plims_sp <- c(0.01, 0.01, 0.01, 0.01, 0.05, 0.05)
@@ -442,9 +396,6 @@ OTHERS_SIZE = 1
 OTHERS_NAME = "Aggr. taxa"
 
 #Get processes
-
-
-
 case_name = "Depression"
 control_name = "Control"
 outdir <- paste0(opt$out, "/SankeyPlots/")

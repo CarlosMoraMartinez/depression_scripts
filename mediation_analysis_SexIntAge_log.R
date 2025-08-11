@@ -4,6 +4,7 @@ library(phyloseq)
 library(janitor)
 library(ggvenn)
 library(ggVennDiagram)
+library(G4Micro)
 
 ## Mediation analysis based on tutorials:
 ## https://advstats.psychstat.org/book/mediation/index.php
@@ -36,14 +37,12 @@ MODE = "LOCAL"
 if(MODE == "IATA"){
   opt <- list()
 }else{
-  opt <- list(out ="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/mediation_analysis12_SexIntAge_logDeseq_noLog/",
+  opt <- list(out ="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results3_pckg/mediation_analysis14/",
               indir = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/",
               #phyloseq_list = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/phyloseq_original//phyloseq_all_list.RData",
               phyloseq_obj = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/DESeq2_AgeSexInteraction/Integrate1/phyloseq_used_remove_tanda2.RData",
               phyloseq_name = "remove_tanda2",
               alphadiv_tab = "/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/results_rstudio_10/AlphaDiversity/remove_tanda2_rarefied_min_AlphaDiv.tsv",
-              r_functions="//home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/metagenomics_core_functions.R",
-              r_functions_mediation="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/depression_scripts/mediation_functions.R",
               metadata = "/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/metadatos_MC_AL12042023_CM_corrected.xlsx",
               rewrite=TRUE,
               fc=1,
@@ -53,16 +52,10 @@ if(MODE == "IATA"){
 }
 if(! dir.exists(opt$out)){dir.create(opt$out)}
 AJUST_PVALS = opt$adjust_pvals
-### LOAD DATA
-source(opt$r_functions)
-source(opt$r_functions_mediation)
 restaurar <- restauraropt_mk(opt)
 plim <- opt$pval
 
-#load(opt$phyloseq_list)
-#phobj <- all_phyloseq[[opt$phyloseq_name]]
-#phobj <- updatePsWithLogs(phobj, c("Edad", "IMC"))
-
+### LOAD DATA
 load(opt$phyloseq_obj)
 
 metadata <- sample_data(phobj) %>% data.frame
@@ -247,7 +240,8 @@ daalist <- list(
 batplotsdaa <- makeBarplotDAA3_Int(daalist, opt$out, plim=0.05, name="corrSexIAgeBMIAllAdj")
 batplotsdaa <- makeBarplotDAA3_Int(daalist, opt$out, plim=0.01, name="corrSexIAgeBMIp01AllAdj")
 
-######## hasta aqui 150612
+#############################################################
+#############################################################
 
 #### Read data
 metadata2 <- metadata2 %>% dplyr::mutate(IMC_log = BMI,
@@ -298,7 +292,7 @@ getvars_MAIN_ANALYSIS_CondAndIMC <- function(summary_df){
     pull(variable)
   return(vars2test)
 }
-
+# This one is used for Fig. 2
 getvars_CondAdjAndIMC <- function(summary_df){
   vars2test <- summary_df %>%
     dplyr::filter(depr_only_padj < plim &
@@ -337,7 +331,7 @@ getvars_onlyNotIMC <- function(summary_df){
 
 
 #####################################################
-mediator_name <- "IMC_log"
+mediator_name <- "IMC"
 y_name <- "Condition_bin"
 plim <- 0.05
 plim_plot <- 0.05
@@ -403,29 +397,32 @@ allMedPlots <- map(c(0.1, 0.05),\(plim_plot){
                              make_boxplots = TRUE,
                              make_power_test = FALSE,
                              list2merge=list2merge)
-    if(plim_plot<1){
-      makeFullMediationAnalysisIMC(vstdf, df_all, opt,
-                                 getVarsFunction = getvars_funcs[[x]],
-                                 mediator_name = mediator_name,
-                                 y_name = y_name,
-                                 plim = plim,
-                                 plim_plot = plim_plot,
-                                 name = "analysis_IMC_separateModel_vjust",
-                                 wnet=14,
-                                 hnet=heights[[x]],
-                                 wbars=8,
-                                 hbars=10,
-                                 wbars2=w2,
-                                 hbars2=h2,
-                                 use_color_scale = FALSE,
-                                 fix_barplot_limits = TRUE,
-                                 custom_colors=custom_cols[[x]],
-                                 make_boxplots=TRUE,
-                                 list2merge=list2merge)
-    }
+    #if(plim_plot<1){
+    #  opt <- restaurar(opt)
+    #  opt$out <- paste0(opt$out, "/", x, "_B/")
+    #  if(!dir.exists(opt$out)) dir.create(opt$out)
+    #  makeFullMediationAnalysisIMC(vstdf, df_all, opt,
+    #                             getVarsFunction = getvars_funcs[[x]],
+    #                             mediator_name = mediator_name,
+    #                             y_name = y_name,
+    #                             plim = plim,
+    #                             plim_plot = plim_plot,
+    #                             name = "analysis_IMC_separateModel_vjust",
+    #                             wnet=14,
+    #                             hnet=heights[[x]],
+    #                             wbars=8,
+    #                             hbars=10,
+    #                             wbars2=w2,
+    #                             hbars2=h2,
+    #                             use_color_scale = FALSE,
+    #                             fix_barplot_limits = TRUE,
+    #                             custom_colors=custom_cols[[x]],
+    #                             make_boxplots=TRUE,
+    #                             list2merge=list2merge)
+    #}
 })})
 
-x <- names(getvars_funcs)[6]
+x <- names(getvars_funcs)[3]
 opt <- restaurar(opt)
 opt$out <- paste0(opt$out, "/", x, "_PowerAn/")
 if(!dir.exists(opt$out)) dir.create(opt$out)

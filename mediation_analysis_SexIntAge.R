@@ -1,7 +1,7 @@
 library(tidyverse)
-library(DESeq2)
 library(phyloseq)
 library(janitor)
+library(G4Micro)
 library(ggvenn)
 library(ggVennDiagram)
 
@@ -30,13 +30,19 @@ library(ggVennDiagram)
 ### 2) -> Mediator (BMI) is correlated to X (bacterial species).
 ### 3)
 
+C_CASE = "#FD8B2F"
+C_CASE2 = "tomato"
+C_CTRL = "#A1C6EA"
+C_CTRL2 = "steelblue2"
+C_NS =  "#A5ABBD"
+
 SEED <- 123
 MODE = "LOCAL"
 
 if(MODE == "IATA"){
   opt <- list()
 }else{
-  opt <- list(out ="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/mediation_analysis11_SexIntAge_noLog/",
+  opt <- list(out ="/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results3_pckg//mediation_analysis17log/",
               indir = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/",
               #phyloseq_list = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/phyloseq_original//phyloseq_all_list.RData",
               phyloseq_obj = "/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/Results_rstudio/results2/DESeq2_AgeSexInteraction/Integrate1/phyloseq_used_remove_tanda2.RData",
@@ -47,21 +53,15 @@ if(MODE == "IATA"){
               metadata = "/home/carlos/Escritorio/202311_DEPRESION/202311_DEPRESION/metadatos_MC_AL12042023_CM_corrected.xlsx",
               rewrite=TRUE,
               fc=1,
-              pval=0.01,
+              pval=0.05,
               adjust_pvals = TRUE
   )
 }
 if(! dir.exists(opt$out)){dir.create(opt$out)}
 AJUST_PVALS = opt$adjust_pvals
 ### LOAD DATA
-source(opt$r_functions)
-source(opt$r_functions_mediation)
 restaurar <- restauraropt_mk(opt)
 plim <- opt$pval
-
-#load(opt$phyloseq_list)
-#phobj <- all_phyloseq[[opt$phyloseq_name]]
-#phobj <- updatePsWithLogs(phobj, c("Edad", "IMC"))
 
 load(opt$phyloseq_obj)
 
@@ -247,10 +247,11 @@ daalist <- list(
 batplotsdaa <- makeBarplotDAA3_Int(daalist, opt$out, plim=0.05, name="corrSexIAgeBMIAllAdj")
 batplotsdaa <- makeBarplotDAA3_Int(daalist, opt$out, plim=0.01, name="corrSexIAgeBMIp01AllAdj")
 
-######## hasta aqui 150612
-
+rm(batplotsdaa)
+########################################################
+########################################################
 #### Read data
-metadata2 <- metadata2 %>% dplyr::mutate(IMC_log = BMI,
+metadata2 <- metadata2 %>% dplyr::mutate(IMC_log = BMI_log,
                                          Edad_log = Age_log)
 
 expr_df <- vstdf %>% column_to_rownames("gene") %>%
@@ -325,12 +326,13 @@ getvars_onlyBeforeAdj <- function(summary_df){
   return(vars2test)
 }
 
+## this one used for direct effects
 getvars_onlyNotIMC <- function(summary_df){
   vars2test <- summary_df %>%
     dplyr::filter(depr_only_padj < plim &
                     depr_adjimc_padj < plim &
-                    imc_only_padj > plim  &
-                    imc_adjdepr_padj > plim) %>%
+                    (imc_only_padj > plim | is.na(imc_only_padj)) &
+                    (imc_adjdepr_padj > plim | is.na(imc_adjdepr_padj))) %>%
     pull(variable)
   return(vars2test)
 }
@@ -340,7 +342,7 @@ getvars_onlyNotIMC <- function(summary_df){
 mediator_name <- "IMC_log"
 y_name <- "Condition_bin"
 plim <- 0.05
-plim_plot <- 0.05
+plim_plot <- 0.1
 
 custom_cols <- list(
   main_mediation_BMI_separate=list(total=TRUE, direct=NA, indirect=TRUE),
@@ -380,7 +382,7 @@ allMedPlots <- map(c(0.1, 0.05),\(plim_plot){
   map(names(getvars_funcs), \(x){
     opt <- restaurar(opt)
     opt$out <- paste0(opt$out, "/", x, "/")
-    
+
     w2 = ifelse(x == names(getvars_funcs)[6], 15, 12)
     h2 = ifelse(x == names(getvars_funcs)[6], 14, 6)
     if(!dir.exists(opt$out)) dir.create(opt$out)
@@ -403,29 +405,29 @@ allMedPlots <- map(c(0.1, 0.05),\(plim_plot){
                              make_boxplots = TRUE,
                              make_power_test = FALSE,
                              list2merge=list2merge)
-    if(plim_plot<1){
-      makeFullMediationAnalysisIMC(vstdf, df_all, opt,
-                                 getVarsFunction = getvars_funcs[[x]],
-                                 mediator_name = mediator_name,
-                                 y_name = y_name,
-                                 plim = plim,
-                                 plim_plot = plim_plot,
-                                 name = "analysis_IMC_separateModel_vjust",
-                                 wnet=14,
-                                 hnet=heights[[x]],
-                                 wbars=8,
-                                 hbars=10,
-                                 wbars2=w2,
-                                 hbars2=h2,
-                                 use_color_scale = FALSE,
-                                 fix_barplot_limits = TRUE,
-                                 custom_colors=custom_cols[[x]],
-                                 make_boxplots=TRUE,
-                                 list2merge=list2merge)
-    }
+    #if(plim_plot<1){
+    #  makeFullMediationAnalysisIMC(vstdf, df_all, opt,
+    #                             getVarsFunction = getvars_funcs[[x]],
+    #                             mediator_name = mediator_name,
+    #                             y_name = y_name,
+    #                             plim = plim,
+    #                             plim_plot = plim_plot,
+    #                             name = "analysis_IMC_separateModel_vjust",
+    #                             wnet=14,
+    #                             hnet=heights[[x]],
+    #                             wbars=8,
+    #                             hbars=10,
+    #                             wbars2=w2,
+    #                             hbars2=h2,
+    #                             use_color_scale = FALSE,
+    #                             fix_barplot_limits = TRUE,
+    #                             custom_colors=custom_cols[[x]],
+    #                             make_boxplots=TRUE,
+    #                             list2merge=list2merge)
+    #}
 })})
 
-x <- names(getvars_funcs)[6]
+x <- names(getvars_funcs)[3]
 opt <- restaurar(opt)
 opt$out <- paste0(opt$out, "/", x, "_PowerAn/")
 if(!dir.exists(opt$out)) dir.create(opt$out)
@@ -448,17 +450,17 @@ aux <- makeFullMediationAnalysisIMC(vstdf, df_all, opt,
                              make_boxplots = TRUE,
                              make_power_test = TRUE,
                              list2merge=list2merge)
-powdf <- aux$power_analysis %>% 
-  dplyr::mutate(taxa = gsub("_", " ", taxa), 
+powdf <- aux$power_analysis %>%
+  dplyr::mutate(taxa = gsub("_", " ", taxa),
                 taxa = gsub("sp ", "sp. ", taxa))
 
-
+library(wesanderson)
 palette16 <- colorRampPalette(wes_palette("AsteroidCity2"))(length(unique(powdf$taxa)))
 
 POWERLEVEL <- 0.9
-pow90 <- powdf %>% 
-  filter(power >= POWERLEVEL) %>% 
-  group_by(taxa, param) %>% 
+pow90 <- powdf %>%
+  filter(power >= POWERLEVEL) %>%
+  group_by(taxa, param) %>%
   dplyr::summarise(ssize=min(ssize))
 write_tsv(pow90, paste0(opt$out, "power_analysis_curve_minSampleSize_pow",as.character(POWERLEVEL), ".tsv"))
 
@@ -466,11 +468,11 @@ write_tsv(pow90, paste0(opt$out, "power_analysis_curve_minSampleSize_pow",as.cha
     facet_grid( ~ param ) +
     geom_hline(yintercept = POWERLEVEL, linetype=2, col="gray") +
     geom_vline(data = pow90, aes(xintercept = ssize, col=taxa),linetype=2) +
-    geom_line() + 
+    geom_line() +
     geom_point() +
-    theme_bw() + 
+    theme_bw() +
     scale_color_manual(values = palette16) +
-    xlab("sample size") + 
+    xlab("sample size") +
     theme(strip.background = element_blank(), #element_rect(fill="white")
           strip.text = element_text(size=16),
           legend.text = element_text(face="italic", size=12),
@@ -483,7 +485,7 @@ write_tsv(pow90, paste0(opt$out, "power_analysis_curve_minSampleSize_pow",as.cha
                                l = 0.2,  # Left margin
                                unit = "in")
           )
-  
+
 )
 ggsave(filename = paste0(opt$out, "power_analysis_curve_pow",as.character(POWERLEVEL), ".pdf"), gpow, width = 16, height = 6)
 
@@ -491,11 +493,11 @@ ggsave(filename = paste0(opt$out, "power_analysis_curve_pow",as.character(POWERL
     facet_grid( taxa ~ param ) +
     geom_hline(yintercept = POWERLEVEL, linetype=2, col="gray") +
     geom_vline(data = pow90, aes(xintercept = ssize, col=taxa),linetype=2) +
-    geom_line() + 
+    geom_line() +
     geom_point() +
-    theme_bw() + 
+    theme_bw() +
     scale_color_manual(values = palette16) +
-    xlab("sample size") + 
+    xlab("sample size") +
     theme(strip.background = element_blank(), #element_rect(fill="white")
           strip.text = element_text(size=16),
           legend.text = element_text(face="italic", size=12),
@@ -509,9 +511,12 @@ ggsave(filename = paste0(opt$out, "power_analysis_curve_pow",as.character(POWERL
                                unit = "in")
     ) +
     theme(legend.position = "none")
-  
+
 )
 ggsave(filename = paste0(opt$out, "power_analysis_curve_facet_pow",as.character(POWERLEVEL), ".pdf"), gpow, width = 12, height = 46)
+
+
+###################################### UP TO HERE
 ###########################################################################
 ### MEDIATION WITH IMC, MERGED
 opt <- restaurar(opt)

@@ -3,7 +3,7 @@ library(DESeq2)
 library(phyloseq)
 library(janitor)
 library(ggvenn)
-
+library(G4Micro)
 ## Mediation analysis based on tutorials:
 ## https://advstats.psychstat.org/book/mediation/index.php 
 ## https://rpubs.com/Momen/485122
@@ -39,8 +39,6 @@ if(MODE == "IATA"){
               indir = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/",
               phyloseq_list = "/home/carmoma/Desktop/202311_DEPRESION/results_rstudio_9/phyloseq/phyloseq_all_list.RData",
               phyloseq_name = "remove_tanda2",
-              r_functions="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/metagenomics_core_functions.R",
-              r_functions_mediation="/home/carmoma/Desktop/202311_DEPRESION/depression_scripts/mediation_functions.R",
               metadata = "/home/carmoma/Desktop/202311_DEPRESION/metadatos_MC_AL12042023_CMcopy.xlsx",
               rewrite=TRUE,
               fc=1, 

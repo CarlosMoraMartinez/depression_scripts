@@ -3,9 +3,9 @@ library(tidyverse)
 library(phyloseq)
 library(readxl)
 library(janitor)
-library(devtools)
-
-devtools::load_all("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/G4Micro")
+library(G4Micro)
+#library(devtools)
+#devtools::load_all("/home/carlos/Escritorio/202311_DEPRESION/ReviewJune2025/scripts/G4Micro")
 
 
 SEED <- 123
@@ -55,9 +55,6 @@ source(opt$read_otutable_script)
 source(opt$read_metadata_script)
 # Create phyloseq objects
 source(opt$create_phyloseq_script)
-
-#Alternatively, simply load the data:
-data("all_phyloseq")
 
 # Alpha and Beta diversity. Descriptive
 source(opt$alpha_beta_script)

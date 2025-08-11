@@ -2,6 +2,9 @@
 
 
 ## Cualitativas
+escalas_qual <- c( "Beck_cualitativo", "Escala_Hamilton_cualitativo","Montgomery.Asberg_qual")
+escalas_quant <- c( "Escala_depresión_Beck", "Escala_Hamilton", "Montgomery.Asberg", "DMSV_puntuacion_total")
+
 
 alpha_indices <- c("Observed", "Chao1", "Shannon", "InvSimpson")
 vars2test <- c("Condition", "Sexo", "PROCEDENCIA",
