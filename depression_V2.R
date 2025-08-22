@@ -22,53 +22,13 @@ SEED <- 123
 MODE = "LOCAL"
 
 if(MODE == "IATA"){
-  opt <- list(out ="/home/ccarlos/Documentos/CLIMBOUT_CORALS/results_rstudio/240307_results5_kraken05_prev05_filtNormalBetter/",
-              indir = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/results_cluster3_Allsamples2_conf05rl100/mg09_combinempa/" , #results_cluster3_Allsamples2_conf05rl100 results_cluster3_Allsamples1_rl75
-              
-              r_functions="/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/metagenomics_core_functions.R",
-              predictive_functions="/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predictive_functions.R",
-              functional_functions="/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predictive_functions.R",
-              functional_script="/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predictive_functions.R",
-              read_metadata_script = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/read_metadata.R",
-              create_phyloseq_script = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/generate_phyloseq_objects.R",
-              read_otutable_script = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/read_otu_table.R",
-              alpha_beta_script = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/alpha_beta_abund.R",
-              daa_main_condition = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_main_condition.R",
-              make_permanova_script = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/make_permanova.R",
-              daa_include_single_covariate = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_include_single_covariate.R",
-              daa_only_covariates = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_include_only_covariate.R",
-              daa_many_covariates = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_include_several_covariates.R",
-              
-              metadata = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/METADATA/CORALS_metagenomica_26.10.2022_metadataTeresa1.xlsx",
-              metadata_class = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/corals_scripts/classified_kids_CM.csv",
-              metadata_riga_45 = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/preprocess_data/muestras_Zaragoza_send.csv",
-              metadata_with_origin = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/climbout_sergio/ClimbOut/DataAnalysis/CORALS_metagenomica_26.10.2022.xlsx",
-              oms_data = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/corals_scripts/Referencia OMS/",
-              predict_2groups = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predict_2groups.R",
-              daa_sep_by_group = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_sep_by_group.R",
-              daa_with_scales = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_with_scales.R",
-              daa_integrate_with_and_without_correction = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_integrate_with_and_without_correction.R",
-              daa_integrate_all_contrasts = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/daa_integrate_all_contrasts.R",
-              predict_4groups = "/home/ccarlos/Documentos/CLIMBOUT_CORALS/scripts_PAR/240307scripts/depression_scripts/predict_4groups.R",
-              rewrite=FALSE,
-              minfreq = 0.05,
-              mincountspersample = 0,
-              mincount= 1,
-              minsampleswithcount = 0,
-              raref_quant = 0.15,
-              fc=1, 
-              pval=0.05, 
-              ptype="adjusted", 
-              fctype="shrunk",
-              num_genes_default=5,
-              only_normal_weight=TRUE
-  )
+  opt <- list()
 }else{
   CODEDIR = "/home/carlos/Documentos/CORALS/scripts_PAR/240806scripts/depression_scripts/"
-  opt <- list(out ="/home/carlos/Documentos/CORALS/results_rstudio/results_Feb25_gam1/",
+  opt <- list(out ="/home/carlos/Documentos/CORALS/results_rstudio/results_Agosto25_1/",
               indir = "/home/carlos/Documentos/CORALS/results_cluster_240924/names_changed_all/" , #results_cluster3_Allsamples2_conf05rl100 results_cluster3_Allsamples1_rl75
               input_funcional = "/home/carlos/Documentos/CORALS/results_cluster_240924/Humann3_analisis_funcional/MERGED_changed_names/",
-              
+
               r_functions=paste0(CODEDIR, "metagenomics_core_functions.R"),
               predictive_functions=paste0(CODEDIR, "predictive_functions.R"),
               read_metadata_script = paste0(CODEDIR, "read_metadata.R"),
@@ -88,25 +48,25 @@ if(MODE == "IATA"){
               predict_4groups = paste0(CODEDIR, "predict_4groups.R"),
               functional_functions=paste0(CODEDIR, "functional_auxiliary_functions.R"),
               functional_script=paste0(CODEDIR, "functional_daa.R"),
-              
-              
+
+
               metadata = "/home/carlos/Documentos/CORALS/METADATA/metadata_NEW_only_CORALS.csv",
-              metadata_class = "/home/carlos/Documentos/CORALS/METADATA/classified_kids_NEWDATA_PROVISIONAL_withZval.csv",
+              metadata_class = "/home/carlos/Documentos/CORALS/METADATA/classified_kids_NEWDATA_PROVISIONAL_withZval_unfiltered.csv",
               metadata_riga_45 = "/home/carlos/Documentos/CORALS/preprocess_data/muestras_Zaragoza_send.csv",
               metadata_with_origin = "/home/carlos/Documentos/CORALS//climbout_sergio/ClimbOut/DataAnalysis/CORALS_metagenomica_26.10.2022.xlsx",
               oms_data = "/home/carlos/Documentos/CORALS/METADATA/Referencia OMS/",
               metadata_mother = "/home/carlos/Documentos/CORALS/METADATA/CORALS_pabdompgrasanivelsocio_2025.xlsx",
               functional_dir = "/home/carlos/Documentos/CORALS/results_cluster_240924/Humann3_analisis_funcional/MERGED_changed_names/",
-              
+
               rewrite=FALSE,
               minfreq = 0.05,
               mincountspersample = 0,
               mincount= 1,
               minsampleswithcount = 0,
               raref_quant = 0.15,
-              fc=1, 
-              pval=0.05, 
-              ptype="adjusted", 
+              fc=1,
+              pval=0.05,
+              ptype="adjusted",
               fctype="shrunk",
               num_genes_default=5,
               only_normal_weight=FALSE
@@ -126,7 +86,7 @@ source(opt$read_otutable_script)
 source(opt$read_metadata_script)
 # Create phyloseq objects
 source(opt$create_phyloseq_script)
-# Alpha and Beta diversity. Descriptive 
+# Alpha and Beta diversity. Descriptive
 source(opt$alpha_beta_script)
 
 # DESeq 4 each

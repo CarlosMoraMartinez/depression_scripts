@@ -11,8 +11,53 @@ metadata <- data.frame(read_tsv(opt$metadata))%>%
          edad_00_round = round(edad_00) %>% as.factor()
   )
 
-metadata_with_origin  <- read_xlsx(opt$metadata_with_origin)
-metadata_gain_labels <- read_csv(opt$metadata_class) %>%  clean_names() %>% data.frame()
+
+### Modify metadata 
+food_variable_names <- c(
+  "energy_kcal"              = "ffq_energia_00",
+  "carbohydrates_g"          = "ffq_h_carb_00",
+  "fiber_g"                  = "ffq_fibra_00",
+  "protein_g"                = "ffq_prot_00",
+  "total_fat_g"              = "ffq_grasa_00",
+  "dairy"              = "lacteos_00",
+  "dairy_derivatives"  = "derivalac_00",
+  "eggs"               = "huevos_00",
+  "meat"               = "carnes_00",
+  "fish"               = "pescados_00",
+  "vegetables"         = "vegetales_00",
+  "tubers"             = "tuberculos_00",
+  "fruits"             = "frutas_00",
+  "nuts"               = "frutosec_00",
+  "oleaginous_fruits"  = "frutoleo_00",
+  "refined_cereals"    = "cereref_00",
+  "whole_grain_cereals"= "cereint_00",
+  "legumes"            = "legum_00",
+  "fats_oils"          = "grasas_00",
+  "sweets_pastries"    = "dulces_bollpast_00",
+  "sugars_and_sweets"  = "azucdulc_00",
+  "snacks_savory"      = "snacks_00",
+  "prepared_foods"     = "alimprepa_00",
+  "sauces_condiments"  = "salscondi_00",
+  "water"              = "agua_00",
+  "juices_softdrinks"  = "refresc_00"
+)
+
+other_names <- c(
+  "z_bmi_00" = "z_imc_00",
+  "z_bmi_01" = "z_imc_01",
+  "z_waist_00"="z_cintura_00",
+  "z_waist_01" = "z_cintura_01",
+  "mother_educ" = "educ_m_discrete",
+  "age_months_T0" =  "edad_00_meses",
+  "age_months_T1" =  "edad_01_meses"
+)
+
+
+metadata_with_origin  <- read_xlsx(opt$metadata_with_origin) 
+
+metadata_gain_labels <- read_csv(opt$metadata_class) %>%  
+  clean_names() %>% data.frame() %>% 
+  dplyr::mutate(status_c1 = ifelse(status_c1 == "normal", status_c1, ifelse(z_t0 < 0, "low weight", "overweight")))
 rownames(metadata) <- paste0("C", metadata$id)
 
 meta_mother <- read_xlsx(opt$metadata_mother)
@@ -74,6 +119,15 @@ metadata <- metadata %>% merge(meta_mother, by.x="sampleID2", by.y = "id")
 nrow(metadata)
 rownames(metadata) <- metadata$sampleID
 
+
+metadata <- metadata %>%
+  dplyr::mutate(educ_m_discrete =ifelse(edu_m_00 <4, "1-3",
+                                        ifelse(edu_m_00 <7, "4-6", "7-10"))
+  ) %>% 
+  dplyr::rename(!!!food_variable_names) %>% 
+  dplyr::rename(!!!other_names) %>% 
+  dplyr::mutate(age_T0 =  edad_00) 
+
 write_tsv(metadata, file = paste0(outdir, "metadata_full.tsv"))
 metadata_full <- metadata
 s_otu_tab_unfilt <- s_otu_tab
@@ -96,12 +150,16 @@ greads <- ggplot(metadata, aes(x=hospital, y = log10(nreads), fill=hospital))+ge
 ggsave(filename = paste0(outdir, "/reads_per_hospital.pdf"), greads, width = 7, height = 4)
 
 all(names(s_otu_tab) == rownames(metadata))
-write_tsv(s_otu_tab %>% rownames_to_column("taxon") %>% select(taxon, everything()), file = paste0(outdir, "otu_tab_names_presentInMetadata.tsv"))
+write_tsv(s_otu_tab %>% rownames_to_column("taxon") %>% select(taxon, everything()), 
+          file = paste0(outdir, "otu_tab_names_presentInMetadata.tsv"))
 
 
 metadata$age_class1 <- factor(ifelse(metadata$edad_00_round %in% c(7, 8), ">7", as.character(metadata$edad_00_round)),
                                  levels=c("3", "4", "5", "6", ">7"))
-
+metadata$age_class2 <- factor(ifelse(metadata$edad_00_round %in% c(7, 8), "7-8",
+                                     ifelse(metadata$edad_00_round %in% c(3, 4), "3-4",
+                                     as.character(metadata$edad_00_round))),
+                              levels=c("3-4", "5", "6", "7-8"))
 write_tsv(metadata, file = paste0(outdir, "metadata_presentInOtus.tsv"))
 
 #Filter only normal weight at T0

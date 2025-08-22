@@ -14,6 +14,7 @@ ps_bracken_species <- phyloseq(sample_data(s_meta),
                                tax_table(as.matrix(classification)))
 pre_phyloseq <- ps_bracken_species
 save(file=paste0(path_phyloseq, "/phyloseq_object_analysis1.RData"), ps_bracken_species)
+load(paste0(path_phyloseq, "/phyloseq_object_analysis1.RData"))
 
 filterPhyla <- NA
 (pre_phyloseq1 = subset_taxa(pre_phyloseq, !Phylum %in% filterPhyla))
@@ -26,6 +27,7 @@ pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Family %in% filterPhyla) # 7 a nive
 pre_phyloseq1 <- subset_taxa(pre_phyloseq1, !Genus %in% filterPhyla)
 
 save(file=paste0(path_phyloseq, "/phyloseq_object_raw_filt_by_Phylum.RData"), pre_phyloseq1)
+load(paste0(path_phyloseq, "/phyloseq_object_raw_filt_by_Phylum.RData"))
 
 all_phyloseq <- list(raw = pre_phyloseq1)
 
@@ -47,6 +49,7 @@ keepTaxa = rownames(pre_prevalence)[(pre_prevalence$Prevalence >= prevalenceThre
 (pre_phyloseq_filt = prune_taxa(keepTaxa, pre_phyloseq1))
 filtered_phyloseq_filename <- paste0(path_phyloseq,'/pre_phyloseq_filt_by_prevalence', as.character(100*opt$minfreq), '.RData')
 save(pre_phyloseq_filt, file = filtered_phyloseq_filename)
+load(filtered_phyloseq_filename)
 
 #Reads before rarefeact
 nreads <- otu_table(pre_phyloseq_filt) %>% colSums()
@@ -87,7 +90,9 @@ standa1 <- metadata %>% dplyr::filter(hospital != "Zaragoza") %>% pull(sampleID)
 if(!file.exists(rmtanda2_fname) | opt$rewrite){
   pre_phyloseq_removet2 <- phyloseq::prune_samples(standa1, pre_phyloseq_filt) 
   save(pre_phyloseq_removet2, file = rmtanda2_fname)
-}else{load(rmtanda2_fname)}
+}else{
+  load(rmtanda2_fname)
+  }
 
 ##  Eliminar tanda 2 - Rarefaction min
 raref_min_filename_not2 <- paste0(path_phyloseq,'/pre_phyloseq_filt_noTandaZaragoza_rarefMin.RData')
@@ -260,9 +265,9 @@ if(!file.exists(allphyloseqlist_fname) | opt$rewrite){
     rarefied_min = pre_phyloseq_rarefied, 
     #rarefied_quant = pre_phyloseq_rarefied2,
     remove_tanda2 = pre_phyloseq_removet2,
-    remove_tanda2_rarefied_min = pre_phyloseq_rarefied_not2,
-    rmbatch_tanda =phseq_batch_tanda,
-    rmbatch_ageBF = phseq_batch_tanda_age
+    remove_tanda2_rarefied_min = pre_phyloseq_rarefied_not2
+    #rmbatch_tanda =phseq_batch_tanda,
+    #rmbatch_ageBF = phseq_batch_tanda_age
     #rmbatch_tanda_shrink = phseq_batch_tanda_shrink,
     #phseq_rerefthenbatch_tanda = phseq_rerefthenbatch_tanda
     #rmbatch_tanda_raref =phseq_batch_tanda_raref,
@@ -277,3 +282,76 @@ if(!file.exists(allphyloseqlist_fname) | opt$rewrite){
 }else{
   load(allphyloseqlist_fname)
 }
+
+
+## Modify exercise:
+
+
+
+### Modify metadata 
+#food_variable_names <- c(
+#  "energy_kcal"              = "ffq_energia_00",
+#  "carbohydrates_g"          = "ffq_h_carb_00",
+#  "fiber_g"                  = "ffq_fibra_00",
+#  "protein_g"                = "ffq_prot_00",
+#  "total_fat_g"              = "ffq_grasa_00",
+#  "dairy"              = "lacteos_00",
+#  "dairy_derivatives"  = "derivalac_00",
+#  "eggs"               = "huevos_00",
+#  "meat"               = "carnes_00",
+#  "fish"               = "pescados_00",
+#  "vegetables"         = "vegetales_00",
+#  "tubers"             = "tuberculos_00",
+#  "fruits"             = "frutas_00",
+#  "nuts"               = "frutosec_00",
+#  "oleaginous_fruits"  = "frutoleo_00",
+#  "refined_cereals"    = "cereref_00",
+#  "whole_grain_cereals"= "cereint_00",
+#  "legumes"            = "legum_00",
+#  "fats_oils"          = "grasas_00",
+#  "sweets_pastries"    = "dulces_bollpast_00",
+#  "sugars_and_sweets"  = "azucdulc_00",
+#  "snacks_savory"      = "snacks_00",
+#  "prepared_foods"     = "alimprepa_00",
+#  "sauces_condiments"  = "salscondi_00",
+#  "water"              = "agua_00",
+#  "juices_softdrinks"  = "refresc_00"
+#)
+#
+#other_names <- c(
+# "z_bmi_00" = "z_imc_00",
+# "z_bmi_01" = "z_imc_01",
+# "z_waist_00"="z_cintura_00",
+# "z_waist_01" = "z_cintura_01",
+# "mother_educ" = "educ_m_discrete",
+# "age_months_T0" =  "edad_00_meses",
+# "age_months_T1" =  "edad_01_meses"
+#)
+#
+#
+#metadata_t0cat <- read_csv("/home/carlos/Documentos/CORALS/METADATA/classified_kids_NEWDATA_PROVISIONAL_withZval_unfiltered.csv") %>% 
+#  mutate(status_c1 = ifelse(status_c1 == "normal", status_c1, ifelse(Z_t0_ < 0, "low weight", "overweight"))) %>% 
+#  dplyr::mutate(Status_c2 = ifelse(is.na(Z_t0_) | is.na(Z_t1_), NA, Status_c2))
+#
+#ggplot(metadata_t0cat, aes(x=status_c1, y=Z_t0_, col=status_c1)) +
+#  facet_grid(. ~ edad_00_meses>=61)+
+#  geom_point() + 
+#  theme_bw()
+#ss <- metadata_t0cat %>% mutate(agroup = ifelse(edad_00_meses>=61, "older", "younger")) %>% 
+#  group_by(agroup, status_c1) %>% 
+#  dplyr::summarise(minz = min(Z_t0_, na.rm = TRUE),
+#            maxz = max(Z_t0_, na.rm = TRUE))
+#
+#metadata_t0cat
+#for(phname in names(all_phyloseq)){
+#  cat(phname, "\n")
+#  metadata <- sample_data(all_phyloseq[[phname]]) %>% data.frame()
+#  assertthat::assert_that(all(food_variable_names %in% names(metadata)))
+#  sample_data(all_phyloseq[[phname]]) <- metadata %>%
+#    dplyr::rename(!!!food_variable_names) %>% 
+#    dplyr::rename(!!!other_names) %>% 
+#    dplyr::mutate(age_T0 =  edad_00) %>% 
+#    sample_data()
+#}
+#allphyloseqlist_fname <- paste0(path_phyloseq, "/phyloseq_all_list_modNames.RData")
+#save(all_phyloseq, file=allphyloseqlist_fname)

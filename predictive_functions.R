@@ -575,7 +575,8 @@ callDoAllModelsFromALLPCAsOriginalVars <- function(all_pcas, PCs, modelo_svm, vs
         as.data.frame() %>% rownames_to_column("sample") %>% 
         dplyr::mutate(class=unlist(metadata[match(sample, metadata$sampleID), vars2pca[1]]))
       names(df2pred) <- gsub("[\\.\\-\\[\\]()]", "", names(df2pred), perl=T)
-      modresults[[paste0(score, ' top ', as.character(topn))]] <- makeAllModels(df2pred, plim=1, opt, name= paste0(name, "_modsIndBacs_", score, "_top", topn))
+      modresults[[paste0(score, ' top ', as.character(topn))]] <- makeAllModels(df2pred, plim=1, opt, name= paste0(name, "_modsIndBacs_", score, "_top", topn), 
+                                                                                nfolds = nfolds)
       modresults[[paste0(score, ' top ', as.character(topn))]]$taxa <- toptaxa
       
     }
@@ -1038,10 +1039,52 @@ plotAllModelPredictions <- function(phname, all_model_results, opt,
 }
 
 
+make_PCA_biplot <- function(pca, pcs_to_plot=1:5, scale_factor=0.6, name="PCA", w=12, h=8){
+
+  scores_df <- as.data.frame(pca$x[, pcs_to_plot])
+  scores_df$Sample <- rownames(scores_df)
+  
+  loadings_df <- as.data.frame(pca$rotation[, pcs_to_plot])
+  loadings_df$Variable <- rownames(loadings_df)
+  
+  # Scale loadings for plotting arrows (optional: adjust factor)
+  arrow_scale <- max(abs(unlist(scores_df[, pcs_to_plot]))) * scale_factor
+  loadings_long <- pivot_longer(loadings_df, cols = starts_with("PC"), names_to = "PC", values_to = "loading")
+  
+  # Create all pairwise combinations of PCs
+  pc_pairs <- lapply(pcs_to_plot[2:length(pcs_to_plot)], \(x) c(pcs_to_plot[1], x) )
+  
+  # Create list of ggplots
+  plots <- lapply(pc_pairs, function(pair) {
+    pcx <- paste0("PC", pair[1])
+    pcy <- paste0("PC", pair[2])
+    
+    ggplot() +
+      geom_point(data = scores_df, aes_string(x = pcx, y = pcy), color = "tomato", alpha = 0.5) +
+      geom_segment(data = loadings_df,
+                   aes_string(x = 0, y = 0,
+                              xend = paste0(pcx, "*", arrow_scale),
+                              yend = paste0(pcy, "*", arrow_scale)),
+                   arrow = arrow(length = unit(0.2, "cm")), color = "black") +
+      geom_text_repel(data = loadings_df,
+                      aes_string(x = paste0(pcx, "*", arrow_scale),
+                                 y = paste0(pcy, "*", arrow_scale),
+                                 label = "Variable"),
+                      size = 3, color = "black") +
+      labs(x = pcx, y = pcy,
+           title = paste0(pcx, " vs ", pcy)) +
+      theme_minimal()
+  })
+  
+  pdf(paste0(outdir, name, "_biplot.pdf"), width=w, height = h)
+  grid.arrange(grobs = plots, ncol = 2)
+  dev.off()
+}
+
 make_meta_PCA<- function(this_metadata, food_variables, 
                          condVar,
                          outdir, make_log=TRUE,
-                         name="PCA_vars"){
+                         name="PCA_vars", make_scale=TRUE){
   mt_long <- this_metadata %>% 
     select(sampleID, all_of(c(condVar, food_variables))) %>% 
     na.omit() %>% 
@@ -1082,8 +1125,11 @@ make_meta_PCA<- function(this_metadata, food_variables,
   }else{
     d2pca <- this_metadata %>% 
       select(sampleID, all_of(c(condVar, food_variables))) %>% 
-      na.omit() %>% 
-      dplyr::mutate_if(is.numeric, \(x)scale(x))
+      na.omit() 
+    if(make_scale){
+      d2pca <- d2pca %>% 
+        dplyr::mutate_if(is.numeric, \(x)scale(x))
+    } 
   }
   
   countdf <- d2pca %>% 
@@ -1094,8 +1140,16 @@ make_meta_PCA<- function(this_metadata, food_variables,
     as.data.frame() %>% 
     rownames_to_column("gene")
   names(countdf)[2:ncol(countdf)] <- d2pca$sampleID
-  pca_plot <- plotPCA(countdf, d2pca, food_variables, condVar)
-    
-  ggsave(paste0(outdir,"/", name, "_PCA.pdf"), pca_plot$plots, width = 10, height = 6)
-  return(pca_plot)
+  
+  pca_plots <- list()
+  for(cc in condVar){
+    pca_plots[[cc]] <- plotPCA(countdf, d2pca, food_variables, cc)
+  }
+  pdf(paste0(outdir,"/", name, "_PCA.pdf"), width = 10, height = 6)
+  for(g in pca_plots) print(g$plots)
+  dev.off()
+  #ggsave(paste0(outdir,"/", name, "_PCA.pdf"), pca_plot$plots, width = 10, height = 6)
+  make_PCA_biplot(pca_plots[[1]]$pca, 1:5, scale_factor = 0.8,
+                  name=name, w=12, h=8)
+  return(pca_plots)
 }
