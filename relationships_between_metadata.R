@@ -1,7 +1,7 @@
 
 
 load("/home/carlos/Documentos/CORALS/results_rstudio/results_Abril25_2/foodPCA/phyloseq_list_foodPCA_withNMF.RData")
-outdir <- paste0(opt$out, "/test_differences_metadata/")
+outdir <- paste0(opt$out, "/test_differences_metadata2/")
 if(!dir.exists(outdir)) dir.create(outdir)
 
 s_meta <- sample_data(all_phyloseq$remove_tanda2_rarefied_min) %>% data.frame %>%

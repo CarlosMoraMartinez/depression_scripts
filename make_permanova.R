@@ -230,7 +230,8 @@ names(permaresults_mult$remove_tanda2_rarefied_min$bray$modelos) <- names(permaf
 save(permaresults_mult, file = paste0(outdir, "PERMANOVA_MULT_250814.RData"))
 save(permaresults_mult_byVar, file = paste0(outdir, "PERMANOVA_MULT_margin1_250814.RData" ))
 
-#load(paste0(outdir, "PERMANOVA_MULT.RData"))
+load(paste0(outdir, "PERMANOVA_MULT_250814.RData"))
+load(paste0(outdir, "PERMANOVA_MULT_margin1_250814.RData"))
 load(paste0(outdir, "permanova_results_bray_250814_2.RData"))
 
 ## Code for merging with previous permanovas
@@ -365,6 +366,8 @@ linedf <- betadf %>% group_by(type) %>%
   dplyr::summarise(xpos = max(as.numeric(model_name)) + 0.5) %>%
   head(nrow(.) - 1)
 
+write_tsv(betadf, file = paste0(outdir, "BETADF_TABLE_USED_FOR_PLOT.tsv"))
+write_tsv(linedf, file = paste0(outdir, "BETADF_TABLE_USED_FOR_PLOT_HelperLinedf.tsv"))
 #colors <- ggsci::pal_lancet()(length(levels(betadf$type)))
 #colors <- colors[c(1, length(colors):2)]
 TSIZE <- 6

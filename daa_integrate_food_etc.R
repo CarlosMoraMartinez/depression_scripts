@@ -168,14 +168,60 @@ write_tsv(tax_numcomp, file = paste0(outdir, "number_of_comparisons_significant_
 tax2plot <- tax_numcomp %>% filter(sig_p001 >= MIN_COMP_LIM)
 nrow(tax2plot)
 
+reserva_outdir <- outdir
+
 #Instead, select those that are significant with BMI
 
-tax2plot <-  all_daa_mod %>% filter(Contrast == "Z-Score BMI T0" | grepl("Status T1", Contrast) | Contrast == "Z-Score BMI T1") %>%
-  filter(padj <= 0.001) %>%
+tax2plot <-  all_daa_mod %>% filter(Contrast == "Z-Score BMI T0" | grepl("Change", Contrast) | Contrast == "Z-Score BMI T1") %>%
+  filter(padj <= 0.001 & !is.na(padj)) %>%
+  group_by(taxon) %>%
+  dplyr::summarise(n_sig = n())
+name2hms <- "SigBMIT0OrT1All"
+
+#Instead, select those that are significant with BMI only at T0
+
+tax2plot <-  all_daa_mod %>% filter(Contrast == "Z-Score BMI T0") %>%
+  filter(padj <= 0.01 & !is.na(padj)) %>%
+  group_by(taxon) %>%
+  dplyr::summarise(n_sig = n())
+name2hms <- "SigOnlyBMIT0"
+
+
+#Instead, select those that are significant with BMI at T1
+tax2plot <-  all_daa_mod %>% filter(Contrast == "Z-Score BMI T1 (Normal T0)" | Contrast == "Change in Z-Score BMI (Normal T0)") %>%
+  filter(padj <= 0.01 & !is.na(padj)) %>%
+  group_by(taxon) %>%
+  dplyr::summarise(n_sig = n())
+name2hms <- "SigT1NormalT0"
+
+#Instead, select those that are significant with diet patterns
+patnames <- c("Preprocessed", "Mediterranean", "Western" )
+tax2plot <-  all_daa_mod %>% filter(Contrast %in% patnames) %>%
+  filter(padj <= 0.01 & !is.na(padj)) %>%
+  group_by(taxon) %>%
+  dplyr::summarise(n_sig = n())
+name2hms <- "SigPatternsOnly"
+
+#Instead, select those that are significant with diet patterns AND at least one BMI variable
+patnames <- c("Preprocessed", "Mediterranean", "Western" )
+tax2plot_a <-  all_daa_mod %>% filter(Contrast %in% patnames) %>%
+  filter(padj <= 0.01 & !is.na(padj)) %>% 
   group_by(taxon) %>%
   dplyr::summarise(n_sig = n())
 
+tax2plot_b <-  all_daa_mod %>% filter(Contrast == "Z-Score BMI T1 (Normal T0)" | Contrast == "Z-Score BMI T0") %>%
+  filter(padj <= 0.01 & !is.na(padj)) %>% 
+  group_by(taxon) %>%
+  dplyr::summarise(n_sig = n())
+
+tax2plot <- tax2plot_a %>% filter(taxon %in% tax2plot_b$taxon)
+
+name2hms <- "SigOnePatternAndOneBMI"
+
+####
 nrow(tax2plot)
+outdir <- paste0(reserva_outdir, name2hms, "/")
+if(!dir.exists(outdir)) dir.create(outdir)
 
 all_daa_mod1 <- all_daa_mod %>%
   dplyr::mutate(LFC = ifelse(padj <= PLIM_PLOT, log2FoldChangeShrink, log2FoldChangeShrink)) %>%
@@ -253,122 +299,122 @@ write_tsv(sig_per_contrast, file = paste0(outdir, "number_of_taxa_significant_pe
 
 ## Now cluster
 ## first find optimal number of clusters for both bacteria and variables
-MAX_CLUSTS<-30
-wcss <- numeric(MAX_CLUSTS)
-wcss_vars <- numeric(MAX_CLUSTS)
-for (k in 1:MAX_CLUSTS) {
-  km <- kmeans(mat2, centers = k, nstart = 100)
-  km_vars <- kmeans(t(mat2), centers = k, nstart = 100)
-  wcss[k] <- km$tot.withinss
-  wcss_vars[k] <- km_vars$tot.withinss
-}
-
-# Plot elbow method
-par(mfrow=c(1, 2))
-plot(1:MAX_CLUSTS, wcss, type = "b", pch = 19, frame = FALSE,
-     main = "Clustering taxa",
-     xlab = "Number of clusters K",
-     ylab = "Total within-clusters sum of squares")
-plot(1:MAX_CLUSTS, wcss_vars, type = "b", pch = 19, frame = FALSE,
-     main = "Clustering variables",
-     xlab = "Number of clusters K",
-     ylab = "Total within-clusters sum of squares")
-
-
-library(cluster)
-
-sil_width <- numeric(MAX_CLUSTS-1)
-sil_width_vars <- numeric(MAX_CLUSTS-1)
-for (k in 2:MAX_CLUSTS) {
-  km <- kmeans(mat2, centers = k, nstart = 100)
-  km_vars <- kmeans(t(mat2), centers = k, nstart = 100)
-
-  ss <- silhouette(km$cluster, dist(mat2))
-  ss_vars <- silhouette(km_vars$cluster, dist(t(mat2)))
-  sil_width[k-1] <- mean(ss[, 3])
-  sil_width_vars[k-1] <- mean(ss_vars[, 3])
-}
-
-par(mfrow=c(1, 2))
-plot(2:MAX_CLUSTS , sil_width, type = "b", pch = 19, frame = FALSE,
-     xlab = "Number of clusters K",
-     ylab = "Average silhouette width")
-plot(2:MAX_CLUSTS , sil_width_vars, type = "b", pch = 19, frame = FALSE,
-     xlab = "Number of clusters K",
-     ylab = "Average silhouette width")
-best_k <- which.max(sil_width) + 1
-best_k
-# not very good results
-
-library(factoextra)
-
-set.seed(123)
-gap_stat <- clusGap(mat2, FUN = kmeans, nstart = 25, K.max = 30, B = 50)
-fviz_gap_stat(gap_stat)
-
-#################
-
-NCLUS <- 5
-clusts <- kmeans(mat2, centers = NCLUS)
-clusts_vars <- kmeans(mat2 %>% t, centers = NCLUS)
-
-annrow <- data.frame(taxon= names(clusts$cluster[rownames(mat2)]),
-                     cluster= paste0("Cluster ", as.character(clusts$cluster[rownames(mat2)]))) %>%
-  column_to_rownames("taxon")
-
-anncol <- data.frame(var= names(clusts_vars$cluster[colnames(mat2)]),
-                     cluster= paste0("Cluster ", as.character(clusts_vars$cluster[colnames(mat2)]))) %>%
-  column_to_rownames("var")
-
-bacpca <- prcomp(mat2)
-pcadf <- bacpca$x %>% as.data.frame %>%
-  rownames_to_column("taxon") %>%
-  dplyr::mutate(cluster=annrow[taxon, "cluster"])
-
-
-plots <- map(paste0("PC", 2:5), \(PC){
-  ggplot(pcadf, aes(x=PC1, y=!!sym(PC), col=cluster, fill=cluster)) +
-    geom_point() +
-    stat_ellipse() +
-    theme_minimal() +
-    #ggsci::scale_color_lancet() +
-    xlab(G4Micro::getPropVar(bacpca, "PC1")) +
-    ylab(G4Micro::getPropVar(bacpca, PC))
-
-})
-pdf(paste0(outdir, "PCA_and_kmeans_clustering_bacteria.pdf"), width = 10, height = 7)
-cowplot::plot_grid(plotlist = plots, ncol=2)
-dev.off()
-
-## try another one
-
-library(mclust)
-mc <- Mclust(mat2)
-summary(mc)
-plot(mc)
-
-library(dbscan)
-db <- dbscan(mat2, eps = 0.5, minPts = 5)
-plot(db, data = mat2)
-
-####
-
-pheatmap(mat2 %>% t,
-         cluster_rows = TRUE, cluster_cols = TRUE,
-         annotation_row = anncol,
-         annotation_col = annrow,
-         filename = paste0(outdir, "heatmap2_annotKmeansK7.pdf"),
-         height = 7, width = 12,
-         show_colnames = FALSE)
-
-pheatmap(mat2 %>% t,
-         cluster_rows = TRUE, cluster_cols = TRUE,
-         annotation_row = anncol,
-         annotation_col = annrow,
-         filename = paste0(outdir, "heatmap2_annotKmeansK7_wardD2.pdf"),
-         clustering_method = "ward.D2",
-         height = 7, width = 12,
-         show_colnames = FALSE)
+#MAX_CLUSTS<-30
+#wcss <- numeric(MAX_CLUSTS)
+#wcss_vars <- numeric(MAX_CLUSTS)
+#for (k in 1:MAX_CLUSTS) {
+#  km <- kmeans(mat2, centers = k, nstart = 100)
+#  km_vars <- kmeans(t(mat2), centers = k, nstart = 100)
+#  wcss[k] <- km$tot.withinss
+#  wcss_vars[k] <- km_vars$tot.withinss
+#}
+#
+## Plot elbow method
+#par(mfrow=c(1, 2))
+#plot(1:MAX_CLUSTS, wcss, type = "b", pch = 19, frame = FALSE,
+#     main = "Clustering taxa",
+#     xlab = "Number of clusters K",
+#     ylab = "Total within-clusters sum of squares")
+#plot(1:MAX_CLUSTS, wcss_vars, type = "b", pch = 19, frame = FALSE,
+#     main = "Clustering variables",
+#     xlab = "Number of clusters K",
+#     ylab = "Total within-clusters sum of squares")
+#
+#
+#library(cluster)
+#
+#sil_width <- numeric(MAX_CLUSTS-1)
+#sil_width_vars <- numeric(MAX_CLUSTS-1)
+#for (k in 2:MAX_CLUSTS) {
+#  km <- kmeans(mat2, centers = k, nstart = 100)
+#  km_vars <- kmeans(t(mat2), centers = k, nstart = 100)
+#
+#  ss <- silhouette(km$cluster, dist(mat2))
+#  ss_vars <- silhouette(km_vars$cluster, dist(t(mat2)))
+#  sil_width[k-1] <- mean(ss[, 3])
+#  sil_width_vars[k-1] <- mean(ss_vars[, 3])
+#}
+#
+#par(mfrow=c(1, 2))
+#plot(2:MAX_CLUSTS , sil_width, type = "b", pch = 19, frame = FALSE,
+#     xlab = "Number of clusters K",
+#     ylab = "Average silhouette width")
+#plot(2:MAX_CLUSTS , sil_width_vars, type = "b", pch = 19, frame = FALSE,
+#     xlab = "Number of clusters K",
+#     ylab = "Average silhouette width")
+#best_k <- which.max(sil_width) + 1
+#best_k
+## not very good results
+#
+#library(factoextra)
+#
+#set.seed(123)
+#gap_stat <- clusGap(mat2, FUN = kmeans, nstart = 25, K.max = 30, B = 50)
+#fviz_gap_stat(gap_stat)
+#
+##################
+#
+#NCLUS <- 5
+#clusts <- kmeans(mat2, centers = NCLUS)
+#clusts_vars <- kmeans(mat2 %>% t, centers = NCLUS)
+#
+#annrow <- data.frame(taxon= names(clusts$cluster[rownames(mat2)]),
+#                     cluster= paste0("Cluster ", as.character(clusts$cluster[rownames(mat2)]))) %>%
+#  column_to_rownames("taxon")
+#
+#anncol <- data.frame(var= names(clusts_vars$cluster[colnames(mat2)]),
+#                     cluster= paste0("Cluster ", as.character(clusts_vars$cluster[colnames(mat2)]))) %>%
+#  column_to_rownames("var")
+#
+#bacpca <- prcomp(mat2)
+#pcadf <- bacpca$x %>% as.data.frame %>%
+#  rownames_to_column("taxon") %>%
+#  dplyr::mutate(cluster=annrow[taxon, "cluster"])
+#
+#
+#plots <- map(paste0("PC", 2:5), \(PC){
+#  ggplot(pcadf, aes(x=PC1, y=!!sym(PC), col=cluster, fill=cluster)) +
+#    geom_point() +
+#    stat_ellipse() +
+#    theme_minimal() +
+#    #ggsci::scale_color_lancet() +
+#    xlab(G4Micro::getPropVar(bacpca, "PC1")) +
+#    ylab(G4Micro::getPropVar(bacpca, PC))
+#
+#})
+#pdf(paste0(outdir, "PCA_and_kmeans_clustering_bacteria.pdf"), width = 10, height = 7)
+#cowplot::plot_grid(plotlist = plots, ncol=2)
+#dev.off()
+#
+### try another one
+#
+#library(mclust)
+#mc <- Mclust(mat2)
+#summary(mc)
+#plot(mc)
+#
+#library(dbscan)
+#db <- dbscan(mat2, eps = 0.5, minPts = 5)
+#plot(db, data = mat2)
+#
+#####
+#
+#pheatmap(mat2 %>% t,
+#         cluster_rows = TRUE, cluster_cols = TRUE,
+#         annotation_row = anncol,
+#         annotation_col = annrow,
+#         filename = paste0(outdir, "heatmap2_annotKmeansK7.pdf"),
+#         height = 7, width = 12,
+#         show_colnames = FALSE)
+#
+#pheatmap(mat2 %>% t,
+#         cluster_rows = TRUE, cluster_cols = TRUE,
+#         annotation_row = anncol,
+#         annotation_col = annrow,
+#         filename = paste0(outdir, "heatmap2_annotKmeansK7_wardD2.pdf"),
+#         clustering_method = "ward.D2",
+#         height = 7, width = 12,
+#         show_colnames = FALSE)
 
 # Ok, cluster only Food variables
 
@@ -483,9 +529,9 @@ col_fun <- scico(100, palette = pname)
 #cluster_rows = TRUE --> IGNORE ORDERING
 pheatmap(mat_ord,
          cluster_rows = TRUE, cluster_cols = FALSE,
-         filename = paste0(outdir, "heatmap5_preOrder_", as.character(MIN_COMP_LIM), "comps_asterisks_", pname, "_clust.pdf"),
+         filename = paste0(outdir, "heatmap5_preOrder_", as.character(MIN_COMP_LIM), "comps_all_", pname, "_clust.pdf"),
          #clustering_method = "ward.D2",
-         height = 10, width = 18, # height = 14 MIN_COMP_LIM = 4 (80 y algo taxa)
+         height = 8, width = 18, # height = 14 MIN_COMP_LIM = 4 (80 y algo taxa)
          gaps_col = sapply(varlist, length) %>% cumsum(),
          annotation_col = anncol,
          show_colnames = TRUE,
@@ -498,13 +544,31 @@ pheatmap(mat_ord,
          color = col_fun,
          annotation_colors = color_list_cols)
 
+pheatmap(mat_ord,
+         cluster_rows = TRUE, cluster_cols = FALSE,
+         filename = paste0(outdir, "heatmap5_preOrder_", as.character(MIN_COMP_LIM), "comps_asterisks_", pname, "_clust.pdf"),
+         #clustering_method = "ward.D2",
+         height = 8, width = 18, # height = 14 MIN_COMP_LIM = 4 (80 y algo taxa)
+         gaps_col = sapply(varlist, length) %>% cumsum(),
+         annotation_col = anncol,
+         show_colnames = TRUE,
+         angle_col = 45,           # rotate column names
+         fontsize_col = 10,
+         fontsize_row = 10,
+         labels_row = labels_col,
+         display_numbers = mat_pchar,
+         fontsize_number=12,
+         number_color = "white",
+         color = col_fun,
+         annotation_colors = color_list_cols)
+
 mat_ord2 <- mat_ord
 mat_ord2[mat_p2 >= 0.1] <- 0
 pheatmap(mat_ord2,
          cluster_rows = TRUE, cluster_cols = FALSE,
          filename = paste0(outdir, "heatmap5_preOrder_", as.character(MIN_COMP_LIM), "_SigOnly_comps_asterisks_", pname, "_clust.pdf"),
          #clustering_method = "ward.D2",
-         height = 10, width = 16,  # height = 14 MIN_COMP_LIM = 4 (80 y algo taxa)
+         height = 7, width = 16,  # height = 14 MIN_COMP_LIM = 4 (80 y algo taxa)
          gaps_col = sapply(varlist, length) %>% cumsum(),
          annotation_col = anncol,
          show_colnames = TRUE,
@@ -518,8 +582,218 @@ pheatmap(mat_ord2,
          annotation_colors = color_list_cols)
 #}
 
-
+################################################################33
 ######## END OF HEATMAPS
+
+##################Lolipop plots
+clean_names <- function(tax){
+  gsub("_", " ", tax) %>% 
+    gsub("[\\[\\]]", "", .)
+}
+
+makeLoliplot <- function(daa_df, 
+                         vars2loliplot = c(), # Variables which LFC include in plot (all in column named 'Contrast')
+                         vars2sort = c(), # Variables to sort taxa, ordered
+                         vars2filter = c(), # Variables to select significant taxa 
+                         outdir = "./",
+                         name="test",
+                         plim = 0.01, plim_col = 0.05, lfclim = 0,
+                         strip_fontsize=9,
+                         w=12, h=12
+){
+  
+  if(length(vars2sort) == 0) vars2sort <- vars2loliplot
+  if(length(vars2filter) == 0) vars2filter <- vars2loliplot
+  
+  usedf <- daa_df %>% 
+    dplyr::filter(Contrast %in% vars2loliplot) %>% 
+    dplyr::mutate(
+      Sig = ifelse(!is.na(padj) & padj <= plim_col, ifelse(log2FoldChangeShrink < 0 , "Down", "Up"), "NS"), 
+      Contrast = factor(Contrast, levels=vars2loliplot)
+    )
+  
+  tax2use <- daa_df %>% 
+    dplyr::filter(Contrast %in% vars2filter) %>% 
+    dplyr::filter(padj < plim & abs(log2FoldChangeShrink) > lfclim) %>%
+    dplyr::pull(taxon) %>% unique
+  tax2use %>% length
+  
+  taxorder <- usedf %>%
+    dplyr::filter(taxon %in% tax2use) %>%
+    dplyr::select(taxon, Contrast, log2FoldChangeShrink, padj) %>%
+    tidyr::gather("vart", "valt", log2FoldChangeShrink, padj) %>%
+    unite("vart2", Contrast, vart, sep="__") %>%
+    tidyr::spread(vart2, valt) %>% 
+    dplyr::mutate(bmisig = "NS")
+  
+  taxorder_b <- purrr::reduce(vars2sort, ~ .y %>% dplyr::mutate(bmisig := ifelse(!!sym(.x) < plim_col, 
+                                                                                 .x, bmisig )), 
+                              .init= taxorder, .dir="backward") 
+  
+  newlevs <- if("NS" %in% taxorder_b$bmisig){c("NS", rev(vars2sort))}else{ c("NS", rev(vars2sort))}
+  
+  taxorder_b <- taxorder_b %>% 
+    dplyr::mutate(bmisig = factor(bmisig, levels = newlevs)) %>% 
+    dplyr::group_by(bmisig) %>% 
+    dplyr::arrange(bmisig) %>% 
+    group_split() 
+  
+  sortlevs <- purrr::map_vec(taxorder_b, ~ unique(.x[["bmisig"]])) %>% as.character
+  sortlevs[sortlevs=="NS"] <- sortlevs[length(sortlevs)]
+  taxorder_b <- purrr::map2(taxorder_b, sortlevs, ~ .x %>% 
+                    dplyr::arrange(.data[[gsub("__padj", "__log2FoldChangeShrink", .y)]])) %>% 
+    #purrr::map( \(x) {
+    #  grname <- x %>% pull(bmisig) %>% unique()
+    #  if(grname == "NS") return(x)
+    #  x %>% 
+    #    dplyr::arrange(x, .data[[gsub("__padj", "__log2FoldChangeShrink", grname)]])
+    #  }) %>% #vars2sort[1] -> avoid NS to fail
+    bind_rows() %>% 
+    #dplyr::arrange(bmisig,`Z-Score BMI T0__log2FoldChangeShrink`) %>%
+    dplyr::mutate(taxon=clean_names(taxon)) %>% 
+    dplyr::mutate(taxon=factor(taxon, levels=taxon))
+  
+  TAXORDER <- taxorder_b$taxon
+  
+  usedf2 <- usedf %>%
+    filter(taxon %in% tax2use) %>%
+    dplyr::mutate(taxon=clean_names(taxon)) %>% 
+    dplyr::mutate(taxon=factor(taxon, levels=TAXORDER))
+  
+  linedf <- taxorder_b %>%
+    dplyr::group_by(bmisig) %>% 
+    dplyr::summarise(xpos = max(as.numeric(taxon)) + 0.5) %>%
+    head(nrow(.)-1)
+  
+  write_tsv(usedf2, file = paste0(outdir, "loliplot_", "_", as.character(plim), "_fc", as.character(lfclim), "_", name, ".tsv"))
+  write_tsv(linedf, file = paste0(outdir, "loliplot_", "_", as.character(plim), "_fc", as.character(lfclim), "_", name, "_linedf.tsv"))
+  
+  (g0 <- ggplot(usedf2, aes(x=taxon, y=log2FoldChangeShrink, col=Sig, fill=Sig))+
+      facet_grid(~ Contrast) +
+      geom_hline(yintercept = 0, linetype=2, col="lightgray") +
+      geom_vline(data=linedf, aes(xintercept=xpos), linetype=2, col="lightgray")+
+      geom_segment(aes(x=taxon, xend = taxon, y=0, yend=log2FoldChangeShrink)) +
+      geom_point() +
+      theme_bw() +
+      coord_flip() +
+      scale_color_manual(values = c("Down"="steelblue", "Up"="tomato", "NS"="darkgray")) +
+      theme(axis.text.y= element_text(face="italic", size=10),
+            axis.text.x= element_text( size=12),
+            axis.title = element_text(size=12),
+            strip.text = element_text(size=strip_fontsize))
+  )
+  ggsave(filename = paste0(outdir, "loliplot_", "_", as.character(plim), "_fc", as.character(lfclim), "_", name, ".pdf"), g0, 
+         width = w, height = h)
+  result <- list(
+    usedf=usedf2, 
+    linedf=linedf, 
+    plot=g0,
+    plotname=paste0(outdir, "loliplot_", "_", as.character(plim), "_fc", as.character(lfclim), "_", name, ".pdf"),
+    dfname= paste0(outdir, "loliplot_", "_", as.character(plim), "_fc", as.character(lfclim), "_", name, ".tsv"),
+    dfname_lines=paste0(outdir, "loliplot_", "_", as.character(plim), "_fc", as.character(lfclim), "_", name, "_linedf.tsv"),
+    input=daa_df, 
+    args = list(vars2sort = vars2sort,
+                vars2filter = vars2filter,
+                name=name,
+                plim = plim, plim_col = plim_col, lfclim = lfclim,
+                w=w, h=h)
+  )
+  save(result, file = paste0(outdir, "loliplot_", "_", as.character(plim), "_fc", as.character(lfclim), "_", name, ".RData"))
+  return(result)
+  
+}
+
+all_daa <- read_tsv(paste0(outdir, "all_DAA_long.tsv"))
+all_daa_mod <- read_tsv(paste0(outdir, "all_DAA_long_NamesModified.tsv"))
+
+vars2loliplot <- c("Z-Score BMI T0",
+                  "Z-Score Waist T0",
+                 # "Change in Z-Score BMI",
+                 # "Change in Z-Score Waist",
+                  "Z-Score BMI T1 (Normal T0)",
+                  "Z-Score Waist T1 (Normal T0)"
+                  #"Change in Z-Score BMI (Normal T0)",
+                 # "Change in Z-Score Waist (Normal T0)"
+                 #"Status T1 Excessive Gain vs Normal (Normal T0)"
+                  #"Body Fat % T0",
+                 )
+
+vars2filtersig <- vars2loliplot[1]
+vars2sort <- paste0(vars2loliplot, "__padj")
+
+
+lol1 <- makeLoliplot(all_daa_mod, vars2loliplot = vars2loliplot, 
+                         vars2sort = vars2sort,
+                         vars2filter = vars2filtersig,
+                         outdir = outdir, 
+                         name="BMI_T0_4",
+                         plim = 0.01, plim_col = 0.05, lfclim = 0,
+                         w=12, h=8
+)
+
+lol1 <- makeLoliplot(all_daa_mod, vars2loliplot = vars2loliplot, 
+                     vars2sort = vars2sort,
+                     vars2filter = vars2filtersig,
+                     outdir = outdir, 
+                     name="BMI_T0_2",
+                     plim = 0.001, plim_col = 0.05, lfclim = 0.5,
+                     w=12, h=6
+)
+
+
+### focus on T1
+
+vars2loliplot_t1 <- c("Change in Z-Score BMI (Normal T0)",
+                   "Change in Z-Score Waist (Normal T0)",
+                   "Z-Score BMI T1 (Normal T0)",
+                   "Z-Score Waist T1 (Normal T0)",
+                   "Z-Score BMI T0",
+                   "Z-Score Waist T0"
+                   #"Change in Z-Score BMI (Normal T0)",
+                   # "Change in Z-Score Waist (Normal T0)"
+                   #"Status T1 Excessive Gain vs Normal (Normal T0)"
+                   #"Body Fat % T0",
+)
+
+vars2filtersig_t1 <- c("Change in Z-Score BMI (Normal T0)",
+                    "Change in Z-Score Waist (Normal T0)",
+                    "Z-Score BMI T1 (Normal T0)",
+                    "Z-Score Waist T1 (Normal T0)"
+)
+vars2sort_t1 <- paste0(vars2loliplot_t1, "__padj")
+
+
+lol2 <- makeLoliplot(all_daa_mod, vars2loliplot = vars2loliplot_t1, 
+                     vars2sort = vars2sort_t1,
+                     vars2filter = vars2filtersig_t1,
+                     outdir = outdir, 
+                     name="BMI_T1_1",
+                     plim = 0.01, plim_col = 0.05, lfclim = 0,
+                     w=18, h=12
+)
+
+vars2loliplot_t1_b <- c("Change in Z-Score BMI (Normal T0)",
+                        "Z-Score BMI T1 (Normal T0)",
+                      "Change in Z-Score Waist (Normal T0)",
+                      "Z-Score Waist T1 (Normal T0)"
+)
+vars2filtersig_t1_b <-vars2loliplot_t1_b[c(1, 2)]
+vars2sort_t1_b <- paste0(vars2loliplot_t1_b, "__padj")
+
+daa_filtered <- all_daa_mod %>% filter(Contrast %in% vars2loliplot_t1_b) %>% 
+  dplyr::mutate(Contrast = gsub(" \\(Normal T0\\)", "", Contrast))
+
+lol3 <- makeLoliplot(daa_filtered, 
+                     vars2loliplot =  gsub(" \\(Normal T0\\)", "", vars2loliplot_t1_b) , 
+                     vars2sort = gsub(" \\(Normal T0\\)", "", vars2sort_t1_b) ,
+                     vars2filter = gsub(" \\(Normal T0\\)", "", vars2filtersig_t1_b) ,
+                     outdir = outdir, 
+                     name="BMI_T1_3_onlyNormalT0_",
+                     plim = 0.01, plim_col = 0.05, lfclim = 0,
+                     strip_fontsize=11,
+                     w=12, h=7
+)
+################################################################################################################ 
 ###### Now plot LFC of different variables  against LFC of other variabels (each species is a point)
 
 all_daa <- read_tsv(paste0(outdir, "all_DAA_long.tsv"))
